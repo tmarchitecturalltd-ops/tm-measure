@@ -29,7 +29,6 @@ workflows:
     max_build_duration: 60
     environment:
       groups:
-        - app_store_connect
         - app_runtime
       ios_signing:
         distribution_type: app_store
@@ -61,12 +60,10 @@ workflows:
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
-    publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
-        beta_groups:
-          - TM Internal
+    # publishing block is intentionally omitted until Apple Developer
+    # enrolment finishes and the App Store Connect integration is
+    # configured in Codemagic. Builds will produce an .ipa artifact
+    # that you can download from the build page in the meantime.
 
   android_release:
     name: TM Measure — Android release
@@ -74,10 +71,11 @@ workflows:
     max_build_duration: 45
     environment:
       groups:
-        - play_store
         - app_runtime
-      android_signing:
-        - tmmeasure
+      # android_signing block re-enable once the keystore is uploaded
+      # in Codemagic → Settings → Code signing identities → Android.
+      # Until then, gradle uses the debug keystore — fine for build
+      # validation but not for Play Store upload.
       java: 17
       node: 22
     scripts:
@@ -99,8 +97,7 @@ workflows:
     artifacts:
       - android/app/build/outputs/**/*.aab
       - android/app/build/outputs/**/mapping.txt
-    publishing:
-      google_play:
-        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
-        track: internal
-        submit_as_draft: true
+    # publishing block deferred until the Google Play service-account
+    # credentials are configured in Codemagic env vars. Builds produce
+    # an .aab artifact you can download and upload manually in the
+    # meantime.
