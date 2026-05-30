@@ -1,0 +1,394 @@
+@import url("https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,400&family=Manrope:wght@300;400;600;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=block");
+@import "tailwindcss";
+
+/*
+ * Material Symbols safety net.
+ *
+ * Several iOS Capacitor and PWA-mode users were seeing raw glyph
+ * names (e.g. "arrow_forward", "photo_camera") instead of icons
+ * because the Google Fonts ligature stylesheet hadn't finished
+ * loading by the time the icon spans rendered. This selector pins
+ * the icon font family explicitly and disables ligature fallback —
+ * if the font fails to load, the icon is simply blank, never plain
+ * text.
+ */
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+}
+
+@theme {
+  --color-surface-tint: #b89650;
+  --color-surface-container-lowest: #ffffff;
+  --color-on-secondary: #ffffff;
+  --color-on-primary-container: #432f00;
+  --color-surface-container-low: #f6f3ef;
+  --color-tertiary-container: #9e9b92;
+  --color-inverse-primary: #e7c177;
+  --color-primary-container: #d9c292;
+  --color-secondary-container: #e5e2de;
+  --color-surface: #fcf9f5;
+  --color-error: #ba1a1a;
+  --color-surface-variant: #e5e2de;
+  --color-inverse-on-surface: #f3f0ec;
+  --color-outline-variant: #d1c5b4;
+  --color-inverse-surface: #31302e;
+  --color-outline: #7f7667;
+  --color-surface-container-high: #ebe8e4;
+  --color-on-surface-variant: #4d4639;
+  --color-secondary-fixed: #e5e2de;
+  --color-on-surface: #1c1c1a;
+  --color-background: #fcf9f5;
+  --color-on-primary: #ffffff;
+  --color-surface-container-highest: #e5e2de;
+  --color-surface-dim: #dcdad6;
+  --color-secondary: #5f5e5c;
+  --color-primary: #b89650;
+  --color-tertiary: #605e57;
+  --color-surface-bright: #fcf9f5;
+  --color-surface-container: #f0edea;
+
+  --font-headline: "Noto Serif", ui-serif, Georgia, serif;
+  --font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-label: "Manrope", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-DEFAULT: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 1rem;
+}
+
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+}
+
+.editorial-shadow {
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.04);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: url("https://images.unsplash.com/photo-1497366216548-37526070297c?w=1920&q=60&auto=format&fit=crop")
+    center / cover no-repeat;
+  filter: brightness(0.15) saturate(0.5);
+}
+
+section {
+  background-color: rgba(252, 249, 245, 0.96) !important;
+}
+
+section.bg-surface-container-low {
+  background-color: rgba(246, 243, 239, 0.97) !important;
+}
+
+section.bg-inverse-surface {
+  background-color: rgba(49, 48, 46, 0.97) !important;
+}
+
+footer {
+  background-color: rgba(246, 243, 239, 0.98) !important;
+}
+
+nav {
+  background-color: rgba(252, 249, 245, 0.88) !important;
+}
+
+.hero-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 100vh;
+  padding-top: 80px;
+}
+
+@media (max-width: 768px) {
+  .hero-split {
+    grid-template-columns: 1fr;
+  }
+  .hero-split-right {
+    height: 60vw;
+    min-height: 260px;
+    order: -1;
+  }
+}
+
+.hero-split-left {
+  padding: 8vh 5vw 6vh 5vw;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+  background: rgba(252, 249, 245, 0.97);
+}
+
+.hero-split-right {
+  position: relative;
+  overflow: hidden;
+  background: #1c1c1a;
+}
+
+.cycle-slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+  animation: kenBurns 8s ease-in-out infinite alternate;
+}
+
+.cycle-slide.active {
+  opacity: 1;
+}
+
+.cycle-slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+@keyframes kenBurns {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.07);
+  }
+}
+
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(26, 26, 24, 0.45) 0%,
+    rgba(26, 26, 24, 0.18) 100%
+  );
+  z-index: 1;
+  pointer-events: none;
+}
+
+.hero-badge {
+  position: absolute;
+  bottom: 8%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(247, 245, 239, 0.1);
+  border: 0.5px solid rgba(247, 245, 239, 0.3);
+  color: #fff;
+  padding: 1.2rem 1.8rem;
+  text-align: center;
+  backdrop-filter: blur(10px);
+  min-width: 200px;
+  z-index: 3;
+}
+
+.hero-badge-number {
+  font-family: "Noto Serif", serif;
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #e7c177;
+  display: block;
+  line-height: 1;
+}
+
+.hero-badge-text {
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: rgba(247, 245, 239, 0.65);
+  margin-top: 4px;
+}
+
+.eyebrow-line {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #b89650;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.eyebrow-line::before {
+  content: "";
+  display: block;
+  width: 28px;
+  height: 0.5px;
+  background: #b89650;
+}
+
+.hero-stats-row {
+  display: flex;
+  gap: 1.5rem;
+  padding-top: 2rem;
+  border-top: 1px solid rgba(26, 26, 24, 0.1);
+  margin-top: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.stat-num {
+  font-family: "Noto Serif", serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #b89650;
+  line-height: 1;
+}
+
+.stat-lbl {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7f7667;
+  margin-top: 4px;
+}
+
+.marquee-strip {
+  background: #1c1c1a;
+  color: #f7f5ef;
+  padding: 13px 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.marquee-inner {
+  display: inline-flex;
+  animation: marquee 32s linear infinite;
+}
+
+.marquee-inner span {
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 0 2.5rem;
+  color: rgba(247, 245, 239, 0.45);
+}
+
+.marquee-inner .mdot {
+  color: #e7c177;
+  padding: 0 0.5rem;
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.reviews-track {
+  display: flex;
+  transition: transform 0.5s ease;
+}
+
+.review-card {
+  min-width: calc(33.333% - 1.5rem);
+  margin-right: 1.5rem;
+  transition: border-color 0.3s;
+}
+
+.review-card:hover {
+  border-color: #b89650;
+}
+
+@media (max-width: 767px) {
+  .review-card {
+    min-width: calc(100% - 0rem);
+    margin-right: 1rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .mobile-3col {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 0.5rem !important;
+  }
+  .mobile-3col .card-inner {
+    padding: 0.5rem !important;
+  }
+  .pricing-mobile-3col {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 0.4rem !important;
+  }
+}
+
+.step-card {
+  cursor: pointer;
+}
+
+@media (min-width: 768px) {
+  .step-card {
+    cursor: default;
+  }
+}
+
+/*
+ * Accessibility — keyboard focus rings.
+ *
+ * Default browser :focus rings are inconsistent across WebKit / Blink
+ * and often suppressed by Tailwind's reset. We restore a high-contrast
+ * focus ring on every keyboard-focused interactive element so screen-
+ * reader and keyboard users can see where they are. :focus-visible
+ * keeps the ring off mouse-clicked controls so the visual remains
+ * clean for sighted mouse/touch users.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+
+/* Honour the user's reduced-motion preference. Used by the tutorial
+ * dot animations and the scan HUD's progress pills. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

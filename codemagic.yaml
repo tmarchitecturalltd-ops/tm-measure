@@ -1,0 +1,106 @@
+# codemagic.yaml — TM Measure cloud build pipeline
+#
+# Two workflows: one for iOS (signed IPA → TestFlight), one for Android
+# (signed AAB → Play Internal Testing). Both build the Next.js static
+# export first, sync Capacitor, then assemble the native app.
+#
+# SETUP (one-time, in Codemagic web UI):
+#   1. Connect this repository to a Codemagic app.
+#   2. Add the iOS signing certificate + provisioning profile (Settings →
+#      iOS code signing). Reference: `code_signing.distribution_type:
+#      app_store`, `bundle_identifier: ltd.tmdesigns.tmmeasure`.
+#   3. Add the Android keystore (Settings → Code signing identities →
+#      Android keystore). Reference key alias: `tmmeasure`.
+#   4. Add environment groups:
+#        - `app_store_connect` — APP_STORE_CONNECT_KEY_IDENTIFIER,
+#          APP_STORE_CONNECT_ISSUER_ID, APP_STORE_CONNECT_PRIVATE_KEY,
+#          BUNDLE_ID.
+#        - `play_store`        — GCLOUD_SERVICE_ACCOUNT_CREDENTIALS,
+#          PACKAGE_NAME.
+#        - `app_runtime`       — NEXT_PUBLIC_MEASURE_SUBMIT_URL.
+#   5. Set the default branch to `main`.
+#
+# Each workflow build takes ~12–18 min for iOS, ~6–10 min for Android.
+
+workflows:
+  ios_release:
+    name: TM Measure — iOS release
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      groups:
+        - app_store_connect
+        - app_runtime
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: ltd.tmdesigns.tmmeasure
+      xcode: latest
+      cocoapods: default
+      node: 22
+    scripts:
+      - name: Install JS dependencies
+        script: npm ci
+      - name: Build Next.js (Capacitor mode)
+        script: npm run build:cap
+      - name: Sync Capacitor → iOS
+        script: npx cap sync ios
+      - name: Install CocoaPods
+        script: |
+          cd ios/App
+          pod install
+      - name: Set build number from Codemagic counter
+        script: |
+          cd ios/App
+          agvtool new-version -all $(($BUILD_NUMBER + 1000))
+      - name: Build & sign IPA
+        script: |
+          xcode-project use-profiles
+          xcode-project build-ipa \
+            --workspace "ios/App/App.xcworkspace" \
+            --scheme "App"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - TM Internal
+
+  android_release:
+    name: TM Measure — Android release
+    instance_type: linux_x2
+    max_build_duration: 45
+    environment:
+      groups:
+        - play_store
+        - app_runtime
+      android_signing:
+        - tmmeasure
+      java: 17
+      node: 22
+    scripts:
+      - name: Install JS dependencies
+        script: npm ci
+      - name: Build Next.js (Capacitor mode)
+        script: npm run build:cap
+      - name: Sync Capacitor → Android
+        script: npx cap sync android
+      - name: Bump versionCode from build number
+        script: |
+          cd android
+          NEW_CODE=$(($BUILD_NUMBER + 1000))
+          sed -i "s/^\(\s*versionCode\s\)[0-9]*/\1$NEW_CODE/" app/build.gradle
+      - name: Build & sign release AAB
+        script: |
+          cd android
+          ./gradlew bundleRelease
+    artifacts:
+      - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/mapping.txt
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+        submit_as_draft: true

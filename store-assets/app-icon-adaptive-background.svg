@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Android adaptive icon — background layer.
+
+  Flat brand cream. Android applies its mask shape on top of this so
+  no rounding / shadow is needed — keep it a pure rectangle.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="432" height="432">
+  <rect x="0" y="0" width="108" height="108" fill="#fcf9f5" />
+</svg>

@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html class="scroll-smooth" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>TM Designs Ltd | Architectural Excellence</title>
+<meta name="description" content="Professional architectural drawings from £550. Guaranteed 2-week delivery, 100% online, UK-wide. 98% first-time planning approval. Save £2k–£4k vs traditional architects."/>
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-5LMPXG29T2"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-5LMPXG29T2');
+</script>
+
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;700&family=Manrope:wght@300;400;600;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "surface-tint":"#b89650","surface-container-lowest":"#ffffff","on-secondary":"#ffffff",
+          "on-primary-container":"#432f00","surface-container-low":"#f6f3ef","tertiary-container":"#9e9b92",
+          "inverse-primary":"#e7c177","primary-container":"#d9c292","secondary-container":"#e5e2de",
+          "surface-container":"#f0edea","error":"#ba1a1a","surface-variant":"#e5e2de",
+          "surface":"#fcf9f5","inverse-on-surface":"#f3f0ec","outline-variant":"#d1c5b4",
+          "inverse-surface":"#31302e","outline":"#7f7667","surface-container-high":"#ebe8e4",
+          "on-surface-variant":"#4d4639","secondary-fixed":"#e5e2de","on-surface":"#1c1c1a",
+          "background":"#fcf9f5","on-primary":"#ffffff","surface-container-highest":"#e5e2de",
+          "surface-dim":"#dcdad6","secondary":"#5f5e5c","primary":"#b89650","tertiary":"#605e57",
+          "surface-bright":"#fcf9f5"
+        },
+        borderRadius:{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"1rem","full":"9999px"},
+        fontFamily:{"headline":["Noto Serif","serif"],"body":["Manrope","sans-serif"],"label":["Manrope","sans-serif"]}
+      }
+    }
+  }
+</script>
+<style>
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  .editorial-shadow { box-shadow: 0 20px 40px rgba(0,0,0,0.04); }
+
+  /* ── Fixed architectural background ── */
+  body::before {
+    content:''; position:fixed; inset:0; z-index:-1;
+    background:url('https://images.unsplash.com/photo-1497366216548-37526070297c?w=1920&q=60&auto=format&fit=crop') center/cover no-repeat;
+    filter:brightness(0.15) saturate(0.5);
+  }
+  section { background-color:rgba(252,249,245,0.96) !important; }
+  section.bg-surface-container-low { background-color:rgba(246,243,239,0.97) !important; }
+  section.bg-inverse-surface { background-color:rgba(49,48,46,0.97) !important; }
+  footer { background-color:rgba(246,243,239,0.98) !important; }
+  nav { background-color:rgba(252,249,245,0.88) !important; }
+
+  /* ── Split hero ── */
+  .hero-split { display:grid; grid-template-columns:1fr 1fr; min-height:100vh; padding-top:80px; }
+  @media (max-width:768px){
+    .hero-split { grid-template-columns:1fr; }
+    .hero-split-right { height:60vw; min-height:260px; order:-1; }
+  }
+  .hero-split-left { padding:8vh 5vw 6vh 5vw; display:flex; flex-direction:column; justify-content:center; position:relative; z-index:2; background:rgba(252,249,245,0.97); }
+  .hero-split-right { position:relative; overflow:hidden; background:#1c1c1a; }
+
+  /* Ken-Burns cycling slides */
+  .cycle-slide { position:absolute; inset:0; background-size:cover; background-position:center; opacity:0; transition:opacity 1.2s ease; animation:kenBurns 8s ease-in-out infinite alternate; }
+  .cycle-slide.active { opacity:1; }
+  @keyframes kenBurns { from{transform:scale(1);} to{transform:scale(1.07);} }
+  .hero-overlay { position:absolute; inset:0; background:linear-gradient(135deg,rgba(26,26,24,0.45) 0%,rgba(26,26,24,0.18) 100%); z-index:1; }
+  .hero-badge { position:absolute; bottom:8%; left:50%; transform:translateX(-50%); background:rgba(247,245,239,0.1); border:0.5px solid rgba(247,245,239,0.3); color:#fff; padding:1.2rem 1.8rem; text-align:center; backdrop-filter:blur(10px); min-width:200px; z-index:3; }
+  .hero-badge-number { font-family:'Noto Serif',serif; font-size:2.2rem; font-weight:700; color:#e7c177; display:block; line-height:1; }
+  .hero-badge-text { font-size:10px; letter-spacing:0.15em; text-transform:uppercase; color:rgba(247,245,239,0.65); margin-top:4px; }
+
+  /* Eyebrow + stats */
+  .eyebrow-line { font-size:11px; letter-spacing:0.22em; text-transform:uppercase; color:#b89650; margin-bottom:1.5rem; display:flex; align-items:center; gap:10px; }
+  .eyebrow-line::before { content:''; display:block; width:28px; height:0.5px; background:#b89650; }
+  .hero-stats-row { display:flex; gap:1.5rem; padding-top:2rem; border-top:1px solid rgba(26,26,24,0.1); margin-top:2.5rem; flex-wrap:wrap; }
+  .stat-num { font-family:'Noto Serif',serif; font-size:1.8rem; font-weight:700; color:#b89650; line-height:1; }
+  .stat-lbl { font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:#7f7667; margin-top:4px; }
+
+  /* Marquee */
+  .marquee-strip { background:#1c1c1a; color:#f7f5ef; padding:13px 0; overflow:hidden; white-space:nowrap; }
+  .marquee-inner { display:inline-flex; animation:marquee 32s linear infinite; }
+  .marquee-inner span { font-size:11px; letter-spacing:0.2em; text-transform:uppercase; padding:0 2.5rem; color:rgba(247,245,239,0.45); }
+  .marquee-inner .mdot { color:#e7c177; padding:0 0.5rem; }
+  @keyframes marquee { from{transform:translateX(0);} to{transform:translateX(-50%);} }
+
+  /* Reviews carousel */
+  .reviews-track { display:flex; transition:transform 0.5s ease; }
+  .review-card { min-width:calc(33.333% - 1.5rem); margin-right:1.5rem; transition:border-color 0.3s; }
+  .review-card:hover { border-color:#b89650; }
+  @media (max-width:767px){ .review-card { min-width:calc(100% - 0rem); margin-right:1rem; } }
+
+  /* Mobile 3-col grid spacing */
+  @media (max-width:767px){
+    .mobile-3col { grid-template-columns:repeat(3,1fr) !important; gap:0.5rem !important; }
+    .mobile-3col .card-inner { padding:0.5rem !important; }
+    .pricing-mobile-3col { grid-template-columns:repeat(3,1fr) !important; gap:0.4rem !important; }
+  }
+
+  /* Step accordion */
+  .step-card { cursor:pointer; }
+  @media (min-width:768px){ .step-card { cursor:default; } }
+
+  /* ── Work gallery ── */
+  .work-scroll-wrap { overflow-x:auto; overflow-y:visible; padding:0 5vw 1.5rem; scrollbar-width:thin; scrollbar-color:#d4b578 transparent; cursor:grab; }
+  .work-scroll-wrap:active { cursor:grabbing; }
+  .work-scroll-wrap::-webkit-scrollbar { height:3px; }
+  .work-scroll-wrap::-webkit-scrollbar-thumb { background:#d4b578; }
+  .work-track { display:flex; gap:3px; width:max-content; }
+  .work-item { position:relative; overflow:hidden; flex-shrink:0; transition:transform 0.35s ease; }
+  .work-item:hover { transform:scale(1.015); z-index:2; }
+  .work-wide { width:460px; height:320px; }
+  .work-sq { width:320px; height:320px; }
+  .work-tall { width:240px; height:320px; }
+  @media (max-width:768px) { .work-wide{width:280px;height:200px;} .work-sq{width:200px;height:200px;} .work-tall{width:150px;height:200px;} }
+  .work-img { width:100%; height:100%; object-fit:cover; transition:transform 0.55s ease; display:block; }
+  .work-item:hover .work-img { transform:scale(1.06); }
+  .work-caption { position:absolute; bottom:0; left:0; right:0; padding:0.75rem 1rem; background:linear-gradient(transparent,rgba(26,26,24,0.78)); color:#f7f5ef; z-index:2; }
+  .work-caption-title { font-family:'Noto Serif',serif; font-size:1rem; font-weight:600; }
+  .work-caption-sub { font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:rgba(247,245,239,0.6); }
+</style>
+</head>
+<body class="bg-surface text-on-surface font-body">
+
+<!-- ── Navigation ── -->
+<nav class="fixed top-0 w-full z-50 backdrop-blur-xl border-b border-outline-variant/20 transition-colors duration-300">
+<div class="flex justify-between items-center h-20 px-4 md:px-8 max-w-[1920px] mx-auto">
+  <div class="font-headline text-xl font-bold tracking-tighter text-on-surface">TM Designs Ltd</div>
+  <div class="hidden md:flex items-center space-x-10">
+    <a class="font-label tracking-tight text-sm uppercase text-on-surface/70 hover:text-primary transition-all" href="#planning">Pricing</a>
+    <a class="font-label tracking-tight text-sm uppercase text-on-surface/70 hover:text-primary transition-all" href="#process">Process</a>
+    <a class="font-label tracking-tight text-sm uppercase text-on-surface/70 hover:text-primary transition-all" href="#reviews">Reviews</a>
+    <a class="font-label tracking-tight text-sm uppercase text-primary border-b border-primary pb-1 hover:opacity-100 transition-all" href="#portfolio">Portfolio</a>
+    <a class="font-label tracking-tight text-sm uppercase text-on-surface/70 hover:text-primary transition-all" href="#contact">Contact</a>
+  </div>
+  <a href="#contact" onclick="trackConversion('nav_cta')" class="bg-primary text-on-primary px-6 py-2.5 rounded-DEFAULT text-sm font-semibold tracking-wide uppercase hover:bg-surface-tint transition-colors">Start Project</a>
+</div>
+</nav>
+
+<main>
+
+<!-- ── 1. HERO — split layout with Ken-Burns slideshow ── -->
+<section id="hero" class="hero-split">
+  <div class="hero-split-left">
+    <div class="eyebrow-line">Online Architectural Plans · UK Wide</div>
+    <h1 class="font-headline text-on-surface mb-6" style="font-size:clamp(2.4rem,4.5vw,5rem);line-height:1.05;letter-spacing:-0.02em;">
+      Extension Plans<br>in 2 Weeks —<br><em style="color:#b89650;font-style:italic;">No Site Visit.</em>
+    </h1>
+    <p class="text-on-surface-variant mb-8" style="font-size:16px;max-width:420px;line-height:1.7;">
+      Professional planning drawings, structural calculations and full building regs packages. From £550, 100% online, UK‑wide. Save £2,000–£4,000 and 8 weeks vs a traditional architect.
+    </p>
+    <div class="flex flex-col sm:flex-row gap-4">
+      <a href="#contact" onclick="trackConversion('hero_primary_cta')" class="bg-primary text-on-primary px-8 py-4 rounded-DEFAULT font-bold tracking-widest uppercase text-sm editorial-shadow hover:bg-surface-tint transition-colors inline-block text-center">
+        Get Your Free Quote in 24 Hours
+      </a>
+      <a href="#process" class="border border-outline text-on-surface px-8 py-4 rounded-DEFAULT font-bold tracking-widest uppercase text-sm hover:bg-surface-container-low transition-colors inline-block text-center">
+        See How It Works →
+      </a>
+    </div>
+    <!-- Google rating -->
+    <div class="flex items-center gap-3 mt-6 mb-2">
+      <a href="https://maps.app.goo.gl/vuZ1J5rqnVh9MPFM6" target="_blank" class="flex items-center gap-2 px-4 py-2 bg-surface-container-low rounded-lg border border-outline-variant/30 hover:border-primary transition-colors">
+        <span class="font-headline font-bold text-sm">Google</span>
+        <span class="text-primary font-bold text-sm">5.0</span>
+        <span class="text-primary" style="font-size:14px;">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+        <span class="text-on-surface-variant text-[9px] uppercase tracking-widest">(21 reviews)</span>
+      </a>
+    </div>
+    <!-- Trust bar -->
+    <div class="hero-stats-row">
+      <div><div class="stat-num">98%</div><div class="stat-lbl">1st-Time Approval</div></div>
+      <div><div class="stat-num">2wk</div><div class="stat-lbl">Guaranteed</div></div>
+      <div><div class="stat-num">£550</div><div class="stat-lbl">From</div></div>
+      <div><div class="stat-num">150+</div><div class="stat-lbl">Projects Done</div></div>
+    </div>
+  </div>
+
+  <div class="hero-split-right">
+    <div id="hero-slideshow">
+      <div class="cycle-slide active" style="background-image:url('https://images.pexels.com/photos/1396122/pexels-photo-1396122.jpeg?auto=compress&cs=tinysrgb&w=1400&h=1000&fit=crop')"></div>
+      <div class="cycle-slide" style="background-image:url('https://images.pexels.com/photos/2724749/pexels-photo-2724749.jpeg?auto=compress&cs=tinysrgb&w=1400&h=1000&fit=crop')"></div>
+      <div class="cycle-slide" style="background-image:url('https://images.pexels.com/photos/1115804/pexels-photo-1115804.jpeg?auto=compress&cs=tinysrgb&w=1400&h=1000&fit=crop')"></div>
+      <div class="cycle-slide" style="background-image:url('https://images.pexels.com/photos/323780/pexels-photo-323780.jpeg?auto=compress&cs=tinysrgb&w=1400&h=1000&fit=crop')"></div>
+      <div class="cycle-slide" style="background-image:url('https://images.pexels.com/photos/1029599/pexels-photo-1029599.jpeg?auto=compress&cs=tinysrgb&w=1400&h=1000&fit=crop')"></div>
+    </div>
+    <div class="hero-overlay"></div>
+    <div class="hero-badge">
+      <span class="hero-badge-number">5.0★</span>
+      <span class="hero-badge-text">Google Rating · 21 Reviews</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── MARQUEE ── -->
+<div class="marquee-strip">
+  <div class="marquee-inner">
+    <span>Planning drawings</span><span class="mdot">·</span><span>Structural calculations</span><span class="mdot">·</span><span>Building regulations</span><span class="mdot">·</span><span>Loft conversions</span><span class="mdot">·</span><span>Extensions</span><span class="mdot">·</span><span>2-week guaranteed turnaround</span><span class="mdot">·</span><span>100% online</span><span class="mdot">·</span><span>UK wide service</span><span class="mdot">·</span>
+    <span>Planning drawings</span><span class="mdot">·</span><span>Structural calculations</span><span class="mdot">·</span><span>Building regulations</span><span class="mdot">·</span><span>Loft conversions</span><span class="mdot">·</span><span>Extensions</span><span class="mdot">·</span><span>2-week guaranteed turnaround</span><span class="mdot">·</span><span>100% online</span><span class="mdot">·</span><span>UK wide service</span><span class="mdot">·</span>
+  </div>
+</div>
+
+<!-- ── 2. PRICING — Simple, Fixed Fees ── -->
+<section id="planning" class="py-20 bg-surface-container-low">
+<div class="max-w-[1920px] mx-auto px-4 md:px-8">
+  <div class="text-center mb-10 md:mb-16">
+    <span class="font-label text-primary uppercase tracking-[0.3em] text-xs font-bold block mb-4">TRANSPARENT PRICING</span>
+    <h2 class="font-headline text-3xl md:text-5xl text-on-surface mb-4">Simple, Fixed Fees. No Surprises.</h2>
+    <p class="text-on-surface-variant max-w-2xl mx-auto">More affordable than traditional architects, with a <strong class="text-primary">guaranteed 2-week turnaround</strong> on every project.</p>
+  </div>
+
+  <!-- Mobile: 3-col condensed | Desktop: 3-col full -->
+  <div class="grid grid-cols-3 gap-2 md:gap-8 max-w-6xl mx-auto">
+
+    <!-- Structural -->
+    <div id="structural" class="bg-surface p-3 md:p-10 rounded-xl border border-outline-variant/30 flex flex-col">
+      <span class="hidden md:block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-6">STRUCTURAL WORK</span>
+      <h3 class="font-headline text-xs md:text-2xl mb-1 md:mb-2 leading-tight">Structural</h3>
+      <div class="text-base md:text-3xl font-headline text-primary mb-1 md:mb-2">£550</div>
+      <p class="text-[10px] md:text-xs text-primary font-bold mb-2">✓ 2wk Guaranteed</p>
+      <ul class="space-y-1 md:space-y-4 mb-3 md:mb-10 flex-grow">
+        <li class="flex items-start gap-1 md:gap-3"><span class="material-symbols-outlined text-primary text-xs md:text-lg leading-tight">check</span><span class="text-[10px] md:text-sm leading-tight">Walls</span></li>
+        <li class="flex items-start gap-1 md:gap-3"><span class="material-symbols-outlined text-primary text-xs md:text-lg leading-tight">check</span><span class="text-[10px] md:text-sm leading-tight">Chimneys</span></li>
+        <li class="flex items-start gap-1 md:gap-3"><span class="material-symbols-outlined text-primary text-xs md:text-lg leading-tight">check</span><span class="text-[10px] md:text-sm leading-tight">Loft/Boiler</span></li>
+        <li class="hidden md:flex items-start gap-3"><span class="material-symbols-outlined text-primary text-lg">check</span><span class="text-sm">Building control ready</span></li>
+        <li class="hidden md:flex items-start gap-3"><span class="material-symbols-outlined text-primary text-lg">check</span><span class="text-sm">Engineer signed calcs</span></li>
+      </ul>
+      <a href="#contact" onclick="trackConversion('pricing_structural')" class="block w-full py-2 md:py-4 text-center border border-primary text-primary font-bold uppercase tracking-widest text-[9px] md:text-xs rounded-DEFAULT hover:bg-primary hover:text-on-primary transition-colors">Get Started</a>
+    </div>
+
+    <!-- Full Package — featured -->
+    <div class="bg-inverse-surface p-3 md:p-10 rounded-xl border border-primary relative flex flex-col editorial-shadow">
+      <div class="absolute -top-3 md:-top-4 left-1/2 -translate-x-1/2 bg-primary text-on-primary text-[8px] md:text-[10px] font-bold uppercase tracking-wider px-2 md:px-4 py-1 rounded-full whitespace-nowrap">Most Popular</div>
+      <span class="hidden md:block text-[10px] font-bold uppercase tracking-widest text-surface-variant mb-6">BEST VALUE</span>
+      <h3 class="font-headline text-xs md:text-2xl text-surface mb-1 md:mb-2 leading-tight">Full Pkg</h3>
+      <div class="text-base md:text-3xl font-headline text-primary mb-1 md:mb-2">£1,650</div>
+      <p class="text-[10px] md:text-xs text-primary font-bold mb-2">✓ 2wk Guaranteed</p>
+      <ul class="space-y-1 md:space-y-4 mb-3 md:mb-10 flex-grow">
+        <li class="flex items-start gap-1 md:gap-3"><span class="material-symbols-outlined text-primary text-xs md:text-lg leading-tight">check</span><span class="text-[10px] md:text-sm text-surface leading-tight">Planning</span></li>
+        <li class="flex items-start gap-1 md:gap-3"><span class="material-symbols-outlined text-primary text-xs md:text-lg leading-tight">check</span><span class="text-[10px] md:text-sm text-surface leading-tight">Structural</span></li>
+        <li class="flex items-start gap-1 md:gap-3"><span class="material-symbols-outlined text-primary text-xs md:text-lg leading-tight">check</span><span class="text-[10px] md:text-sm text-surface leading-tight">Bldg Regs</span></li>
+        <li class="hidden md:flex items-start gap-3"><span class="material-symbols-outlined text-primary text-lg">check</span><span class="text-sm text-surface">Council ready</span></li>
+        <li class="hidden md:flex items-start gap-3"><span class="material-symbols-outlined text-primary text-lg">check</span><span class="text-sm text-surface">Priority support</span></li>
+      </ul>
+      <a href="#contact" onclick="trackConversion('pricing_full')" class="block w-full py-2 md:py-4 text-center bg-primary text-on-primary font-bold uppercase tracking-widest text-[9px] md:text-xs rounded-DEFAULT hover:bg-surface-tint transition-colors">Get Started</a>
+    </div>
+
+    <!-- Planning Drawings -->
+    <div class="bg-surface p-3 md:p-10 rounded-xl border border-outline-variant/30 flex flex-col">
+      <span class="hidden md:block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-6">FOR PLANNING PERMISSION</span>
+      <h3 class="font-headline text-xs md:text-2xl mb-1 md:mb-2 leading-tight">Planning</h3>
+      <div class="text-base md:text-3xl font-headline text-primary mb-1 md:mb-2">£1,100</div>
+      <p class="text-[10px] md:text-xs text-primary font-bold mb-2">✓ 2wk Guaranteed</p>
+      <ul class="space-y-1 md:space-y-4 mb-3 md:mb-10 flex-grow">
+        <li class="flex items-start gap-1 md:gap-3"><span class="material-symbols-outlined text-primary text-xs md:text-lg leading-tight">check</span><span class="text-[10px] md:text-sm leading-tight">Floor plans</span></li>
+        <li class="flex items-start gap-1 md:gap-3"><span class="material-symbols-outlined text-primary text-xs md:text-lg leading-tight">check</span><span class="text-[10px] md:text-sm leading-tight">Elevations</span></li>
+        <li class="flex items-start gap-1 md:gap-3"><span class="material-symbols-outlined text-primary text-xs md:text-lg leading-tight">check</span><span class="text-[10px] md:text-sm leading-tight">Extensions</span></li>
+        <li class="hidden md:flex items-start gap-3"><span class="material-symbols-outlined text-primary text-lg">check</span><span class="text-sm">Planning submission ready</span></li>
+        <li class="hidden md:flex items-start gap-3"><span class="material-symbols-outlined text-primary text-lg">check</span><span class="text-sm">Revisions included</span></li>
+      </ul>
+      <a href="#contact" onclick="trackConversion('pricing_planning')" class="block w-full py-2 md:py-4 text-center border border-primary text-primary font-bold uppercase tracking-widest text-[9px] md:text-xs rounded-DEFAULT hover:bg-primary hover:text-on-primary transition-colors">Get Started</a>
+    </div>
+
+  </div>
+</div>
+</section>
+
+<!-- ── 3. PROCESS — Four Steps ── -->
+<section id="process" class="py-20 bg-surface">
+<div class="max-w-[1920px] mx-auto px-4 md:px-8">
+  <div class="mb-10 md:mb-16">
+    <span class="font-label text-primary uppercase tracking-[0.3em] text-xs font-bold block mb-4">THE PROCESS</span>
+    <h2 class="font-headline text-3xl md:text-5xl text-on-surface">Four Steps to Planning-Ready Drawings</h2>
+  </div>
+  <!-- 4-col on all screens; tappable expand on mobile -->
+  <div class="grid grid-cols-4 gap-2 md:gap-8" id="steps-grid">
+    <div class="step-card bg-surface-container-low p-3 md:p-8 rounded-lg flex flex-col select-none transition-shadow hover:shadow-md" onclick="toggleStep(this,'01')">
+      <div class="flex items-start justify-between">
+        <span class="font-headline text-xl md:text-4xl text-primary/30 block mb-2 md:mb-6">01</span>
+        <span class="material-symbols-outlined text-primary/40 text-sm mt-0.5 step-icon md:hidden">expand_more</span>
+      </div>
+      <h3 class="font-headline text-xs md:text-xl mb-1 md:mb-4 leading-tight">Send Details</h3>
+      <p class="hidden md:block text-on-surface-variant text-sm leading-relaxed mt-2">Fill in our simple online form with your project details. We'll send you a measuring kit with a laser measurer — no site visit needed, anywhere in the UK.</p>
+    </div>
+    <div class="step-card bg-surface-container-low p-3 md:p-8 rounded-lg flex flex-col select-none transition-shadow hover:shadow-md" onclick="toggleStep(this,'02')">
+      <div class="flex items-start justify-between">
+        <span class="font-headline text-xl md:text-4xl text-primary/30 block mb-2 md:mb-6">02</span>
+        <span class="material-symbols-outlined text-primary/40 text-sm mt-0.5 step-icon md:hidden">expand_more</span>
+      </div>
+      <h3 class="font-headline text-xs md:text-xl mb-1 md:mb-4 leading-tight">You Measure, We Draw</h3>
+      <p class="hidden md:block text-on-surface-variant text-sm leading-relaxed mt-2">Take photos and measurements using our kit. Our team creates accurate architectural drawings and structural calculations tailored to your project.</p>
+    </div>
+    <div class="step-card bg-surface-container-low p-3 md:p-8 rounded-lg flex flex-col select-none transition-shadow hover:shadow-md" onclick="toggleStep(this,'03')">
+      <div class="flex items-start justify-between">
+        <span class="font-headline text-xl md:text-4xl text-primary/30 block mb-2 md:mb-6">03</span>
+        <span class="material-symbols-outlined text-primary/40 text-sm mt-0.5 step-icon md:hidden">expand_more</span>
+      </div>
+      <h3 class="font-headline text-xs md:text-xl mb-1 md:mb-4 leading-tight">Review &amp; Revise</h3>
+      <p class="hidden md:block text-on-surface-variant text-sm leading-relaxed mt-2">Review your draft drawings 100% online. Request any amendments until you're completely happy — all included in your fixed price.</p>
+    </div>
+    <div class="step-card bg-surface-container-low p-3 md:p-8 rounded-lg flex flex-col select-none transition-shadow hover:shadow-md" onclick="toggleStep(this,'04')">
+      <div class="flex items-start justify-between">
+        <span class="font-headline text-xl md:text-4xl text-primary/30 block mb-2 md:mb-6">04</span>
+        <span class="material-symbols-outlined text-primary/40 text-sm mt-0.5 step-icon md:hidden">expand_more</span>
+      </div>
+      <h3 class="font-headline text-xs md:text-xl mb-1 md:mb-4 leading-tight">Submit &amp; Build</h3>
+      <p class="hidden md:block text-on-surface-variant text-sm leading-relaxed mt-2">Receive your completed plans within 2 weeks, ready for planning submission or building control approval. 98% of our plans are approved first time.</p>
+    </div>
+  </div>
+  <div id="step-detail-panel" class="hidden md:hidden mt-3 p-4 bg-primary/5 border border-primary/20 rounded-lg">
+    <p id="step-detail-text" class="text-sm text-on-surface-variant leading-relaxed"></p>
+  </div>
+</div>
+</section>
+
+<!-- ── 6. REVIEWS / TESTIMONIALS ── -->
+<section id="reviews" class="py-20 bg-surface">
+<div class="max-w-[1920px] mx-auto px-4 md:px-8">
+  <div class="mb-0">
+    <span class="font-label text-primary uppercase tracking-[0.3em] text-xs font-bold block mb-4">CLIENT TESTIMONIALS</span>
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+      <h2 class="font-headline text-3xl md:text-5xl text-on-surface">What Our Clients Say</h2>
+      <div class="flex items-center gap-6 px-6 py-4 bg-surface-container-low rounded-lg border border-outline-variant/30">
+        <div class="flex flex-col">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-headline font-bold text-lg tracking-tight">Google</span>
+            <span class="text-on-surface-variant text-[9px] font-bold uppercase tracking-widest">Rating</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-primary font-bold text-base leading-none">5.0</span>
+            <div class="flex text-primary">
+              <span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span>
+            </div>
+            <span class="text-on-surface-variant text-[9px] font-medium uppercase tracking-widest">(21 reviews)</span>
+          </div>
+        </div>
+        <div class="h-8 w-px bg-outline-variant/30"></div>
+        <a class="font-label text-primary text-[10px] font-bold uppercase tracking-[0.1em] hover:opacity-70 transition-opacity flex items-center gap-2" href="https://search.google.com/local/writereview?placeid=ChIJm7bjWDgFdkgRqI0-flh49kE" target="_blank">
+          <span class="material-symbols-outlined text-sm">edit_note</span>Leave Review
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="relative" id="reviews-carousel-wrapper">
+    <button onclick="moveCarousel(-1)" class="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 w-10 h-10 rounded-full bg-surface border border-outline-variant/30 flex items-center justify-center shadow hover:bg-primary hover:text-on-primary transition-colors"><span class="material-symbols-outlined text-sm">chevron_left</span></button>
+    <button onclick="moveCarousel(1)" class="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 w-10 h-10 rounded-full bg-surface border border-outline-variant/30 flex items-center justify-center shadow hover:bg-primary hover:text-on-primary transition-colors"><span class="material-symbols-outlined text-sm">chevron_right</span></button>
+    <div class="overflow-hidden px-1">
+      <div class="reviews-track" id="reviews-track">
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">J</div><div><div class="font-bold text-xs uppercase tracking-widest">James Okafor</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">"Extremely professional and fast. TM Architectural Designs delivered our planning drawings well within the 2-week window. Council approved first time — couldn't ask for more."</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Google Review · TM Architectural Designs LTD · 1 week ago</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">S</div><div><div class="font-bold text-xs uppercase tracking-widest">Sarah Mitchell</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">"I needed structural calculations for a chimney breast removal. TM were responsive, affordable and the drawings were accepted by building control without any queries. Great service."</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Google Review · TM Architectural Designs LTD · 2 weeks ago</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">A</div><div><div class="font-bold text-xs uppercase tracking-widest">Adam Harrison</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">"TM Designs provided their services much faster than any other architect I'd been quoted. Took a huge amount of stress out of my home extension project. Highly recommend."</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Google Review · TM Architectural Designs LTD · 1 month ago</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">L</div><div><div class="font-bold text-xs uppercase tracking-widest">Louise Bennett</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">"Professional, creative and detail-oriented. Their drawings transformed our vision into something buildable and beautiful. The whole process was completely seamless."</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Google Review · TM Architectural Designs LTD · 1 month ago</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">P</div><div><div class="font-bold text-xs uppercase tracking-widest">Priya Sharma</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">"Used TM for our loft conversion drawings. Very clear communication throughout, revisions were handled quickly, and the final package was exactly what building control needed."</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Google Review · TM Architectural Designs LTD · 3 months ago</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">O</div><div><div class="font-bold text-xs uppercase tracking-widest">Oliver Knight</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">"Outstanding. Smart, well-structured drawings that helped us secure planning approval faster and for significantly less than a traditional architect. Done in under 2 weeks."</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Google Review · TM Architectural Designs LTD · 2 months ago</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">M</div><div><div class="font-bold text-xs uppercase tracking-widest">Marcus Webb</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">"Brilliant service for our single-storey extension. Everything was remote — they worked from photos and measurements I sent. Back in under 2 weeks, approved by the council. Excellent value."</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Google Review · TM Architectural Designs LTD · 4 months ago</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">D</div><div><div class="font-bold text-xs uppercase tracking-widest">Daniel Cooper</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">&ldquo;Used TM for a rear extension and loft conversion package. Both sets of drawings were thorough and building control signed off without any issues. Really impressed.&rdquo;</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Verified Google Review &middot; TM Architectural Designs LTD</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">R</div><div><div class="font-bold text-xs uppercase tracking-widest">Rachel Thompson</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">&ldquo;Amazing turnaround time. We needed planning drawings urgently and TM delivered in just over a week. The quality was exceptional for the price.&rdquo;</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Verified Google Review &middot; TM Architectural Designs LTD</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">M</div><div><div class="font-bold text-xs uppercase tracking-widest">Michael Patel</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">&ldquo;Third time using TM Designs and they never disappoint. This time for a garage conversion &mdash; drawings were perfect and council approved within days.&rdquo;</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Verified Google Review &middot; TM Architectural Designs LTD</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">E</div><div><div class="font-bold text-xs uppercase tracking-widest">Emma Griffiths</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">&ldquo;Couldn&rsquo;t believe how easy the whole process was. Sent measurements, got professional drawings back in 10 days. Planning approved first time. Fantastic service.&rdquo;</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Verified Google Review &middot; TM Architectural Designs LTD</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">D</div><div><div class="font-bold text-xs uppercase tracking-widest">David Chen</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">&ldquo;Had quotes from three local architects ranging from &pound;3,000-&pound;5,000. TM delivered the same quality for a fraction of the cost. No site visit needed either.&rdquo;</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Verified Google Review &middot; TM Architectural Designs LTD</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">H</div><div><div class="font-bold text-xs uppercase tracking-widest">Helen Murphy</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">&ldquo;TM handled our double-storey extension plans brilliantly. The structural calculations were thorough and our builder said they were some of the clearest he&rsquo;d seen.&rdquo;</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Verified Google Review &middot; TM Architectural Designs LTD</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">T</div><div><div class="font-bold text-xs uppercase tracking-widest">Tom Richards</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">&ldquo;Quick, professional and great value. Used them for structural calcs on a load-bearing wall removal. Building control approved everything first time.&rdquo;</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Verified Google Review &middot; TM Architectural Designs LTD</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">S</div><div><div class="font-bold text-xs uppercase tracking-widest">Sophie Turner</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">&ldquo;Excellent experience from start to finish. The measuring kit made everything simple and the final drawings were detailed and professional. Highly recommend.&rdquo;</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Verified Google Review &middot; TM Architectural Designs LTD</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">B</div><div><div class="font-bold text-xs uppercase tracking-widest">Ben Walker</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">&ldquo;We used TM for our orangery plans. The drawings captured exactly what we wanted and planning went through without a hitch. Will definitely use again.&rdquo;</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Verified Google Review &middot; TM Architectural Designs LTD</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">K</div><div><div class="font-bold text-xs uppercase tracking-widest">Kate Williams</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">&ldquo;Fast, affordable and high quality. What more could you ask for? Our loft conversion plans were delivered ahead of schedule.&rdquo;</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Verified Google Review &middot; TM Architectural Designs LTD</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">C</div><div><div class="font-bold text-xs uppercase tracking-widest">Chris Morgan</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">&ldquo;TM Designs made the whole process stress-free. Great communication, fair pricing, and the drawings were accepted by building control immediately.&rdquo;</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Verified Google Review &middot; TM Architectural Designs LTD</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">N</div><div><div class="font-bold text-xs uppercase tracking-widest">Natalie Brown</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">&ldquo;Needed structural calcs for a chimney removal. Quick quote, fast delivery, and my builder was very happy with the level of detail. Top service.&rdquo;</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Verified Google Review &middot; TM Architectural Designs LTD</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">A</div><div><div class="font-bold text-xs uppercase tracking-widest">Andrew Scott</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">&ldquo;Used TM for a side return extension. Plans were clear, professional and building regs approved first submission. Saved us thousands compared to a local architect.&rdquo;</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Verified Google Review &middot; TM Architectural Designs LTD</div></div>
+        <div class="review-card p-8 border border-outline-variant/20 rounded-xl bg-surface-container-lowest editorial-shadow flex-shrink-0"><div class="flex items-center gap-3 mb-6"><div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">L</div><div><div class="font-bold text-xs uppercase tracking-widest">Lisa Taylor</div><div class="flex text-primary"><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span><span class="material-symbols-outlined text-xs">star</span></div></div></div><p class="text-on-surface italic text-sm leading-relaxed mb-4">&ldquo;Fantastic company. From initial enquiry to receiving our completed plans took less than 2 weeks. The whole experience was smooth and professional.&rdquo;</p><div class="text-[9px] text-on-surface-variant uppercase tracking-widest">Verified Google Review &middot; TM Architectural Designs LTD</div></div>
+      </div>
+    </div>
+    <div class="flex justify-center gap-2 mt-8" id="carousel-dots"></div>
+  </div>
+  <div class="mt-10 text-center">
+    <a class="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant hover:text-primary transition-colors" href="https://maps.app.goo.gl/vuZ1J5rqnVh9MPFM6" target="_blank">View all 21 reviews on Google Maps <span class="material-symbols-outlined text-sm">open_in_new</span></a>
+  </div>
+</div>
+</section>
+
+<!-- ── 5. PORTFOLIO — Our Work ── -->
+<section id="portfolio" class="py-20 bg-surface-container-low">
+<div class="max-w-[1920px] mx-auto px-4 md:px-8 mb-12">
+  <span class="font-label text-primary uppercase tracking-[0.3em] text-xs font-bold block mb-4">PORTFOLIO</span>
+  <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <h2 class="font-headline text-3xl md:text-5xl text-on-surface">Our Work</h2>
+    <a href="#contact" class="border border-outline px-6 py-3 text-xs font-bold uppercase tracking-widest hover:bg-on-surface hover:text-surface transition-colors rounded whitespace-nowrap inline-block">GET A QUOTE &rarr;</a>
+  </div>
+  <p class="text-on-surface-variant text-sm mt-3 max-w-xl">A selection of projects delivered across the UK &mdash; from structural knock-throughs to full loft conversions and orangeries.</p>
+</div>
+<div class="work-scroll-wrap" id="workScroll">
+  <div class="work-track">
+    <div class="work-item work-wide"><img src="https://images.pexels.com/photos/1571460/pexels-photo-1571460.jpeg?auto=compress&cs=tinysrgb&w=900&h=600&fit=crop" alt="Open plan knock-through" class="work-img"><div class="work-caption"><div class="work-caption-title">Open-Plan Knock-Through</div><div class="work-caption-sub">Load-bearing wall removal &middot; Structural calcs</div></div></div>
+    <div class="work-item work-sq"><img src="https://images.pexels.com/photos/2724749/pexels-photo-2724749.jpeg?auto=compress&cs=tinysrgb&w=700&h=700&fit=crop" alt="Single storey rear extension" class="work-img"><div class="work-caption"><div class="work-caption-title">Single Storey Rear Extension</div><div class="work-caption-sub">Planning drawings &middot; Full package</div></div></div>
+    <div class="work-item work-tall"><img src="https://images.pexels.com/photos/280222/pexels-photo-280222.jpeg?auto=compress&cs=tinysrgb&w=600&h=800&fit=crop" alt="Double storey extension" class="work-img"><div class="work-caption"><div class="work-caption-title">Double Storey Extension</div><div class="work-caption-sub">Planning &amp; building regs</div></div></div>
+    <div class="work-item work-wide"><img src="https://images.pexels.com/photos/1643383/pexels-photo-1643383.jpeg?auto=compress&cs=tinysrgb&w=900&h=600&fit=crop" alt="Dormer loft conversion" class="work-img"><div class="work-caption"><div class="work-caption-title">Dormer Loft Conversion</div><div class="work-caption-sub">Structural calcs &middot; Planning drawings</div></div></div>
+    <div class="work-item work-sq"><img src="https://images.pexels.com/photos/2062426/pexels-photo-2062426.jpeg?auto=compress&cs=tinysrgb&w=700&h=700&fit=crop" alt="Kitchen extension" class="work-img"><div class="work-caption"><div class="work-caption-title">Kitchen Extension</div><div class="work-caption-sub">Full building regs package</div></div></div>
+    <div class="work-item work-tall"><img src="https://images.pexels.com/photos/1396132/pexels-photo-1396132.jpeg?auto=compress&cs=tinysrgb&w=600&h=800&fit=crop" alt="Side extension" class="work-img"><div class="work-caption"><div class="work-caption-title">Side Extension</div><div class="work-caption-sub">Planning application &middot; Elevations</div></div></div>
+    <div class="work-item work-wide"><img src="https://images.pexels.com/photos/6782567/pexels-photo-6782567.jpeg?auto=compress&cs=tinysrgb&w=900&h=600&fit=crop" alt="Orangery" class="work-img"><div class="work-caption"><div class="work-caption-title">Orangery</div><div class="work-caption-sub">Planning drawings &middot; Design consultation</div></div></div>
+    <div class="work-item work-sq"><img src="https://images.pexels.com/photos/1571468/pexels-photo-1571468.jpeg?auto=compress&cs=tinysrgb&w=700&h=700&fit=crop" alt="Chimney breast removal" class="work-img"><div class="work-caption"><div class="work-caption-title">Chimney Breast Removal</div><div class="work-caption-sub">Structural calculations</div></div></div>
+    <div class="work-item work-tall"><img src="https://images.pexels.com/photos/2119714/pexels-photo-2119714.jpeg?auto=compress&cs=tinysrgb&w=600&h=800&fit=crop" alt="Hip-to-gable loft" class="work-img"><div class="work-caption"><div class="work-caption-title">Hip-to-Gable Loft</div><div class="work-caption-sub">Full building regs &middot; Structural calcs</div></div></div>
+  </div>
+</div>
+</section>
+
+<!-- ── 8. FAQ ── -->
+<section id="faq" class="py-20 bg-surface">
+<div class="max-w-3xl mx-auto px-4 md:px-8">
+  <span class="font-label text-primary uppercase tracking-[0.3em] text-xs font-bold block mb-4 text-center">COMMON QUESTIONS</span>
+  <h2 class="font-headline text-3xl md:text-4xl text-on-surface mb-12 text-center">Common Questions</h2>
+  <div class="space-y-4" id="faq-list">
+    <div class="faq-item bg-surface-container-low rounded-xl border border-outline-variant/20 overflow-hidden">
+      <button class="w-full flex items-center justify-between p-6 text-left font-bold text-sm hover:bg-surface-container-high transition-colors" onclick="toggleFaq(this)">
+        <span>How can you design accurate plans without visiting my property?</span>
+        <span class="material-symbols-outlined text-primary flex-shrink-0 ml-4">expand_more</span>
+      </button>
+      <div class="faq-body hidden px-6 pb-6 text-on-surface-variant text-sm leading-relaxed">We send you a measuring kit with a professional laser measurer. You take photos and measurements following our simple guide, and we create precise drawings from there. This method has helped us achieve a 98% first-time approval rate across 150+ projects.</div>
+    </div>
+    <div class="faq-item bg-surface-container-low rounded-xl border border-outline-variant/20 overflow-hidden">
+      <button class="w-full flex items-center justify-between p-6 text-left font-bold text-sm hover:bg-surface-container-high transition-colors" onclick="toggleFaq(this)">
+        <span>What if my planning application gets rejected?</span>
+        <span class="material-symbols-outlined text-primary flex-shrink-0 ml-4">expand_more</span>
+      </button>
+      <div class="faq-body hidden px-6 pb-6 text-on-surface-variant text-sm leading-relaxed">98% of our plans are approved first time. If yours isn't, we'll work with the council to understand their concerns and revise the design at no extra cost until you have an approved plan you're happy with.</div>
+    </div>
+    <div class="faq-item bg-surface-container-low rounded-xl border border-outline-variant/20 overflow-hidden">
+      <button class="w-full flex items-center justify-between p-6 text-left font-bold text-sm hover:bg-surface-container-high transition-colors" onclick="toggleFaq(this)">
+        <span>Are your drawings as good as a traditional architect's?</span>
+        <span class="material-symbols-outlined text-primary flex-shrink-0 ml-4">expand_more</span>
+      </button>
+      <div class="faq-body hidden px-6 pb-6 text-on-surface-variant text-sm leading-relaxed">Yes. Our drawings meet all council requirements and building regulations. We've completed 150+ projects with a 98% approval rate. The only difference is we work online, which makes us faster and more affordable.</div>
+    </div>
+    <div class="faq-item bg-surface-container-low rounded-xl border border-outline-variant/20 overflow-hidden">
+      <button class="w-full flex items-center justify-between p-6 text-left font-bold text-sm hover:bg-surface-container-high transition-colors" onclick="toggleFaq(this)">
+        <span>How long does it really take?</span>
+        <span class="material-symbols-outlined text-primary flex-shrink-0 ml-4">expand_more</span>
+      </button>
+      <div class="faq-body hidden px-6 pb-6 text-on-surface-variant text-sm leading-relaxed">Most projects are delivered within 2 weeks from the day we receive your measurements. Complex projects may take slightly longer, but we'll tell you upfront. Our 2-week guarantee applies to all standard projects.</div>
+    </div>
+    <div class="faq-item bg-surface-container-low rounded-xl border border-outline-variant/20 overflow-hidden">
+      <button class="w-full flex items-center justify-between p-6 text-left font-bold text-sm hover:bg-surface-container-high transition-colors" onclick="toggleFaq(this)">
+        <span>What areas do you cover?</span>
+        <span class="material-symbols-outlined text-primary flex-shrink-0 ml-4">expand_more</span>
+      </button>
+      <div class="faq-body hidden px-6 pb-6 text-on-surface-variant text-sm leading-relaxed">We work UK-wide with a focus on South London, Surrey, and Suffolk. Because we're 100% online, your location doesn't affect our service or pricing.</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ── 7. GET STARTED NOW ── -->
+<section class="py-20 bg-inverse-surface text-surface">
+<div class="max-w-3xl mx-auto px-4 md:px-8 text-center">
+  <span class="font-label text-primary uppercase tracking-[0.3em] text-xs font-bold block mb-4">READY TO START?</span>
+  <h2 class="font-headline text-3xl md:text-4xl text-surface mb-4">Get Started Now</h2>
+  <p class="text-surface-variant mb-8 max-w-xl mx-auto">Get your free, no-obligation quote in 24 hours. Tell us about your project and we&rsquo;ll confirm a fixed price and book your guaranteed 2-week delivery slot.</p>
+  <a href="#contact" onclick="trackConversion('final_cta')" class="inline-block bg-primary text-on-primary px-10 py-5 rounded font-bold tracking-widest uppercase text-sm hover:bg-surface-tint transition-colors mb-8">Get Your Free Quote &rarr;</a>
+  <div class="flex flex-wrap justify-center gap-6 mt-6">
+    <div class="flex items-center gap-2 text-surface-variant text-sm"><span class="text-primary font-bold">&check;</span> No commitment required</div>
+    <div class="flex items-center gap-2 text-surface-variant text-sm"><span class="text-primary font-bold">&check;</span> Fixed pricing confirmed upfront</div>
+    <div class="flex items-center gap-2 text-surface-variant text-sm"><span class="text-primary font-bold">&check;</span> 5.0&#9733; Google rating</div>
+    <div class="flex items-center gap-2 text-surface-variant text-sm"><span class="text-primary font-bold">&check;</span> 98% approval success rate</div>
+  </div>
+</div>
+</section>
+
+<!-- ── 8. CONTACT FORM ── -->
+<section id="contact" class="py-20 bg-surface">
+<div class="max-w-[1920px] mx-auto px-4 md:px-8 grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-20">
+  <div>
+    <span class="font-label text-primary uppercase tracking-[0.3em] text-xs font-bold block mb-4">GET IN TOUCH</span>
+    <h2 class="font-headline text-3xl md:text-5xl mb-6">Get Your Free Quote in 24 Hours</h2>
+    <p class="text-on-surface-variant text-sm mb-10">Tell us about your project and we&rsquo;ll get back to you with a fixed price and confirm your guaranteed 2-week delivery slot.</p>
+    <div class="space-y-6">
+      <div class="flex items-start gap-4"><span class="material-symbols-outlined text-primary">mail</span><div><div class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-1">EMAIL</div><div class="font-bold"><a href="mailto:tmarchitecturalltd@gmail.com" class="hover:text-primary transition-colors">tmarchitecturalltd@gmail.com</a></div></div></div>
+    </div>
+  </div>
+  <div>
+    <form class="space-y-6" id="project-contact-form" onsubmit="sendEnquiryEmail(event)">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div><label class="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">YOUR NAME *</label><input id="f-name" class="w-full bg-surface-container-low border-none rounded px-4 py-3 text-sm focus:ring-1 focus:ring-primary" placeholder="e.g. John Smith" required type="text"/></div>
+        <div><label class="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">EMAIL ADDRESS *</label><input id="f-email" class="w-full bg-surface-container-low border-none rounded px-4 py-3 text-sm focus:ring-1 focus:ring-primary" placeholder="e.g. john@email.com" required type="email"/></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div><label class="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">PROJECT LOCATION</label><input id="f-location" class="w-full bg-surface-container-low border-none rounded px-4 py-3 text-sm focus:ring-1 focus:ring-primary" placeholder="e.g. South London, SE1" type="text"/></div>
+        <div><!-- spacer --></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">SELECT SERVICE *</label>
+          <select class="w-full bg-surface-container-low border-none rounded px-4 py-3 text-sm focus:ring-1 focus:ring-primary" id="service-select" onchange="updateProjectTypes()" required>
+            <option value="">Choose a service...</option>
+            <option value="structural">Structural Calculation &mdash; &pound;550</option>
+            <option value="planning">Planning Drawing &mdash; &pound;1,100</option>
+            <option value="full">Full Package &mdash; &pound;1,650</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">PROJECT TYPE</label>
+          <select class="w-full bg-surface-container-low border-none rounded px-4 py-3 text-sm focus:ring-1 focus:ring-primary" id="project-type-select">
+            <option value="">Select service first...</option>
+          </select>
+        </div>
+      </div>
+      <div><label class="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">TELL US ABOUT YOUR PROJECT</label><textarea class="w-full bg-surface-container-low border-none rounded px-4 py-3 text-sm h-32 focus:ring-1 focus:ring-primary" id="f-message" placeholder="Describe your project (e.g. single-storey rear extension on a mid-terrace house...)"></textarea></div>
+      <button type="submit" id="send-btn" onclick="trackConversion('form_submit')" class="w-full bg-inverse-surface text-surface font-bold uppercase tracking-widest text-xs py-5 rounded-DEFAULT hover:bg-on-surface transition-colors shadow-lg">SEND MY PROJECT DETAILS &rarr;</button>
+      <div id="form-success" class="hidden text-center py-4 px-6 bg-primary/10 rounded-DEFAULT border border-primary/30"><p class="text-sm font-bold text-primary">&check; Your enquiry has been sent!</p><p class="text-xs text-on-surface-variant mt-1">We&rsquo;ll get back to you within 24 hours with a fixed price quote.</p></div>
+    </form>
+  </div>
+</div>
+</section>
+
+</main>
+
+<!-- ── FOOTER ── -->
+<footer class="border-t border-outline-variant/20 pt-20 pb-10">
+<div class="max-w-[1920px] mx-auto px-4 md:px-8">
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12 mb-16">
+    <div class="col-span-2 md:col-span-1">
+      <div class="font-headline text-xl font-bold tracking-tighter mb-4">TM Designs Ltd</div>
+      <p class="text-xs text-on-surface-variant leading-relaxed max-w-xs mb-4">Online architectural plans for residential projects across the UK. Fast, affordable, and 100% remote — no site visit needed.</p>
+      <div class="text-[10px] text-primary font-bold uppercase tracking-widest">⚡ Guaranteed 2-week turnaround · From £550</div>
+    </div>
+    <div>
+      <h5 class="text-[10px] font-bold uppercase tracking-[0.2em] mb-4">SERVICES</h5>
+      <ul class="space-y-3 text-xs text-on-surface-variant">
+        <li><a class="hover:text-primary transition-colors" href="#planning">Planning Drawings</a></li>
+        <li><a class="hover:text-primary transition-colors" href="#structural">Structural Calculations</a></li>
+        <li><a class="hover:text-primary transition-colors" href="#planning">Full Package</a></li>
+        <li><a class="hover:text-primary transition-colors" href="#portfolio">Loft Conversions</a></li>
+        <li><a class="hover:text-primary transition-colors" href="#portfolio">Extensions</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5 class="text-[10px] font-bold uppercase tracking-[0.2em] mb-4">COMPANY</h5>
+      <ul class="space-y-3 text-xs text-on-surface-variant">
+        <li><a class="hover:text-primary transition-colors" href="#process">How It Works</a></li>
+        <li><a class="hover:text-primary transition-colors" href="tmdesigns-ourwork.html">Our Work</a></li>
+        <li><a class="hover:text-primary transition-colors" href="#reviews">Testimonials</a></li>
+        <li><a class="hover:text-primary transition-colors" href="#planning">Pricing</a></li>
+        <li><a class="hover:text-primary transition-colors" href="#contact">Contact Us</a></li>
+      </ul>
+    </div>
+    <div>
+      <h5 class="text-[10px] font-bold uppercase tracking-[0.2em] mb-4">CONNECT</h5>
+      <div class="space-y-3 text-xs text-on-surface-variant">
+        <div><a href="mailto:tmarchitecturalltd@gmail.com" class="hover:text-primary transition-colors">tmarchitecturalltd@gmail.com</a></div>
+        <div><a href="https://maps.app.goo.gl/vuZ1J5rqnVh9MPFM6" target="_blank" class="hover:text-primary transition-colors">Google Reviews ↗</a></div>
+      </div>
+    </div>
+  </div>
+  <div class="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-outline-variant/20 gap-4">
+    <div class="flex flex-col gap-1">
+      <div class="text-[10px] text-on-surface-variant uppercase tracking-widest">© 2025 TM Designs Ltd. All rights reserved.</div>
+      <a href="mailto:tmarchitecturalltd@gmail.com" class="text-[10px] text-primary hover:opacity-70 transition-opacity tracking-wide">tmarchitecturalltd@gmail.com</a>
+    </div>
+    <div class="flex space-x-8 text-[10px] text-on-surface-variant uppercase tracking-widest">
+      <a class="hover:text-primary transition-colors" href="/privacy.html">Privacy Policy</a>
+      <a class="hover:text-primary transition-colors" href="#">Terms of Service</a>
+    </div>
+  </div>
+</div>
+</footer>
+
+<script>
+// ── Conversion tracking helper ──────────────────────────────────────────────
+function trackConversion(eventName) {
+  // Google Analytics 4 event
+  if (typeof gtag !== 'undefined') {
+    gtag('event', eventName, { event_category: 'conversion', event_label: eventName });
+    // Also fire GA4 lead event for key CTAs
+    if (['form_submit','hero_primary_cta','final_cta','nav_cta'].includes(eventName)) {
+      gtag('event', 'generate_lead', { currency: 'GBP', event_label: eventName });
+    }
+  }
+  // Google Tag Manager dataLayer push
+  if (typeof dataLayer !== 'undefined') {
+    dataLayer.push({ event: eventName, eventCategory: 'conversion' });
+  }
+}
+
+// ── Step accordion (mobile) ─────────────────────────────────────────────────
+var stepDetails = {
+  '01': 'Fill in our simple online form with your project details. We\'ll send you a measuring kit with a laser measurer — no site visit needed, anywhere in the UK.',
+  '02': 'Take photos and measurements using our kit. Our team creates accurate architectural drawings and structural calculations tailored to your project requirements.',
+  '03': 'You review the draft drawings and request any amendments. We\'ll refine until you\'re completely happy — all included in your fixed price.',
+  '04': 'Receive your completed plans within 2 weeks, ready for planning submission or building control approval. 98% of our plans are approved first time.'
+};
+var activeStep = null;
+function toggleStep(card, stepId) {
+  if (window.innerWidth >= 768) return;
+  var panel = document.getElementById('step-detail-panel');
+  var textEl = document.getElementById('step-detail-text');
+  var icon = card.querySelector('.step-icon');
+  document.querySelectorAll('.step-card').forEach(function(c) {
+    c.classList.remove('ring-2','ring-primary');
+    var i = c.querySelector('.step-icon');
+    if (i) i.textContent = 'expand_more';
+  });
+  if (activeStep === card) { panel.classList.add('hidden'); activeStep = null; return; }
+  card.classList.add('ring-2','ring-primary');
+  if (icon) icon.textContent = 'expand_less';
+  textEl.textContent = stepDetails[stepId] || '';
+  panel.classList.remove('hidden');
+  activeStep = card;
+  setTimeout(function(){ panel.scrollIntoView({ behavior:'smooth', block:'nearest' }); }, 50);
+}
+
+// ── FAQ accordion ───────────────────────────────────────────────────────────
+function toggleFaq(btn) {
+  var body = btn.nextElementSibling;
+  var icon = btn.querySelector('.material-symbols-outlined');
+  var isOpen = !body.classList.contains('hidden');
+  // Close all
+  document.querySelectorAll('.faq-body').forEach(function(b){ b.classList.add('hidden'); });
+  document.querySelectorAll('.faq-item button .material-symbols-outlined').forEach(function(i){ i.textContent = 'expand_more'; });
+  if (!isOpen) { body.classList.remove('hidden'); icon.textContent = 'expand_less'; }
+}
+
+// ── Hero Ken-Burns cycling slideshow ────────────────────────────────────────
+(function(){
+  var slides = document.querySelectorAll('.cycle-slide');
+  var cur = 0;
+  if (!slides.length) return;
+  setInterval(function(){
+    slides[cur].classList.remove('active');
+    cur = (cur+1) % slides.length;
+    slides[cur].classList.add('active');
+  }, 5000);
+})();
+
+// ── Reviews carousel ────────────────────────────────────────────────────────
+var carouselPos = 0;
+function getVisibleCount(){ return window.innerWidth < 768 ? 1 : 3; }
+function buildDots(){
+  var track = document.getElementById('reviews-track');
+  var dotsEl = document.getElementById('carousel-dots');
+  if (!track||!dotsEl) return;
+  var cards = track.querySelectorAll('.review-card');
+  var total = cards.length - getVisibleCount() + 1;
+  dotsEl.innerHTML = '';
+  for (var i=0; i<total; i++){
+    var d = document.createElement('button');
+    d.className = 'w-2 h-2 rounded-full transition-colors '+(i===0?'bg-primary':'bg-outline-variant');
+    d.setAttribute('data-idx',i);
+    d.onclick = (function(idx){ return function(){ goTo(idx); }; })(i);
+    dotsEl.appendChild(d);
+  }
+}
+function goTo(idx){
+  var track = document.getElementById('reviews-track');
+  var dotsEl = document.getElementById('carousel-dots');
+  if (!track) return;
+  var cards = track.querySelectorAll('.review-card');
+  var vc = getVisibleCount();
+  var max = cards.length - vc;
+  carouselPos = Math.max(0, Math.min(idx, max));
+  var cardW = cards[0].offsetWidth + 24;
+  track.style.transform = 'translateX(-'+(carouselPos*cardW)+'px)';
+  if (dotsEl){ dotsEl.querySelectorAll('button').forEach(function(d,i){ d.className = 'w-2 h-2 rounded-full transition-colors '+(i===carouselPos?'bg-primary':'bg-outline-variant'); }); }
+}
+function moveCarousel(dir){ goTo(carouselPos+dir); }
+
+// ── Project type dropdown ────────────────────────────────────────────────────
+function updateProjectTypes(){
+  var service = document.getElementById('service-select').value;
+  var typeSelect = document.getElementById('project-type-select');
+  var optionsMap = {
+    'structural':[
+      {value:'knockthrough',text:'Knock-throughs (load-bearing walls)'},
+      {value:'chimney',text:'Chimney breast removals'},
+      {value:'loft_boiler',text:'Loft/boiler installations'},
+      {value:'beam_steel',text:'Beam & steelwork sizing'}
+    ],
+    'planning':[
+      {value:'floor_plans',text:'Existing & proposed floor plans'},
+      {value:'elevations',text:'Front side & rear elevations'},
+      {value:'ext_loft',text:'Extensions & loft conversions'},
+      {value:'porches',text:'Porches & conservatories'}
+    ],
+    'full':[
+      {value:'garage_conv',text:'Garage conversions'},
+      {value:'basement_conv',text:'Basement conversions'},
+      {value:'internal_reconfig',text:'Internal reconfigurations'},
+      {value:'change_use',text:'Change of use applications'},
+      {value:'dormer_mansard',text:'Dormer & mansard'},
+      {value:'hip_gable',text:'Hip to gable'},
+      {value:'roof_lift',text:'Roof lifts'},
+      {value:'velux',text:'Velux conversions'},
+      {value:'single_double',text:'Single & double storey'},
+      {value:'rear_side_ext',text:'Rear & side extensions'},
+      {value:'wraparound',text:'Wraparound extensions'},
+      {value:'orangeries',text:'Orangeries & garden rooms'}
+    ]
+  };
+  if (!service){ typeSelect.innerHTML = '<option value="">Select service first...</option>'; return; }
+  var options = optionsMap[service] || [];
+  typeSelect.innerHTML = '<option value="">Choose a project type...</option>';
+  options.forEach(function(opt){
+    var el = document.createElement('option');
+    el.value = opt.value; el.textContent = opt.text;
+    typeSelect.appendChild(el);
+  });
+}
+
+// ── Form submit via Formsubmit ───────────────────────────────────────────────
+function sendEnquiryEmail(e){
+  e.preventDefault();
+  var name = document.getElementById('f-name').value.trim();
+  var email = document.getElementById('f-email').value.trim();
+  var location = document.getElementById('f-location').value.trim();
+  var service = document.getElementById('service-select');
+  var projType = document.getElementById('project-type-select');
+  var message = document.getElementById('f-message').value.trim();
+  var serviceText = service.options[service.selectedIndex]?.text || '—';
+  var projTypeText = projType.options[projType.selectedIndex]?.text || '—';
+  var btn = document.getElementById('send-btn');
+  btn.textContent = 'SENDING…'; btn.disabled = true;
+  trackConversion('form_submit');
+  fetch('https://formsubmit.co/ajax/tmarchitecturalltd@gmail.com', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','Accept':'application/json'},
+    body: JSON.stringify({
+      _subject:'New Project Enquiry – TM Designs Ltd',
+      Name:name, Email:email, Location:location||'—',
+      Service:serviceText, 'Project Type':projTypeText, Message:message||'—',
+      _template:'table', _captcha:'false'
+    })
+  })
+  .then(function(res){ return res.json(); })
+  .then(function(){ 
+    btn.classList.add('hidden'); 
+    document.getElementById('form-success').classList.remove('hidden');
+    document.getElementById('project-contact-form').reset(); 
+    updateProjectTypes();
+  })
+  .catch(function(){
+    var subject = encodeURIComponent('New Project Enquiry – TM Designs Ltd');
+    var body = encodeURIComponent('Name: '+(name||'—')+'\nEmail: '+(email||'—')+'\nLocation: '+(location||'—')+'\nService: '+serviceText+'\nProject Type: '+projTypeText+'\n\nMessage:\n'+(message||'—'));
+    window.location.href = 'mailto:tmarchitecturalltd@gmail.com?subject='+subject+'&body='+body;
+    btn.textContent = 'SEND MY PROJECT DETAILS →'; btn.disabled = false;
+  });
+}
+
+
+// ── Drag-to-scroll work gallery ────────────────────────────────────────────
+(function() {
+    var el = document.getElementById('workScroll');
+    if (!el) return;
+    var isDown = false, startX, scrollLeft;
+    el.addEventListener('mousedown', function(e) {
+        isDown = true; el.style.cursor = 'grabbing';
+        startX = e.pageX - el.offsetLeft; scrollLeft = el.scrollLeft;
+    });
+    el.addEventListener('mouseleave', function() { isDown = false; el.style.cursor = 'grab'; });
+    el.addEventListener('mouseup', function() { isDown = false; el.style.cursor = 'grab'; });
+    el.addEventListener('mousemove', function(e) {
+        if (!isDown) return;
+        e.preventDefault();
+        var x = e.pageX - el.offsetLeft;
+        el.scrollLeft = scrollLeft - (x - startX) * 1.5;
+    });
+})();
+
+document.addEventListener('DOMContentLoaded', function(){
+  updateProjectTypes();
+  buildDots(); goTo(0);
+  setInterval(function(){
+    var track = document.getElementById('reviews-track');
+    if (!track) return;
+    var cards = track.querySelectorAll('.review-card');
+    var max = cards.length - getVisibleCount();
+    goTo(carouselPos >= max ? 0 : carouselPos+1);
+  }, 4000);
+});
+</script>
+</body>
+</html>

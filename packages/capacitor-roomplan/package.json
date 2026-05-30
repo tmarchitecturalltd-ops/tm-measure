@@ -1,0 +1,24 @@
+{
+  "name": "@tm-designs/capacitor-roomplan",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Apple RoomPlan Capacitor plugin for TM Measure",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src/",
+    "ios/",
+    "TmDesignsCapacitorRoomplan.podspec"
+  ],
+  "peerDependencies": {
+    "@capacitor/core": "^7.0.0"
+  },
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  }
+}

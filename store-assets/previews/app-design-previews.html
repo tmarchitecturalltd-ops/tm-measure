@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TM Measure — App design previews</title>
+<style>
+  :root {
+    --cream: #fcf9f5;
+    --gold:  #b89650;
+    --ink:   #1c1c1a;
+    --ink-2: rgba(28,28,26,0.65);
+    --ink-3: rgba(28,28,26,0.45);
+    --hair:  rgba(28,28,26,0.18);
+  }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #efece4;
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    padding: 32px 16px 64px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page {
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  .page-head {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .page-head .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin: 0;
+  }
+  .page-head h1 {
+    margin: 8px 0 0;
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight: 500;
+    font-size: 32px;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .page-head p {
+    margin: 10px auto 0;
+    max-width: 600px;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--ink-2);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 32px;
+    align-items: start;
+  }
+  .card {
+    background: #fff;
+    border: 0.5px solid rgba(0,0,0,0.08);
+    border-radius: 24px;
+    padding: 22px;
+  }
+  .card .cap {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin: 0 0 14px;
+  }
+  .card .cap span {
+    color: var(--ink-2);
+    font-weight: 500;
+    margin-left: 8px;
+    letter-spacing: 0.05em;
+    text-transform: none;
+  }
+
+  /* ──────────────────────────────────────────────────────────── */
+  /* Phone frame — shared by all previews                          */
+  /* ──────────────────────────────────────────────────────────── */
+  .phone {
+    width: 390px;
+    max-width: 100%;
+    margin: 0 auto;
+    background: var(--cream);
+    border-radius: 28px;
+    border: 0.5px solid rgba(0,0,0,0.1);
+    overflow: hidden;
+  }
+  .status-bar {
+    height: 22px;
+    background: var(--cream);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 18px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .battery {
+    width: 14px; height: 7px;
+    border: 0.5px solid var(--ink);
+    border-radius: 2px;
+    display: inline-block;
+    position: relative;
+  }
+  .battery::after {
+    content: ''; position: absolute; inset: 1px;
+    background: var(--ink); border-radius: 1px;
+  }
+
+  /* App header */
+  .app-header {
+    border-bottom: 0.5px solid rgba(184,150,80,0.25);
+    padding: 11px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(252,249,245,0.95);
+  }
+  .app-header .lock {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .app-header .eyebrow {
+    margin: 0;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+  .app-header h2 {
+    margin: 2px 0 0;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .app-header .out {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(28,28,26,0.55);
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  /* Hero wash */
+  .hero-wash {
+    background-image: radial-gradient(80% 60% at 0% 0%, rgba(184,150,80,0.07) 0%, rgba(184,150,80,0) 70%);
+    padding: 4px 14px 0;
+  }
+  .hero-copy {
+    padding: 22px 4px 14px;
+  }
+  .hero-copy .eyebrow {
+    margin: 0;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+  .hero-copy h2 {
+    margin: 8px 0 0;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 26px;
+    font-weight: 500;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .hero-copy p {
+    margin: 10px 0 0;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--ink-2);
+  }
+  .hero-link {
+    margin: 12px 0 0;
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--gold);
+    text-decoration: none;
+  }
+
+  /* Tile grid */
+  .tile-grid {
+    padding: 0 4px 6px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .tile {
+    border: 0.5px solid var(--hair);
+    border-radius: 14px;
+    padding: 12px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .tile .pill {
+    width: 32px; height: 32px;
+    flex-shrink: 0;
+    border-radius: 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tile .body { min-width: 0; flex: 1; }
+  .tile .body .t {
+    display: block; font-size: 13px; font-weight: 500; color: var(--ink);
+  }
+  .tile .body .s {
+    display: block; font-size: 11px; line-height: 1.35; margin-top: 2px;
+    color: var(--ink-2);
+  }
+
+  /* How it works */
+  .hiw { padding: 22px 18px 8px; }
+  .hiw .eyebrow {
+    margin: 0;
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 0.25em; text-transform: uppercase;
+    color: var(--gold);
+  }
+  .hiw .row {
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+  .hiw .step {
+    border: 0.5px solid rgba(28,28,26,0.15);
+    border-radius: 12px;
+    padding: 10px;
+    background: rgba(255,255,255,0.55);
+  }
+  .hiw .step p { margin: 0; }
+  .hiw .step .n {
+    font-size: 9px; font-weight: 600;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--gold);
+  }
+  .hiw .step .h {
+    margin-top: 4px;
+    font-size: 12px; font-weight: 500; color: var(--ink);
+  }
+  .hiw .step .b {
+    margin-top: 4px;
+    font-size: 11px; line-height: 1.35; color: var(--ink-2);
+  }
+
+  /* Recent submissions */
+  .recents { padding: 18px 18px 22px; }
+  .recents .eyebrow {
+    margin: 0;
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 0.25em; text-transform: uppercase;
+    color: var(--gold);
+  }
+  .recents .empty {
+    margin-top: 10px;
+    border: 0.5px dashed rgba(28,28,26,0.22);
+    border-radius: 14px;
+    background: rgba(255,255,255,0.45);
+    padding: 18px;
+    text-align: center;
+  }
+  .recents .empty p {
+    margin: 0;
+    font-size: 12px; line-height: 1.5; color: var(--ink-2);
+  }
+  .footer-line {
+    margin: 18px 0 0;
+    text-align: center;
+    font-size: 9px; font-weight: 500;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  /* Photo tips sections */
+  .tips { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .tip {
+    border-radius: 16px;
+    padding: 16px;
+  }
+  .tip .top {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .tip .pill {
+    width: 30px; height: 30px;
+    border-radius: 9px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .tip .eyebrow {
+    margin: 0;
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 0.25em; text-transform: uppercase;
+  }
+  .tip h3 {
+    margin: 10px 0 0;
+    font-size: 16px; font-weight: 500; color: var(--ink);
+    font-family: Georgia, "Times New Roman", serif;
+  }
+  .tip > p {
+    margin: 5px 0 0;
+    font-size: 12.5px; line-height: 1.5; color: var(--ink-2);
+  }
+  .tip ul {
+    margin: 12px 0 0; padding: 0; list-style: none;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .tip ul li {
+    display: flex; gap: 8px;
+    font-size: 12.5px; line-height: 1.5;
+    color: rgba(28,28,26,0.7);
+  }
+  .tip ul li .dot {
+    margin-top: 6px; width: 5px; height: 5px;
+    border-radius: 50%; flex-shrink: 0;
+  }
+  .tip ul li strong { color: var(--ink); font-weight: 500; }
+
+  .cta-card {
+    border: 0.5px solid rgba(184,150,80,0.4);
+    background: rgba(184,150,80,0.06);
+    border-radius: 16px;
+    padding: 16px;
+    margin-top: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .cta-card .eyebrow {
+    margin: 0;
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 0.25em; text-transform: uppercase;
+    color: var(--gold);
+  }
+  .cta-card p {
+    margin: 5px 0 0;
+    font-size: 12.5px; line-height: 1.5; color: rgba(28,28,26,0.7);
+  }
+  .cta-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 6px;
+    background: var(--gold); color: var(--cream);
+    font-size: 13px; font-weight: 500;
+    padding: 10px 18px;
+    border-radius: 10px;
+    text-decoration: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <header class="page-head">
+    <p class="eyebrow">TM Designs Ltd · Measure</p>
+    <h1>App design previews</h1>
+    <p>Three screens from the in-app build of TM Measure — distinct from the marketing landing at tmdesignsltd.com but on the same brand. Cream + gold + dark, with subtle architectural tints layered in.</p>
+  </header>
+
+  <div class="grid">
+
+    <!-- ────────────────────────────────────────────────────────── -->
+    <!-- Preview 1 — App home, original                             -->
+    <!-- ────────────────────────────────────────────────────────── -->
+    <div class="card">
+      <p class="cap">App home <span>v1 — neutral palette</span></p>
+      <div class="phone">
+
+        <div class="status-bar">
+          <span>9:41</span>
+          <span class="battery"></span>
+        </div>
+
+        <div class="app-header">
+          <div class="lock">
+            <div>
+              <p class="eyebrow">TM Designs Ltd</p>
+              <h2>Measure</h2>
+            </div>
+          </div>
+          <span class="out">tmdesignsltd.com</span>
+        </div>
+
+        <div style="padding: 22px 18px 14px;">
+          <p class="eyebrow" style="margin: 0; font-size: 10px; font-weight: 600; letter-spacing: 0.25em; text-transform: uppercase; color: var(--gold);">Self-measure your project</p>
+          <h2 style="margin: 8px 0 0; font-family: Georgia, serif; font-size: 26px; font-weight: 500; line-height: 1.1; letter-spacing: -0.02em; color: var(--ink);">What are you building?</h2>
+          <p style="margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--ink-2);">Pick the type below to start. We'll guide you through capturing walls, doors, windows and a quick floor plan — usually 10–15 minutes per room.</p>
+        </div>
+
+        <div class="tile-grid">
+          <div class="tile">
+            <span class="pill" style="background: rgba(184,150,80,0.12); color: var(--gold);">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/><path d="M14 9h6"/><path d="M17 6v6"/></svg>
+            </span>
+            <span class="body"><span class="t">Extension</span><span class="s">Single or double storey, side or rear</span></span>
+          </div>
+          <div class="tile">
+            <span class="pill" style="background: rgba(184,150,80,0.12); color: var(--gold);">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12L12 4l10 8"/><path d="M5 11v9h14v-9"/><rect x="10" y="13" width="4" height="4"/></svg>
+            </span>
+            <span class="body"><span class="t">Loft conversion</span><span class="s">Dormer, hip-to-gable or rooflight</span></span>
+          </div>
+          <div class="tile">
+            <span class="pill" style="background: rgba(184,150,80,0.12); color: var(--gold);">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V8l8-5 8 5v13"/><path d="M4 14h16"/><path d="M9 21v-7h6v7"/></svg>
+            </span>
+            <span class="body"><span class="t">New build</span><span class="s">Self-build or replacement dwelling</span></span>
+          </div>
+          <div class="tile">
+            <span class="pill" style="background: rgba(184,150,80,0.12); color: var(--gold);">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/><path d="M14 11l3 3"/><path d="M16 9l4 4"/></svg>
+            </span>
+            <span class="body"><span class="t">Renovation</span><span class="s">Internal layout, refurb, full re-fit</span></span>
+          </div>
+          <div class="tile">
+            <span class="pill" style="background: rgba(184,150,80,0.12); color: var(--gold);">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9H3z"/><path d="M6 14h12"/><path d="M6 17h12"/></svg>
+            </span>
+            <span class="body"><span class="t">Garage conversion</span><span class="s">Garage to habitable room</span></span>
+          </div>
+          <div class="tile">
+            <span class="pill" style="background: rgba(184,150,80,0.12); color: var(--gold);">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/></svg>
+            </span>
+            <span class="body"><span class="t">Not sure yet</span><span class="s">Pick the type later — start measuring</span></span>
+          </div>
+        </div>
+
+        <div class="hiw">
+          <p class="eyebrow">How it works</p>
+          <div class="row">
+            <div class="step"><p class="n">Step 1</p><p class="h">Capture</p><p class="b">Walk room-by-room. Scan or type lengths.</p></div>
+            <div class="step"><p class="n">Step 2</p><p class="h">Review</p><p class="b">Add notes, photos, doors and windows.</p></div>
+            <div class="step"><p class="n">Step 3</p><p class="h">Send</p><p class="b">Drag rooms onto the floor plan, submit.</p></div>
+          </div>
+        </div>
+
+        <div class="recents">
+          <p class="eyebrow">Recent submissions</p>
+          <div class="empty"><p>Nothing here yet. Your submissions will appear in this list once you send your first measurement.</p></div>
+          <p class="footer-line">© 2026 TM Architectural Designs Ltd · UK wide</p>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ────────────────────────────────────────────────────────── -->
+    <!-- Preview 2 — App home, with logo + colour tints             -->
+    <!-- ────────────────────────────────────────────────────────── -->
+    <div class="card">
+      <p class="cap">App home <span>v2 — logo + tinted tiles</span></p>
+      <div class="phone">
+
+        <div class="status-bar">
+          <span>9:41</span>
+          <span class="battery"></span>
+        </div>
+
+        <div class="app-header">
+          <div class="lock">
+            <svg viewBox="0 0 40 40" width="34" height="34" style="color: var(--gold);">
+              <rect x="2" y="2" width="36" height="36" rx="6" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <line x1="6" y1="9" x2="34" y2="9" stroke="currentColor" stroke-width="0.5" opacity="0.45"/>
+              <line x1="6" y1="31" x2="34" y2="31" stroke="currentColor" stroke-width="0.5" opacity="0.45"/>
+              <text x="20" y="25" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="600" font-size="14" letter-spacing="0.5" fill="currentColor">TM</text>
+            </svg>
+            <div>
+              <p class="eyebrow">TM Designs Ltd</p>
+              <h2>Measure</h2>
+            </div>
+          </div>
+          <span class="out">tmdesignsltd.com</span>
+        </div>
+
+        <div class="hero-wash">
+          <div class="hero-copy">
+            <p class="eyebrow">Self-measure your project</p>
+            <h2>What are you building?</h2>
+            <p>Pick the type below to start. We'll guide you through capturing walls, doors, windows and a quick floor plan.</p>
+            <a class="hero-link" href="#">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h3l2-3h8l2 3h3v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg>
+              How to take great room photos
+            </a>
+          </div>
+
+          <div class="tile-grid">
+            <div class="tile" style="background: rgba(184,150,80,0.04);">
+              <span class="pill" style="background: rgba(184,150,80,0.14); color: #8a6f3a;">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/><path d="M14 9h6"/><path d="M17 6v6"/></svg>
+              </span>
+              <span class="body"><span class="t">Extension</span><span class="s">Single or double storey, side or rear</span></span>
+            </div>
+            <div class="tile" style="background: rgba(110,130,150,0.05);">
+              <span class="pill" style="background: rgba(110,130,150,0.16); color: #5a6a80;">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12L12 4l10 8"/><path d="M5 11v9h14v-9"/><rect x="10" y="13" width="4" height="4"/></svg>
+              </span>
+              <span class="body"><span class="t">Loft conversion</span><span class="s">Dormer, hip-to-gable or rooflight</span></span>
+            </div>
+            <div class="tile" style="background: rgba(120,145,110,0.05);">
+              <span class="pill" style="background: rgba(120,145,110,0.16); color: #5e7456;">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V8l8-5 8 5v13"/><path d="M4 14h16"/><path d="M9 21v-7h6v7"/></svg>
+              </span>
+              <span class="body"><span class="t">New build</span><span class="s">Self-build or replacement dwelling</span></span>
+            </div>
+            <div class="tile" style="background: rgba(180,110,90,0.05);">
+              <span class="pill" style="background: rgba(180,110,90,0.15); color: #8a4f3d;">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/><path d="M14 11l3 3"/><path d="M16 9l4 4"/></svg>
+              </span>
+              <span class="body"><span class="t">Renovation</span><span class="s">Internal layout, refurb, full re-fit</span></span>
+            </div>
+            <div class="tile" style="background: rgba(140,125,110,0.05);">
+              <span class="pill" style="background: rgba(140,125,110,0.16); color: #6f5e4d;">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9H3z"/><path d="M6 14h12"/><path d="M6 17h12"/></svg>
+              </span>
+              <span class="body"><span class="t">Garage conversion</span><span class="s">Garage to habitable room</span></span>
+            </div>
+            <div class="tile" style="background: rgba(120,115,105,0.04);">
+              <span class="pill" style="background: rgba(120,115,105,0.13); color: #615b53;">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><circle cx="12" cy="17" r="0.6" fill="currentColor"/></svg>
+              </span>
+              <span class="body"><span class="t">Not sure yet</span><span class="s">Pick the type later — start measuring</span></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hiw">
+          <p class="eyebrow">How it works</p>
+          <div class="row">
+            <div class="step"><p class="n">Step 1</p><p class="h">Capture</p><p class="b">Walk room-by-room. Scan or type lengths.</p></div>
+            <div class="step"><p class="n">Step 2</p><p class="h">Review</p><p class="b">Add notes, photos, doors and windows.</p></div>
+            <div class="step"><p class="n">Step 3</p><p class="h">Send</p><p class="b">Drag rooms onto the floor plan, submit.</p></div>
+          </div>
+        </div>
+
+        <div class="recents">
+          <p class="eyebrow">Recent submissions</p>
+          <div class="empty"><p>Nothing here yet. Your submissions will appear in this list once you send your first measurement.</p></div>
+          <p class="footer-line">© 2026 TM Architectural Designs Ltd · UK wide</p>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ────────────────────────────────────────────────────────── -->
+    <!-- Preview 3 — Photo tips page                                -->
+    <!-- ────────────────────────────────────────────────────────── -->
+    <div class="card">
+      <p class="cap">Photo tips <span>/photo-tips</span></p>
+      <div class="phone">
+
+        <div class="status-bar">
+          <span>9:41</span>
+          <span class="battery"></span>
+        </div>
+
+        <div class="app-header">
+          <div class="lock">
+            <svg viewBox="0 0 40 40" width="34" height="34" style="color: var(--gold);">
+              <rect x="2" y="2" width="36" height="36" rx="6" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <line x1="6" y1="9" x2="34" y2="9" stroke="currentColor" stroke-width="0.5" opacity="0.45"/>
+              <line x1="6" y1="31" x2="34" y2="31" stroke="currentColor" stroke-width="0.5" opacity="0.45"/>
+              <text x="20" y="25" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="600" font-size="14" letter-spacing="0.5" fill="currentColor">TM</text>
+            </svg>
+            <div>
+              <p class="eyebrow">TM Designs Ltd</p>
+              <h2>Photo tips</h2>
+            </div>
+          </div>
+          <span class="out">
+            <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            Home
+          </span>
+        </div>
+
+        <div style="background-image: radial-gradient(80% 60% at 0% 0%, rgba(184,150,80,0.07) 0%, rgba(184,150,80,0) 70%); padding: 18px 18px 4px;">
+          <p style="margin: 0; font-size: 10px; font-weight: 600; letter-spacing: 0.25em; text-transform: uppercase; color: var(--gold);">Take great room photos</p>
+          <h2 style="margin: 8px 0 0; font-family: Georgia, serif; font-size: 22px; font-weight: 500; line-height: 1.15; letter-spacing: -0.02em; color: var(--ink);">A few small habits make a huge difference</h2>
+          <p style="margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--ink-2);">Photos fill the gaps that measurements alone can't cover. Five minutes of prep gets you there.</p>
+        </div>
+
+        <div class="tips">
+
+          <div class="tip" style="border: 0.5px solid rgba(184,150,80,0.25); background: rgba(184,150,80,0.05);">
+            <div class="top">
+              <span class="pill" style="background: rgba(184,150,80,0.16); color: #8a6f3a;">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+              </span>
+              <p class="eyebrow" style="color: #8a6f3a;">Lighting</p>
+            </div>
+            <h3>Light the room before you shoot</h3>
+            <p>Even good phone cameras struggle in dim rooms. Two minutes of prep lifts every photo.</p>
+            <ul>
+              <li><span class="dot" style="background: #8a6f3a;"></span><span><strong>Turn every light on.</strong> Ceiling lights, lamps, even the cooker hood.</span></li>
+              <li><span class="dot" style="background: #8a6f3a;"></span><span><strong>Open blinds and curtains.</strong> But don't shoot directly into a bright window.</span></li>
+              <li><span class="dot" style="background: #8a6f3a;"></span><span><strong>Avoid mid-day sunbeams.</strong> Hot patches of sun blow out the exposure.</span></li>
+            </ul>
+          </div>
+
+          <div class="tip" style="border: 0.5px solid rgba(110,130,150,0.28); background: rgba(110,130,150,0.05);">
+            <div class="top">
+              <span class="pill" style="background: rgba(110,130,150,0.16); color: #5a6a80;">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h3l2-3h8l2 3h3v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg>
+              </span>
+              <p class="eyebrow" style="color: #5a6a80;">Camera angles</p>
+            </div>
+            <h3>Shoot from corners, not the centre</h3>
+            <p>Standing in the middle of a room hides the walls. Standing in the corner shows three of them.</p>
+            <ul>
+              <li><span class="dot" style="background: #5a6a80;"></span><span><strong>Stand in a corner.</strong> Point diagonally — four corners covers the full room.</span></li>
+              <li><span class="dot" style="background: #5a6a80;"></span><span><strong>Hold the phone level.</strong> Tilted phones distort wall heights.</span></li>
+              <li><span class="dot" style="background: #5a6a80;"></span><span><strong>Use landscape orientation.</strong> Wider frame, captures floor and ceiling lines.</span></li>
+              <li><span class="dot" style="background: #5a6a80;"></span><span><strong>Tap to focus.</strong> Tap a wall on the screen before pressing the shutter.</span></li>
+            </ul>
+          </div>
+
+          <div class="tip" style="border: 0.5px solid rgba(120,145,110,0.28); background: rgba(120,145,110,0.05);">
+            <div class="top">
+              <span class="pill" style="background: rgba(120,145,110,0.16); color: #5e7456;">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11a2 2 0 0 1 2 2v14H5z"/><path d="M9 9l2 2 4-4"/><path d="M9 15h6"/></svg>
+              </span>
+              <p class="eyebrow" style="color: #5e7456;">What to capture</p>
+            </div>
+            <h3>Include the things we'll need to draw</h3>
+            <p>Photos fill the gaps the measurements can't show. The more context, the fewer follow-ups.</p>
+            <ul>
+              <li><span class="dot" style="background: #5e7456;"></span><span><strong>All four walls in full.</strong> Floor to ceiling, corner to corner.</span></li>
+              <li><span class="dot" style="background: #5e7456;"></span><span><strong>Sockets, switches, radiators.</strong> Help us position furniture and confirm layouts.</span></li>
+              <li><span class="dot" style="background: #5e7456;"></span><span><strong>Doors and windows.</strong> Closed and open, so we can see swing direction.</span></li>
+              <li><span class="dot" style="background: #5e7456;"></span><span><strong>Ceiling features.</strong> Beams, downstand, sloping or vaulted sections.</span></li>
+              <li><span class="dot" style="background: #5e7456;"></span><span><strong>Awkward bits.</strong> Niches, columns, alcoves, boxed-in pipes, step-ups.</span></li>
+            </ul>
+          </div>
+
+          <div class="tip" style="border: 0.5px solid rgba(180,110,90,0.28); background: rgba(180,110,90,0.05);">
+            <div class="top">
+              <span class="pill" style="background: rgba(180,110,90,0.16); color: #8a4f3d;">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 17H2z"/><path d="M12 10v5"/><circle cx="12" cy="18" r="0.6" fill="currentColor"/></svg>
+              </span>
+              <p class="eyebrow" style="color: #8a4f3d;">Avoid</p>
+            </div>
+            <h3>Common photo mistakes</h3>
+            <p>These cost us the most time and force us to ask for re-shoots.</p>
+            <ul>
+              <li><span class="dot" style="background: #8a4f3d;"></span><span><strong>Blurry shots.</strong> Brace your phone against a doorframe in dark rooms.</span></li>
+              <li><span class="dot" style="background: #8a4f3d;"></span><span><strong>Cropped features.</strong> Half a window, the top of a radiator missing.</span></li>
+              <li><span class="dot" style="background: #8a4f3d;"></span><span><strong>Backlit silhouettes.</strong> Shooting into a bright window with the room dark.</span></li>
+              <li><span class="dot" style="background: #8a4f3d;"></span><span><strong>Photos through doorways.</strong> Step in — you lose the wall behind you otherwise.</span></li>
+            </ul>
+          </div>
+
+          <div class="cta-card">
+            <div>
+              <p class="eyebrow">Ready to start?</p>
+              <p>Pick a project type and we'll prompt you for the right photos as you go.</p>
+            </div>
+            <a class="cta-btn" href="#">
+              Start a measurement
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+          </div>
+
+        </div>
+
+        <p class="footer-line" style="margin: 0 18px 18px;">© 2026 TM Architectural Designs Ltd · UK wide</p>
+
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+</body>
+</html>

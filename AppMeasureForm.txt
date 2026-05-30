@@ -1,0 +1,1107 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  parseMeters,
+  formatLengthDual,
+  validateProject,
+  type FieldIssue,
+  type Opening,
+  type ProjectDraft,
+  type RoomDraft,
+  type RoomPhoto,
+  type WallSegment,
+} from "@tm-designs/measure-core";
+import RoomScanOverlay, {
+  type ScanDimensions,
+} from "@/components/measure/RoomScanOverlay";
+
+function newId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function wallDefaults(): WallSegment[] {
+  return [
+    { id: newId(), label: "Wall 1 (e.g. North)", lengthM: "" },
+    { id: newId(), label: "Wall 2 (e.g. East)", lengthM: "" },
+    { id: newId(), label: "Wall 3 (e.g. South)", lengthM: "" },
+    { id: newId(), label: "Wall 4 (e.g. West)", lengthM: "" },
+  ];
+}
+
+function emptyRoom(): RoomDraft {
+  return {
+    id: newId(),
+    name: "",
+    walls: wallDefaults(),
+    ceilingHeightM: "",
+    doors: [],
+    windows: [],
+    irregularNotes: "",
+    notes: "",
+    photos: [],
+  };
+}
+
+type Step = "project" | "rooms" | "review";
+
+export default function MeasureIntakeForm() {
+  const [step, setStep] = useState<Step>("project");
+  const [customerName, setCustomerName] = useState("");
+  const [email, setEmail] = useState("");
+  const [projectName, setProjectName] = useState("");
+  const [unit, setUnit] = useState<ProjectDraft["unit"]>("metric");
+  const [rooms, setRooms] = useState<RoomDraft[]>([emptyRoom()]);
+  const [issues, setIssues] = useState<FieldIssue[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [photoTargetRoomId, setPhotoTargetRoomId] = useState<string | null>(
+    null,
+  );
+  const [scanRoomId, setScanRoomId] = useState<string | null>(null);
+  const [scanPickerOpen, setScanPickerOpen] = useState(false);
+
+  const openBannerAutoScan = useCallback(() => {
+    if (rooms.length === 0) return;
+    if (rooms.length === 1) {
+      setScanRoomId(rooms[0].id);
+      return;
+    }
+    setScanPickerOpen(true);
+  }, [rooms]);
+
+  const roomDisplayLabel = useCallback((room: RoomDraft, index: number) => {
+    const n = room.name.trim();
+    return n ? n : `Room ${index + 1} (unnamed)`;
+  }, []);
+
+  const activeScanContext = useMemo(() => {
+    if (!scanRoomId) return null;
+    const index = rooms.findIndex((r) => r.id === scanRoomId);
+    if (index < 0) return null;
+    return { room: rooms[index], index };
+  }, [scanRoomId, rooms]);
+
+  const applyScanToRoom = useCallback((roomId: string, d: ScanDimensions) => {
+    const wm = d.widthM.toFixed(2);
+    const lm = d.lengthM.toFixed(2);
+    const hm = d.heightM.toFixed(2);
+    setRooms((prev) =>
+      prev.map((r) => {
+        if (r.id !== roomId) return r;
+        const walls = r.walls.map((w, i) => {
+          if (i === 0) return { ...w, lengthM: wm };
+          if (i === 1) return { ...w, lengthM: lm };
+          if (i === 2) return { ...w, lengthM: wm };
+          if (i === 3) return { ...w, lengthM: lm };
+          return w;
+        });
+        const stamp = `[Auto-scan ${new Date().toISOString()} — W×L×H ${wm}×${lm}×${hm} m]`;
+        return {
+          ...r,
+          walls,
+          ceilingHeightM: hm,
+          notes: r.notes.trim() ? `${r.notes.trim()}\n${stamp}` : stamp,
+        };
+      }),
+    );
+  }, []);
+
+  const setRoom = useCallback(
+    (id: string, patch: Partial<RoomDraft>) => {
+      setRooms((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, ...patch } : r)),
+      );
+    },
+    [],
+  );
+
+  const addRoom = useCallback(() => {
+    setRooms((prev) => [...prev, emptyRoom()]);
+  }, []);
+
+  const removeRoom = useCallback((id: string) => {
+    setRooms((prev) => {
+      const next = prev.filter((r) => r.id !== id);
+      return next.length ? next : [emptyRoom()];
+    });
+  }, []);
+
+  const addWall = useCallback((roomId: string) => {
+    setRooms((prev) =>
+      prev.map((r) =>
+        r.id === roomId
+          ? {
+              ...r,
+              walls: [
+                ...r.walls,
+                {
+                  id: newId(),
+                  label: `Wall ${r.walls.length + 1}`,
+                  lengthM: "",
+                },
+              ],
+            }
+          : r,
+      ),
+    );
+  }, []);
+
+  const removeWall = useCallback((roomId: string, wallId: string) => {
+    setRooms((prev) =>
+      prev.map((r) => {
+        if (r.id !== roomId) return r;
+        if (r.walls.length <= 3) return r;
+        return { ...r, walls: r.walls.filter((w) => w.id !== wallId) };
+      }),
+    );
+  }, []);
+
+  const addOpening = useCallback(
+    (roomId: string, kind: "doors" | "windows") => {
+      setRooms((prev) =>
+        prev.map((r) =>
+          r.id === roomId
+            ? {
+                ...r,
+                [kind]: [
+                  ...r[kind],
+                  { id: newId(), widthM: "", note: "" } satisfies Opening,
+                ],
+              }
+            : r,
+        ),
+      );
+    },
+    [],
+  );
+
+  const removeOpening = useCallback(
+    (roomId: string, kind: "doors" | "windows", openingId: string) => {
+      setRooms((prev) =>
+        prev.map((r) => {
+          if (r.id !== roomId) return r;
+          const list = r[kind].filter((o) => o.id !== openingId);
+          return { ...r, [kind]: list };
+        }),
+      );
+    },
+    [],
+  );
+
+  const attachPhotos = useCallback(
+    (roomId: string, files: FileList | null) => {
+      if (!files?.length) return;
+      setRooms((prev) =>
+        prev.map((r) => {
+          if (r.id !== roomId) return r;
+          const next: RoomPhoto[] = [...r.photos];
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            if (!file.type.startsWith("image/")) continue;
+            next.push({
+              id: newId(),
+              uri: URL.createObjectURL(file),
+              name: file.name,
+              mimeType: file.type,
+              sizeBytes: file.size,
+            });
+          }
+          return { ...r, photos: next };
+        }),
+      );
+    },
+    [],
+  );
+
+  const removePhoto = useCallback((roomId: string, photoId: string) => {
+    setRooms((prev) =>
+      prev.map((r) => {
+        if (r.id !== roomId) return r;
+        const photo = r.photos.find((p) => p.id === photoId);
+        if (photo) URL.revokeObjectURL(photo.uri);
+        return { ...r, photos: r.photos.filter((p) => p.id !== photoId) };
+      }),
+    );
+  }, []);
+
+  const goRooms = () => {
+    const v: FieldIssue[] = [];
+    if (!customerName.trim()) v.push({ path: "name", message: "Enter your name." });
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      v.push({ path: "email", message: "Enter a valid email." });
+    if (!projectName.trim())
+      v.push({ path: "project", message: "Name your project." });
+    setIssues(v);
+    if (v.length) return;
+    setStep("rooms");
+  };
+
+  const goReview = () => {
+    const v = validateProject(rooms);
+    setIssues(v);
+    if (v.length) return;
+    setStep("review");
+  };
+
+  const issueFor = (path: string) => issues.find((i) => i.path === path)?.message;
+
+  const payload = useMemo(() => {
+    const serialRooms = rooms.map((r) => ({
+      name: r.name,
+      walls: r.walls.map((w) => ({
+        label: w.label,
+        lengthM: parseMeters(w.lengthM),
+      })),
+      ceilingHeightM: parseMeters(r.ceilingHeightM),
+      doors: r.doors
+        .filter((d) => d.widthM.trim())
+        .map((d) => ({
+          widthM: parseMeters(d.widthM),
+          note: d.note || undefined,
+        })),
+      windows: r.windows
+        .filter((w) => w.widthM.trim())
+        .map((w) => ({
+          widthM: parseMeters(w.widthM),
+          note: w.note || undefined,
+        })),
+      irregularShapeNotes: r.irregularNotes.trim() || undefined,
+      notes: r.notes.trim() || undefined,
+      photos: r.photos.map((p) => ({
+        name: p.name,
+        sizeBytes: p.sizeBytes,
+        type: p.mimeType,
+      })),
+    }));
+    return {
+      version: 1,
+      submittedAt: new Date().toISOString(),
+      customerName: customerName.trim(),
+      email: email.trim(),
+      projectName: projectName.trim(),
+      unitPreference: unit,
+      rooms: serialRooms,
+    };
+  }, [rooms, customerName, email, projectName, unit]);
+
+  const downloadJson = () => {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `tm-measure-${projectName.replace(/\s+/g, "-").slice(0, 40) || "export"}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const openMailto = () => {
+    const body = encodeURIComponent(
+      `TM Measure intake (summary)\n\n${JSON.stringify(payload, null, 2)}\n\nNote: attach photos from your device separately until upload is connected.`,
+    );
+    window.location.href = `mailto:tmarchitecturalltd@gmail.com?subject=${encodeURIComponent(
+      `Measurement intake — ${projectName}`,
+    )}&body=${body}`;
+  };
+
+  return (
+    <div className="min-h-screen bg-surface pb-28 pt-24">
+      <header className="fixed left-0 right-0 top-0 z-40 border-b border-outline-variant/20 bg-surface/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 md:px-6">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="material-symbols-outlined rounded-full p-2 text-primary transition-colors hover:bg-surface-container-low"
+              aria-label="Back to home"
+            >
+              arrow_back
+            </Link>
+            <div>
+              <p className="font-label text-[10px] font-bold uppercase tracking-widest text-primary">
+                TM Measure
+              </p>
+              <h1 className="font-headline text-lg font-semibold text-on-surface">
+                Self-measurement intake
+              </h1>
+            </div>
+          </div>
+          <span className="hidden text-xs text-on-surface-variant sm:block">
+            Web · Manual entry (PRD §4.2)
+          </span>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-5xl px-4 md:px-6">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            if (photoTargetRoomId) attachPhotos(photoTargetRoomId, e.target.files);
+            setPhotoTargetRoomId(null);
+            e.target.value = "";
+          }}
+        />
+        <p className="mb-8 max-w-3xl text-sm leading-relaxed text-on-surface-variant">
+          Guided room capture per{" "}
+          <strong className="text-on-surface">FR-01–FR-04</strong>: walls, doors,
+          windows, validation, notes, and photos. Use{" "}
+          <strong className="text-on-surface">Auto-Scan Room</strong> for camera-led
+          capture (video / corner / LiDAR placeholder), then refine in{" "}
+          <strong className="text-on-surface">metres</strong> (imperial shown on
+          review per FR-25).
+        </p>
+
+        {activeScanContext && scanRoomId && (
+          <RoomScanOverlay
+            open
+            roomLabel={roomDisplayLabel(
+              activeScanContext.room,
+              activeScanContext.index,
+            )}
+            onClose={() => setScanRoomId(null)}
+            onApply={(d) => applyScanToRoom(scanRoomId, d)}
+          />
+        )}
+
+        {scanPickerOpen && (
+          <div
+            className="fixed inset-0 z-[160] flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="scan-picker-title"
+          >
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+              aria-label="Close room picker"
+              onClick={() => setScanPickerOpen(false)}
+            />
+            <div className="relative max-h-[85vh] w-full max-w-md overflow-y-auto rounded-xl border border-outline-variant/30 bg-surface p-6 shadow-2xl">
+              <h2
+                id="scan-picker-title"
+                className="font-headline text-xl text-on-surface"
+              >
+                Which room should we scan?
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">
+                You have more than one room. Pick the space to measure — results
+                will fill that room&apos;s wall lengths and ceiling height.
+              </p>
+              <ul className="mt-6 space-y-2">
+                {rooms.map((room, ri) => (
+                  <li key={room.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScanRoomId(room.id);
+                        setScanPickerOpen(false);
+                      }}
+                      className="flex w-full items-center justify-between gap-3 rounded-lg border border-outline-variant/30 bg-surface-container-low px-4 py-4 text-left transition-colors hover:border-primary hover:bg-surface-container-high"
+                    >
+                      <span className="font-semibold text-on-surface">
+                        {roomDisplayLabel(room, ri)}
+                      </span>
+                      <span className="shrink-0 rounded bg-inverse-surface/10 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                        #{ri + 1}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() => setScanPickerOpen(false)}
+                className="mt-6 w-full rounded-lg border border-outline px-4 py-3 text-sm font-bold uppercase tracking-widest text-on-surface transition-colors hover:bg-surface-container-low"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        <ol className="mb-10 flex flex-wrap gap-3 text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
+          <li
+            className={`rounded-full px-4 py-2 ${step === "project" ? "bg-primary text-on-primary" : "bg-surface-container-low"}`}
+          >
+            1. Your details
+          </li>
+          <li
+            className={`rounded-full px-4 py-2 ${step === "rooms" ? "bg-primary text-on-primary" : "bg-surface-container-low"}`}
+          >
+            2. Rooms
+          </li>
+          <li
+            className={`rounded-full px-4 py-2 ${step === "review" ? "bg-primary text-on-primary" : "bg-surface-container-low"}`}
+          >
+            3. Review
+          </li>
+        </ol>
+
+        {step === "project" && (
+          <section className="space-y-6 rounded-xl bg-surface-container-low p-6 md:p-8">
+            <h2 className="font-headline text-2xl text-on-surface">Project details</h2>
+            <div className="grid gap-6 md:grid-cols-2">
+              <div>
+                <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  Your name *
+                </label>
+                <input
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="w-full rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/40 focus:ring-2"
+                />
+                {issueFor("name") && (
+                  <p className="mt-1 text-xs text-error">{issueFor("name")}</p>
+                )}
+              </div>
+              <div>
+                <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/40 focus:ring-2"
+                />
+                {issueFor("email") && (
+                  <p className="mt-1 text-xs text-error">{issueFor("email")}</p>
+                )}
+              </div>
+              <div className="md:col-span-2">
+                <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  Project name *
+                </label>
+                <input
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  placeholder="e.g. Rear extension — 12 Smith Street"
+                  className="w-full rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/40 focus:ring-2"
+                />
+                {issueFor("project") && (
+                  <p className="mt-1 text-xs text-error">{issueFor("project")}</p>
+                )}
+              </div>
+              <div>
+                <span className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  Display units (FR-24 / FR-25)
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setUnit("metric")}
+                    className={`rounded px-4 py-2 text-xs font-semibold uppercase ${
+                      unit === "metric"
+                        ? "bg-primary text-on-primary"
+                        : "bg-surface-container-high text-on-surface"
+                    }`}
+                  >
+                    Metric primary
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUnit("imperial")}
+                    className={`rounded px-4 py-2 text-xs font-semibold uppercase ${
+                      unit === "imperial"
+                        ? "bg-primary text-on-primary"
+                        : "bg-surface-container-high text-on-surface"
+                    }`}
+                  >
+                    Imperial primary
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-on-surface-variant">
+                  All measurements are entered in metres; we show the alternate unit
+                  beside each value on the review step.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={goRooms}
+              className="rounded bg-primary px-8 py-3 text-sm font-bold uppercase tracking-widest text-on-primary transition-colors hover:bg-surface-tint"
+            >
+              Continue to rooms
+            </button>
+          </section>
+        )}
+
+        {step === "rooms" && (
+          <div className="space-y-10">
+            <div className="rounded-xl border-2 border-primary/40 bg-inverse-surface p-6 text-on-primary shadow-lg md:p-8">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="font-label text-[10px] font-bold uppercase tracking-[0.25em] text-primary">
+                    Auto-scan
+                  </p>
+                  <h2 className="font-headline mt-1 text-xl text-[#f7f5ef] md:text-2xl">
+                    Scan your room with the camera
+                  </h2>
+                  <p className="mt-2 max-w-xl text-sm text-white/65">
+                    Full-screen HUD with LiDAR/RoomPlan placeholder, corner marking, or
+                    360° video + mock AI processing. With several rooms, you&apos;ll
+                    pick which one to update; a single room opens the scan right away.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={openBannerAutoScan}
+                  className="shrink-0 rounded-lg bg-primary px-8 py-4 text-sm font-bold uppercase tracking-widest text-on-primary transition-colors hover:bg-surface-tint"
+                >
+                  Auto-Scan Room
+                </button>
+              </div>
+            </div>
+
+            {rooms.map((room, ri) => (
+              <section
+                key={room.id}
+                className="rounded-xl border border-outline-variant/20 bg-surface-container-low p-6 md:p-8"
+              >
+                <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+                  <h2 className="font-headline text-xl text-on-surface">
+                    Room {ri + 1}
+                  </h2>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setScanRoomId(room.id)}
+                      className="rounded-lg border border-primary bg-primary/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
+                    >
+                      Auto-Scan this room
+                    </button>
+                    {rooms.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeRoom(room.id)}
+                        className="text-xs font-bold uppercase tracking-widest text-error hover:underline"
+                      >
+                        Remove room
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mb-6">
+                  <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    Room name *
+                  </label>
+                  <input
+                    value={room.name}
+                    onChange={(e) =>
+                      setRoom(room.id, { name: e.target.value })
+                    }
+                    placeholder="e.g. Kitchen, Master bedroom"
+                    className="w-full max-w-md rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/40 focus:ring-2"
+                  />
+                  {issueFor(`room-${ri}-name`) && (
+                    <p className="mt-1 text-xs text-error">
+                      {issueFor(`room-${ri}-name`)}
+                    </p>
+                  )}
+                </div>
+
+                <div className="mb-8">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="font-label text-xs font-bold uppercase tracking-widest text-primary">
+                      Wall lengths (FR-01 / irregular FR-02)
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => addWall(room.id)}
+                      className="text-xs font-bold uppercase tracking-widest text-primary hover:underline"
+                    >
+                      + Add wall segment
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {room.walls.map((w, wi) => (
+                      <div
+                        key={w.id}
+                        className="flex flex-col gap-2 rounded-lg bg-surface-container-lowest p-4 sm:flex-row sm:items-end"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            Label
+                          </label>
+                          <input
+                            value={w.label}
+                            onChange={(e) => {
+                              const walls = room.walls.map((x) =>
+                                x.id === w.id
+                                  ? { ...x, label: e.target.value }
+                                  : x,
+                              );
+                              setRoom(room.id, { walls });
+                            }}
+                            className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                          />
+                        </div>
+                        <div className="w-full sm:w-40">
+                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            Length (m)
+                          </label>
+                          <input
+                            inputMode="decimal"
+                            value={w.lengthM}
+                            onChange={(e) => {
+                              const walls = room.walls.map((x) =>
+                                x.id === w.id
+                                  ? { ...x, lengthM: e.target.value }
+                                  : x,
+                              );
+                              setRoom(room.id, { walls });
+                            }}
+                            placeholder="0.00"
+                            className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                          />
+                          {issueFor(`room-${ri}-wall-${wi}`) && (
+                            <p className="mt-1 text-xs text-error">
+                              {issueFor(`room-${ri}-wall-${wi}`)}
+                            </p>
+                          )}
+                        </div>
+                        {room.walls.length > 3 && (
+                          <button
+                            type="button"
+                            onClick={() => removeWall(room.id, w.id)}
+                            className="material-symbols-outlined shrink-0 rounded p-2 text-on-surface-variant hover:bg-surface-container-low hover:text-error"
+                            aria-label="Remove wall"
+                          >
+                            close
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mb-8">
+                  <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    Ceiling height (m) *
+                  </label>
+                  <input
+                    inputMode="decimal"
+                    value={room.ceilingHeightM}
+                    onChange={(e) =>
+                      setRoom(room.id, { ceilingHeightM: e.target.value })
+                    }
+                    placeholder="e.g. 2.45"
+                    className="w-full max-w-xs rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/40 focus:ring-2"
+                  />
+                  {issueFor(`room-${ri}-ceiling`) && (
+                    <p className="mt-1 text-xs text-error">
+                      {issueFor(`room-${ri}-ceiling`)}
+                    </p>
+                  )}
+                </div>
+
+                <div className="mb-8 grid gap-8 md:grid-cols-2">
+                  <div>
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="font-label text-xs font-bold uppercase tracking-widest text-primary">
+                        Doors
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => addOpening(room.id, "doors")}
+                        className="text-xs font-bold uppercase tracking-widest text-primary hover:underline"
+                      >
+                        + Add door
+                      </button>
+                    </div>
+                    {room.doors.length === 0 && (
+                      <p className="text-xs text-on-surface-variant">
+                        Optional — add each door opening width.
+                      </p>
+                    )}
+                    <div className="space-y-3">
+                      {room.doors.map((d, di) => (
+                        <div
+                          key={d.id}
+                          className="flex flex-col gap-2 rounded-lg bg-surface-container-lowest p-4 sm:flex-row"
+                        >
+                          <div className="flex-1">
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                              Width (m)
+                            </label>
+                            <input
+                              inputMode="decimal"
+                              value={d.widthM}
+                              onChange={(e) => {
+                                const doors = room.doors.map((x) =>
+                                  x.id === d.id
+                                    ? { ...x, widthM: e.target.value }
+                                    : x,
+                                );
+                                setRoom(room.id, { doors });
+                              }}
+                              className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                            />
+                            {issueFor(`room-${ri}-door-${di}`) && (
+                              <p className="mt-1 text-xs text-error">
+                                {issueFor(`room-${ri}-door-${di}`)}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex-[2]">
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                              Note (optional)
+                            </label>
+                            <input
+                              value={d.note}
+                              onChange={(e) => {
+                                const doors = room.doors.map((x) =>
+                                  x.id === d.id
+                                    ? { ...x, note: e.target.value }
+                                    : x,
+                                );
+                                setRoom(room.id, { doors });
+                              }}
+                              placeholder="e.g. Patio — sliding"
+                              className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              removeOpening(room.id, "doors", d.id)
+                            }
+                            className="material-symbols-outlined self-end rounded p-2 text-on-surface-variant hover:text-error sm:self-center"
+                          >
+                            close
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="font-label text-xs font-bold uppercase tracking-widest text-primary">
+                        Windows
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => addOpening(room.id, "windows")}
+                        className="text-xs font-bold uppercase tracking-widest text-primary hover:underline"
+                      >
+                        + Add window
+                      </button>
+                    </div>
+                    {room.windows.length === 0 && (
+                      <p className="text-xs text-on-surface-variant">
+                        Optional — rough opening widths.
+                      </p>
+                    )}
+                    <div className="space-y-3">
+                      {room.windows.map((w, wi) => (
+                        <div
+                          key={w.id}
+                          className="flex flex-col gap-2 rounded-lg bg-surface-container-lowest p-4 sm:flex-row"
+                        >
+                          <div className="flex-1">
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                              Width (m)
+                            </label>
+                            <input
+                              inputMode="decimal"
+                              value={w.widthM}
+                              onChange={(e) => {
+                                const windows = room.windows.map((x) =>
+                                  x.id === w.id
+                                    ? { ...x, widthM: e.target.value }
+                                    : x,
+                                );
+                                setRoom(room.id, { windows });
+                              }}
+                              className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                            />
+                            {issueFor(`room-${ri}-window-${wi}`) && (
+                              <p className="mt-1 text-xs text-error">
+                                {issueFor(`room-${ri}-window-${wi}`)}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex-[2]">
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                              Note (optional)
+                            </label>
+                            <input
+                              value={w.note}
+                              onChange={(e) => {
+                                const windows = room.windows.map((x) =>
+                                  x.id === w.id
+                                    ? { ...x, note: e.target.value }
+                                    : x,
+                                );
+                                setRoom(room.id, { windows });
+                              }}
+                              placeholder="e.g. Bay — centre"
+                              className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              removeOpening(room.id, "windows", w.id)
+                            }
+                            className="material-symbols-outlined self-end rounded p-2 text-on-surface-variant hover:text-error sm:self-center"
+                          >
+                            close
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-6">
+                  <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    Irregular room (FR-02) — describe bays, angles, L-shape
+                  </label>
+                  <textarea
+                    value={room.irregularNotes}
+                    onChange={(e) =>
+                      setRoom(room.id, { irregularNotes: e.target.value })
+                    }
+                    rows={3}
+                    placeholder="e.g. Fifth wall 1.2 m at 135° to wall 4; bay 0.9 m deep…"
+                    className="w-full rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/40 focus:ring-2"
+                  />
+                </div>
+
+                <div className="mb-6">
+                  <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    Notes for this room (FR-04)
+                  </label>
+                  <textarea
+                    value={room.notes}
+                    onChange={(e) => setRoom(room.id, { notes: e.target.value })}
+                    rows={3}
+                    placeholder="Anything else the designer should know…"
+                    className="w-full rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/40 focus:ring-2"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    Photos (FR-04) — corners, openings, overall context
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhotoTargetRoomId(room.id);
+                      fileInputRef.current?.click();
+                    }}
+                    className="mb-4 rounded border border-primary px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
+                  >
+                    Upload photos
+                  </button>
+                  <div className="flex flex-wrap gap-3">
+                    {room.photos.map((p) => (
+                      <div
+                        key={p.id}
+                        className="relative w-28 shrink-0 overflow-hidden rounded-lg border border-outline-variant/30 bg-surface-container-high"
+                      >
+                        <img
+                          src={p.uri}
+                          alt={p.name}
+                          className="aspect-square h-28 w-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removePhoto(room.id, p.id)}
+                          className="absolute right-1 top-1 rounded bg-inverse-surface/80 px-1 text-[10px] text-surface"
+                        >
+                          ✕
+                        </button>
+                        <p className="truncate p-1 text-[9px] text-on-surface-variant">
+                          {p.name}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            ))}
+
+            <button
+              type="button"
+              onClick={addRoom}
+              className="w-full rounded-xl border border-dashed border-outline py-4 text-sm font-bold uppercase tracking-widest text-primary transition-colors hover:bg-surface-container-low"
+            >
+              + Add another room (FR-06)
+            </button>
+
+            {issues.some((i) => i.path === "rooms") && (
+              <p className="text-sm text-error">{issueFor("rooms")}</p>
+            )}
+
+            <div className="flex flex-wrap gap-4">
+              <button
+                type="button"
+                onClick={() => setStep("project")}
+                className="rounded border border-outline px-6 py-3 text-sm font-bold uppercase tracking-widest text-on-surface hover:bg-surface-container-low"
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={goReview}
+                className="rounded bg-primary px-8 py-3 text-sm font-bold uppercase tracking-widest text-on-primary hover:bg-surface-tint"
+              >
+                Review &amp; export
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === "review" && (
+          <div className="space-y-10">
+            <section className="rounded-xl bg-surface-container-low p-6 md:p-8">
+              <h2 className="font-headline mb-2 text-2xl text-on-surface">
+                Submission summary
+              </h2>
+              <p className="mb-6 text-sm text-on-surface-variant">
+                {customerName} · {email} · {projectName}
+              </p>
+              <div className="space-y-8">
+                {rooms.map((room, ri) => (
+                  <div key={room.id}>
+                    <h3 className="font-headline mb-4 text-lg text-primary">
+                      {room.name}
+                    </h3>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {room.walls.map((w) => {
+                        const m = parseMeters(w.lengthM);
+                        const dual = formatLengthDual(m, unit);
+                        return (
+                          <div
+                            key={w.id}
+                            className="flex items-center justify-between rounded-lg bg-surface-container-lowest p-4 editorial-shadow"
+                          >
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                                {w.label}
+                              </p>
+                              <p className="font-headline text-2xl text-on-surface">
+                                {dual.primary}
+                              </p>
+                              <p className="text-xs text-on-surface-variant">
+                                {dual.secondary}
+                              </p>
+                            </div>
+                            <span className="text-[10px] font-bold text-emerald-700">
+                              OK
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {(() => {
+                        const m = parseMeters(room.ceilingHeightM);
+                        const dual = formatLengthDual(m, unit);
+                        return (
+                          <div className="flex items-center justify-between rounded-lg bg-surface-container-lowest p-4 editorial-shadow">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                                Ceiling height
+                              </p>
+                              <p className="font-headline text-2xl text-on-surface">
+                                {dual.primary}
+                              </p>
+                              <p className="text-xs text-on-surface-variant">
+                                {dual.secondary}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    {(room.doors.length > 0 || room.windows.length > 0) && (
+                      <ul className="mt-4 list-inside list-disc text-sm text-on-surface-variant">
+                        {room.doors.map((d) =>
+                          d.widthM.trim() ? (
+                            <li key={d.id}>
+                              Door {d.widthM} m{d.note ? ` — ${d.note}` : ""}
+                            </li>
+                          ) : null,
+                        )}
+                        {room.windows.map((w) =>
+                          w.widthM.trim() ? (
+                            <li key={w.id}>
+                              Window {w.widthM} m{w.note ? ` — ${w.note}` : ""}
+                            </li>
+                          ) : null,
+                        )}
+                      </ul>
+                    )}
+                    {room.irregularNotes.trim() && (
+                      <p className="mt-3 text-sm text-on-surface">
+                        <strong>Irregular:</strong> {room.irregularNotes}
+                      </p>
+                    )}
+                    {room.notes.trim() && (
+                      <p className="mt-2 text-sm text-on-surface-variant">
+                        {room.notes}
+                      </p>
+                    )}
+                    {room.photos.length > 0 && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {room.photos.map((p) => (
+                          <img
+                            key={p.id}
+                            src={p.uri}
+                            alt=""
+                            className="h-20 w-20 rounded object-cover ring-1 ring-outline-variant/30"
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <div className="flex flex-wrap gap-4">
+              <button
+                type="button"
+                onClick={() => setStep("rooms")}
+                className="rounded border border-outline px-6 py-3 text-sm font-bold uppercase tracking-widest"
+              >
+                Edit measurements
+              </button>
+              <button
+                type="button"
+                onClick={downloadJson}
+                className="rounded bg-inverse-surface px-6 py-3 text-sm font-bold uppercase tracking-widest text-surface hover:opacity-90"
+              >
+                Download JSON (FR-16 draft)
+              </button>
+              <button
+                type="button"
+                onClick={openMailto}
+                className="rounded bg-primary px-6 py-3 text-sm font-bold uppercase tracking-widest text-on-primary hover:bg-surface-tint"
+              >
+                Email summary to TM Designs
+              </button>
+            </div>
+            <p className="text-xs text-on-surface-variant">
+              Photo binary upload to your servers is not wired yet — JSON
+              includes filenames only; attach images manually when emailing, or
+              extend with an API per FR-16.
+            </p>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}

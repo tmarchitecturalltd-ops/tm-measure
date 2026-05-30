@@ -1,0 +1,1195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>TM Measure — App Store screenshots (1290×2796)</title>
+<meta name="viewport" content="width=1290, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Serif:wght@400;600;700&family=Material+Symbols+Outlined&display=swap" rel="stylesheet" />
+
+<!--
+  TM Measure — App Store screenshot source.
+
+  Five separate sections, each one exactly 1290 × 2796 px — the size Apple
+  requires for iPhone 6.9" screenshots (iPhone 15 Pro Max / 16 Pro Max).
+  The same PNGs work as Play Store phone screenshots.
+
+  HOW TO EXPORT (Chrome, no extensions, Windows):
+    1. Open this file in Chrome
+    2. Press F12 to open DevTools
+    3. Click the "Toggle device toolbar" icon (top-left of DevTools) OR
+       press Ctrl+Shift+M. You'll see a device dropdown at the top.
+    4. Click "Dimensions: Responsive" and type 1290 × 2796
+    5. In the URL bar, append #screen-1 (then #screen-2, etc.) so only
+       one screenshot fills the viewport at a time
+    6. In DevTools, click the three-dot menu → "Capture full size screenshot"
+    7. Chrome saves a 1290×2796 PNG to your Downloads folder
+    8. Repeat for #screen-2 … #screen-5
+
+  Alternative workflow without device mode:
+    Just zoom your browser out until the whole page fits, right-click →
+    "Save as image" won't work in Chrome; use the DevTools method instead.
+
+  If you want to tweak copy, the caption text is in the .caption-title and
+  .caption-sub elements of each <section>. Everything else is a token.
+-->
+
+<style>
+  /* ─── Tokens mirrored from your app's globals.css ─────────────────── */
+  :root {
+    --surface: #fcf9f5;
+    --surface-container-low: #f3eadd;
+    --surface-container-lowest: #fdfbf8;
+    --primary: #b89650;
+    --primary-dark: #8c6f39;
+    --on-primary: #1c1c1a;
+    --on-surface: #1c1c1a;
+    --on-surface-variant: #6e6658;
+    --outline: #d6cbb6;
+    --hud: #1c1c1a;
+    --success: #2f7d5b;
+    --warning: #b89650;
+    --danger: #9e3b3b;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #202020;            /* framing around the 1290-wide strip */
+    color: var(--on-surface);
+    font-family: "Manrope", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Every screen is a 1290×2796 stage, centered on the page so it's
+     easy to see in a normal browser window. */
+  .screen {
+    width: 1290px;
+    height: 2796px;
+    margin: 40px auto;
+    background: var(--surface);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 30px 100px rgba(0, 0, 0, 0.35);
+  }
+
+  /* URL-fragment isolation: #screen-1 hides 2–5, etc.
+     This makes Chrome's "capture full size" tool produce a single clean PNG. */
+  :target ~ .screen,
+  :target ~ * .screen { display: none; }
+  #screen-1:target ~ .screen { display: none; }
+  #screen-1:target ~ #screen-1-stage { display: block; }
+  #screen-2:target ~ .screen { display: none; }
+  #screen-2:target ~ #screen-2-stage { display: block; }
+  #screen-3:target ~ .screen { display: none; }
+  #screen-3:target ~ #screen-3-stage { display: block; }
+  #screen-4:target ~ .screen { display: none; }
+  #screen-4:target ~ #screen-4-stage { display: block; }
+  #screen-5:target ~ .screen { display: none; }
+  #screen-5:target ~ #screen-5-stage { display: block; }
+
+  /* ─── Shared structure ────────────────────────────────────────────── */
+  /* Caption zone: hero text at the top of every screen */
+  .caption {
+    padding: 140px 120px 80px;
+    text-align: center;
+    position: relative;
+    z-index: 2;
+  }
+  .eyebrow {
+    font-family: "Manrope", sans-serif;
+    font-size: 30px;
+    letter-spacing: 8px;
+    font-weight: 700;
+    color: var(--primary);
+    text-transform: uppercase;
+    margin: 0 0 28px;
+  }
+  .caption-title {
+    font-family: "Noto Serif", Georgia, serif;
+    font-weight: 700;
+    font-size: 108px;
+    line-height: 1.02;
+    letter-spacing: -1.5px;
+    color: var(--on-surface);
+    margin: 0 0 36px;
+  }
+  .caption-title em {
+    font-style: italic;
+    color: var(--primary-dark);
+  }
+  .caption-sub {
+    font-family: "Manrope", sans-serif;
+    font-size: 44px;
+    line-height: 1.35;
+    font-weight: 500;
+    color: var(--on-surface-variant);
+    margin: 0 auto;
+    max-width: 1000px;
+  }
+
+  /* Stage: where the phone-like UI sits */
+  .stage {
+    position: absolute;
+    left: 120px;
+    right: 120px;
+    bottom: 0;
+    top: 1000px;
+  }
+
+  /* Phone chrome — a soft rounded rectangle, no fake bezel overkill */
+  .phone {
+    position: absolute;
+    inset: 0 80px 200px;
+    background: var(--surface);
+    border-radius: 90px;
+    box-shadow:
+      0 4px 0 rgba(255, 255, 255, 0.4) inset,
+      0 -4px 0 rgba(0, 0, 0, 0.04) inset,
+      0 60px 120px rgba(28, 28, 26, 0.18),
+      0 10px 30px rgba(28, 28, 26, 0.08);
+    overflow: hidden;
+    border: 12px solid #1c1c1a;
+  }
+  /* Dynamic Island */
+  .phone::before {
+    content: "";
+    position: absolute;
+    top: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 260px;
+    height: 78px;
+    background: #0a0a0a;
+    border-radius: 40px;
+    z-index: 20;
+  }
+
+  /* Status bar */
+  .status-bar {
+    position: absolute;
+    top: 30px;
+    left: 0;
+    right: 0;
+    padding: 0 80px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--on-surface);
+    font-family: "Manrope", sans-serif;
+    font-weight: 700;
+    font-size: 34px;
+    z-index: 10;
+  }
+  .status-bar .right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 28px;
+  }
+  .status-bar .bars {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 3px;
+  }
+  .status-bar .bars span {
+    width: 6px;
+    background: var(--on-surface);
+    border-radius: 1px;
+  }
+  .status-bar .bars span:nth-child(1) { height: 8px; }
+  .status-bar .bars span:nth-child(2) { height: 14px; }
+  .status-bar .bars span:nth-child(3) { height: 20px; }
+  .status-bar .bars span:nth-child(4) { height: 26px; }
+  .status-bar .battery {
+    width: 54px;
+    height: 24px;
+    border: 3px solid var(--on-surface);
+    border-radius: 6px;
+    position: relative;
+    display: inline-block;
+  }
+  .status-bar .battery::after {
+    content: "";
+    position: absolute;
+    top: 6px;
+    right: -8px;
+    width: 4px;
+    height: 8px;
+    background: var(--on-surface);
+    border-radius: 0 2px 2px 0;
+  }
+  .status-bar .battery::before {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    width: calc(100% - 4px);
+    background: var(--on-surface);
+    border-radius: 3px;
+  }
+
+  /* App header (matches your real app) */
+  .app-header {
+    position: absolute;
+    top: 130px;
+    left: 0;
+    right: 0;
+    padding: 30px 56px 28px;
+    background: rgba(252, 249, 245, 0.92);
+    backdrop-filter: blur(24px);
+    border-bottom: 1px solid rgba(214, 203, 182, 0.3);
+    z-index: 9;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  .app-header .back {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: var(--primary);
+    font-family: "Material Symbols Outlined";
+    font-size: 44px;
+    line-height: 1;
+  }
+  .app-header .label {
+    font-family: "Manrope";
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--primary);
+    margin: 0;
+  }
+  .app-header h1 {
+    font-family: "Noto Serif";
+    font-weight: 600;
+    font-size: 38px;
+    margin: 4px 0 0;
+    color: var(--on-surface);
+  }
+
+  /* Wizard step pills (shared) */
+  .steps {
+    display: flex;
+    gap: 18px;
+    padding: 32px 56px 0;
+    flex-wrap: wrap;
+  }
+  .steps li {
+    font-family: "Manrope";
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 18px 28px;
+    border-radius: 999px;
+    background: var(--surface-container-low);
+    color: var(--on-surface-variant);
+    list-style: none;
+  }
+  .steps li.active {
+    background: var(--primary);
+    color: var(--on-primary);
+  }
+
+  /* ─── SCREEN 1 — HERO ─────────────────────────────────────────────── */
+  #screen-1-stage .stage {
+    top: 1020px;
+  }
+  #screen-1-stage .hero-card {
+    position: absolute;
+    inset: 0 160px 240px;
+    background: var(--surface-container-low);
+    border-radius: 64px;
+    padding: 120px 100px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  #screen-1-stage .logo-mark {
+    width: 360px;
+    height: 360px;
+    margin: 0 auto;
+    background: var(--surface);
+    border-radius: 80px;
+    box-shadow: 0 40px 80px rgba(184, 150, 80, 0.18);
+    display: grid;
+    place-items: center;
+    font-family: "Noto Serif";
+    font-weight: 700;
+    font-size: 220px;
+    color: var(--primary);
+    position: relative;
+  }
+  #screen-1-stage .logo-mark::after {
+    content: "MEASURE";
+    position: absolute;
+    bottom: 40px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-family: "Manrope";
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 10px;
+    color: var(--on-surface-variant);
+  }
+  #screen-1-stage .tagline {
+    font-family: "Noto Serif";
+    font-size: 56px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    margin: 80px 0 60px;
+    color: var(--on-surface);
+  }
+  #screen-1-stage .cta-row {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+  }
+  #screen-1-stage .cta-row .cta {
+    background: var(--primary);
+    color: var(--on-primary);
+    font-family: "Manrope";
+    font-weight: 800;
+    font-size: 28px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    padding: 36px 64px;
+    border-radius: 18px;
+    box-shadow: 0 20px 50px rgba(184, 150, 80, 0.4);
+  }
+  #screen-1-stage .cta-row .cta.ghost {
+    background: transparent;
+    color: var(--on-surface);
+    border: 3px solid var(--outline);
+    box-shadow: none;
+  }
+
+  /* ─── SCREEN 2 — PROJECT DETAILS ──────────────────────────────────── */
+  #screen-2-stage .phone { inset: 0 80px 200px; }
+  #screen-2-stage .panel {
+    position: absolute;
+    top: 360px;
+    left: 56px;
+    right: 56px;
+    background: var(--surface-container-low);
+    border-radius: 48px;
+    padding: 64px 56px 80px;
+  }
+  #screen-2-stage .panel h2 {
+    font-family: "Noto Serif";
+    font-weight: 600;
+    font-size: 56px;
+    margin: 0 0 48px;
+    color: var(--on-surface);
+  }
+  #screen-2-stage .field {
+    margin-bottom: 44px;
+  }
+  #screen-2-stage .field label {
+    display: block;
+    font-family: "Manrope";
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--on-surface-variant);
+    margin-bottom: 18px;
+  }
+  #screen-2-stage .field .input {
+    background: var(--surface-container-lowest);
+    border: 1px solid rgba(214, 203, 182, 0.4);
+    border-radius: 14px;
+    padding: 32px 28px;
+    font-family: "Manrope";
+    font-size: 32px;
+    font-weight: 500;
+    color: var(--on-surface);
+  }
+  #screen-2-stage .unit-toggle {
+    display: flex;
+    gap: 16px;
+    margin-top: 20px;
+  }
+  #screen-2-stage .unit-toggle .chip {
+    padding: 20px 32px;
+    font-family: "Manrope";
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    border-radius: 12px;
+    background: #d9cdb1;
+    color: var(--on-surface);
+  }
+  #screen-2-stage .unit-toggle .chip.active {
+    background: var(--primary);
+    color: var(--on-primary);
+  }
+  #screen-2-stage .submit-cta {
+    position: absolute;
+    bottom: 260px;
+    left: 56px;
+    right: 56px;
+    background: var(--primary);
+    color: var(--on-primary);
+    font-family: "Manrope";
+    font-weight: 800;
+    font-size: 32px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    padding: 42px 0;
+    border-radius: 16px;
+    text-align: center;
+  }
+
+  /* ─── SCREEN 3 — AUTO-SCAN HUD ────────────────────────────────────── */
+  #screen-3-stage .phone { background: #0a0a0a; }
+  #screen-3-stage .camera-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 50% 35%, rgba(184, 150, 80, 0.12), transparent 60%),
+      linear-gradient(180deg, #2a2624 0%, #1a1816 40%, #0d0c0b 100%);
+    z-index: 1;
+  }
+  /* Fake room-corners perspective sketch */
+  #screen-3-stage .room-mock {
+    position: absolute;
+    inset: 200px 100px 500px;
+    z-index: 2;
+    opacity: 0.25;
+  }
+  #screen-3-stage .room-mock svg { width: 100%; height: 100%; }
+  #screen-3-stage .hud-top {
+    position: absolute;
+    top: 130px;
+    left: 0;
+    right: 0;
+    padding: 32px 56px;
+    background: rgba(28, 28, 26, 0.9);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 10;
+  }
+  #screen-3-stage .hud-top .eyebrow {
+    color: var(--primary);
+    font-size: 22px;
+    margin: 0 0 8px;
+    letter-spacing: 4px;
+  }
+  #screen-3-stage .hud-top .room {
+    color: #e9e9e6;
+    font-family: "Manrope";
+    font-weight: 600;
+    font-size: 32px;
+    margin: 0;
+  }
+  #screen-3-stage .hud-top .close {
+    color: #e9e9e6;
+    font-family: "Manrope";
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    padding: 20px 28px;
+    border-radius: 999px;
+  }
+
+  /* Central AR reticle */
+  #screen-3-stage .reticle {
+    position: absolute;
+    top: 48%;
+    left: 50%;
+    width: 420px;
+    height: 420px;
+    margin: -210px 0 0 -210px;
+    z-index: 6;
+  }
+  #screen-3-stage .reticle svg { width: 100%; height: 100%; }
+
+  /* Mode chips */
+  #screen-3-stage .modes {
+    position: absolute;
+    left: 56px;
+    right: 56px;
+    bottom: 460px;
+    display: flex;
+    gap: 14px;
+    padding: 24px;
+    border-radius: 32px;
+    background: rgba(28, 28, 26, 0.92);
+    z-index: 10;
+  }
+  #screen-3-stage .modes .chip {
+    padding: 18px 28px;
+    font-family: "Manrope";
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.65);
+  }
+  #screen-3-stage .modes .chip.active {
+    background: var(--primary);
+    color: var(--on-primary);
+  }
+  #screen-3-stage .record {
+    position: absolute;
+    left: 56px;
+    right: 56px;
+    bottom: 300px;
+    padding: 36px 0;
+    background: var(--primary);
+    color: var(--on-primary);
+    text-align: center;
+    font-family: "Manrope";
+    font-weight: 800;
+    font-size: 30px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    border-radius: 16px;
+    z-index: 10;
+  }
+  #screen-3-stage .hint {
+    position: absolute;
+    left: 56px;
+    right: 56px;
+    bottom: 240px;
+    text-align: center;
+    font-family: "Manrope";
+    font-size: 22px;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    z-index: 10;
+  }
+
+  /* ─── SCREEN 4 — SCAN REVIEW ──────────────────────────────────────── */
+  #screen-4-stage .hero-panel {
+    position: absolute;
+    top: 350px;
+    left: 56px;
+    right: 56px;
+    aspect-ratio: 4/3;
+    background: linear-gradient(145deg, #14120f 0%, #2a241c 100%);
+    border-radius: 40px;
+    overflow: hidden;
+  }
+  #screen-4-stage .hero-panel svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  #screen-4-stage .hero-panel .tag {
+    position: absolute;
+    top: 28px;
+    left: 28px;
+    padding: 14px 22px;
+    background: rgba(184, 150, 80, 0.2);
+    color: var(--primary);
+    font-family: "Manrope";
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    border-radius: 999px;
+  }
+  #screen-4-stage .hero-panel .toggle {
+    position: absolute;
+    bottom: 28px;
+    right: 28px;
+    display: flex;
+    gap: 10px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.55);
+    border-radius: 999px;
+  }
+  #screen-4-stage .hero-panel .toggle span {
+    padding: 14px 22px;
+    font-family: "Manrope";
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: rgba(255, 255, 255, 0.6);
+    border-radius: 999px;
+  }
+  #screen-4-stage .hero-panel .toggle .on {
+    background: var(--primary);
+    color: var(--on-primary);
+  }
+
+  #screen-4-stage .dims {
+    position: absolute;
+    top: 1420px;
+    left: 56px;
+    right: 56px;
+    background: var(--surface-container-lowest);
+    border-radius: 32px;
+    padding: 44px 40px;
+  }
+  #screen-4-stage .dims .heading {
+    font-family: "Manrope";
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--on-surface-variant);
+    margin-bottom: 28px;
+  }
+  #screen-4-stage .dim-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 24px 0;
+    border-bottom: 1px solid rgba(214, 203, 182, 0.5);
+  }
+  #screen-4-stage .dim-row:last-child { border-bottom: none; }
+  #screen-4-stage .dim-row .label {
+    font-family: "Manrope";
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--on-surface-variant);
+    letter-spacing: 1px;
+  }
+  #screen-4-stage .dim-row .value {
+    font-family: "Noto Serif";
+    font-weight: 700;
+    font-size: 56px;
+    color: var(--on-surface);
+    line-height: 1;
+  }
+  #screen-4-stage .dim-row .value small {
+    font-family: "Manrope";
+    font-size: 24px;
+    font-weight: 500;
+    color: var(--on-surface-variant);
+    margin-left: 8px;
+    letter-spacing: 2px;
+  }
+  #screen-4-stage .dim-row .chip {
+    padding: 10px 20px;
+    font-family: "Manrope";
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    border-radius: 999px;
+  }
+  #screen-4-stage .dim-row .chip.high { background: #dcf0e4; color: var(--success); }
+  #screen-4-stage .dim-row .chip.med  { background: #f6ead1; color: var(--primary-dark); }
+  #screen-4-stage .dim-row .chip.low  { background: #f6d9d9; color: var(--danger); }
+
+  #screen-4-stage .confirm {
+    position: absolute;
+    left: 56px;
+    right: 56px;
+    bottom: 230px;
+    padding: 44px 0;
+    background: var(--primary);
+    color: var(--on-primary);
+    text-align: center;
+    font-family: "Manrope";
+    font-weight: 800;
+    font-size: 32px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    border-radius: 18px;
+  }
+
+  /* ─── SCREEN 5 — SUBMIT / REVIEW ──────────────────────────────────── */
+  #screen-5-stage .proj-meta {
+    position: absolute;
+    top: 360px;
+    left: 56px;
+    right: 56px;
+    padding: 40px 44px;
+    background: var(--surface-container-low);
+    border-radius: 32px;
+  }
+  #screen-5-stage .proj-meta h2 {
+    font-family: "Noto Serif";
+    font-weight: 600;
+    font-size: 44px;
+    margin: 0 0 16px;
+  }
+  #screen-5-stage .proj-meta p {
+    font-family: "Manrope";
+    font-size: 24px;
+    color: var(--on-surface-variant);
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  #screen-5-stage .room-card {
+    position: absolute;
+    left: 56px;
+    right: 56px;
+    padding: 36px 40px;
+    background: var(--surface-container-lowest);
+    border: 1px solid rgba(214, 203, 182, 0.5);
+    border-radius: 28px;
+  }
+  #screen-5-stage .room-card.first { top: 720px; }
+  #screen-5-stage .room-card.second { top: 1200px; }
+
+  #screen-5-stage .room-card h3 {
+    font-family: "Noto Serif";
+    font-weight: 600;
+    font-size: 36px;
+    color: var(--primary);
+    margin: 0 0 28px;
+  }
+  #screen-5-stage .room-card .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  #screen-5-stage .room-card .cell {
+    background: var(--surface);
+    border-radius: 18px;
+    padding: 24px 26px;
+  }
+  #screen-5-stage .room-card .cell .k {
+    font-family: "Manrope";
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--on-surface-variant);
+    margin-bottom: 10px;
+  }
+  #screen-5-stage .room-card .cell .v {
+    font-family: "Noto Serif";
+    font-weight: 700;
+    font-size: 44px;
+    color: var(--on-surface);
+  }
+  #screen-5-stage .room-card .cell .v2 {
+    font-family: "Manrope";
+    font-size: 20px;
+    color: var(--on-surface-variant);
+    margin-top: 4px;
+  }
+
+  #screen-5-stage .submit-row {
+    position: absolute;
+    left: 56px;
+    right: 56px;
+    bottom: 240px;
+    display: flex;
+    gap: 18px;
+  }
+  #screen-5-stage .submit-row .btn {
+    flex: 1;
+    padding: 38px 0;
+    font-family: "Manrope";
+    font-weight: 800;
+    font-size: 26px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    text-align: center;
+    border-radius: 16px;
+  }
+  #screen-5-stage .submit-row .btn.primary {
+    background: var(--primary);
+    color: var(--on-primary);
+  }
+  #screen-5-stage .submit-row .btn.ghost {
+    background: transparent;
+    color: var(--on-surface);
+    border: 3px solid var(--outline);
+  }
+
+  /* ─── Nav bar for previewing in a regular browser window ─────────── */
+  .nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: rgba(20, 20, 20, 0.9);
+    padding: 14px 24px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    z-index: 9999;
+    backdrop-filter: blur(12px);
+  }
+  .nav a {
+    color: #fff;
+    font-family: "Manrope";
+    font-weight: 600;
+    font-size: 14px;
+    text-decoration: none;
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .nav a:hover { background: rgba(255, 255, 255, 0.1); }
+  .nav .label { color: #999; font-size: 12px; margin-right: 8px; font-family: "Manrope"; }
+
+  /* Hide the nav when a screen is targeted — gives you a clean PNG */
+  body:has(:target) .nav { display: none; }
+
+  /* Initial state: show all 5 so you can see them. :target overrides. */
+  .screen { display: block; }
+</style>
+</head>
+<body>
+
+<!-- Hash targets — empty anchors used by :target rules above -->
+<div id="screen-1" style="display:none"></div>
+<div id="screen-2" style="display:none"></div>
+<div id="screen-3" style="display:none"></div>
+<div id="screen-4" style="display:none"></div>
+<div id="screen-5" style="display:none"></div>
+
+<!-- Nav (only shown when no #screen-N hash is active) -->
+<nav class="nav">
+  <span class="label">TM Measure — App Store (1290×2796)</span>
+  <a href="#screen-1">1 · Hero</a>
+  <a href="#screen-2">2 · Project</a>
+  <a href="#screen-3">3 · Scan</a>
+  <a href="#screen-4">4 · Review</a>
+  <a href="#screen-5">5 · Submit</a>
+  <a href="./screenshots.html" style="margin-left:auto;opacity:0.6">All 5</a>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN 1 — HERO                                                    -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="screen-1-stage">
+  <div class="caption">
+    <p class="eyebrow">TM Architectural Designs</p>
+    <h2 class="caption-title">Measure your home<br/>in <em>under an hour</em></h2>
+    <p class="caption-sub">Skip the £300 site visit.<br/>Your drawings start the next day.</p>
+  </div>
+  <div class="stage">
+    <div class="hero-card">
+      <div class="logo-mark">TM</div>
+      <p class="tagline">The companion app for<br/>TM Architectural Designs clients.</p>
+      <div class="cta-row">
+        <div class="cta">Start measuring</div>
+        <div class="cta ghost">Learn more</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN 2 — PROJECT DETAILS                                          -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="screen-2-stage">
+  <div class="caption">
+    <p class="eyebrow">Step 1 of 3</p>
+    <h2 class="caption-title">One wizard,<br/><em>every room</em></h2>
+    <p class="caption-sub">Guided capture for walls, ceilings,<br/>doors, windows &mdash; in metric or imperial.</p>
+  </div>
+  <div class="stage">
+    <div class="phone">
+      <div class="status-bar">
+        <span>9:41</span>
+        <span class="right">
+          <span class="bars"><span></span><span></span><span></span><span></span></span>
+          <span style="letter-spacing:1px;">5G</span>
+          <span class="battery"></span>
+        </span>
+      </div>
+      <div class="app-header">
+        <div class="back">arrow_back</div>
+        <div>
+          <p class="label">TM Measure</p>
+          <h1>Self-measurement intake</h1>
+        </div>
+      </div>
+      <ol class="steps" style="top:280px;position:absolute;">
+        <li class="active">1. Your details</li>
+        <li>2. Rooms</li>
+        <li>3. Review</li>
+      </ol>
+      <div class="panel">
+        <h2>Project details</h2>
+        <div class="field">
+          <label>Your name *</label>
+          <div class="input">Harry Marchant</div>
+        </div>
+        <div class="field">
+          <label>Email *</label>
+          <div class="input">harry@tmdesigns.co.uk</div>
+        </div>
+        <div class="field">
+          <label>Project name *</label>
+          <div class="input">Rear extension — 12 Smith St</div>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>Display units</label>
+          <div class="unit-toggle">
+            <span class="chip active">Metric primary</span>
+            <span class="chip">Imperial primary</span>
+          </div>
+        </div>
+      </div>
+      <div class="submit-cta">Continue to rooms</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN 3 — AUTO-SCAN HUD                                            -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="screen-3-stage" style="background:#0a0a0a">
+  <div class="caption">
+    <p class="eyebrow">Camera-led capture</p>
+    <h2 class="caption-title" style="color:#fcf9f5">Point your camera.<br/>We'll do <em>the maths.</em></h2>
+    <p class="caption-sub" style="color:rgba(252,249,245,0.65)">Tap four corners. LiDAR-ready on iPhone Pro.<br/>Calibrated accuracy to &plusmn;3&nbsp;cm.</p>
+  </div>
+  <div class="stage">
+    <div class="phone">
+      <div class="camera-bg"></div>
+      <!-- Rough perspective sketch of a room corner, purely decorative -->
+      <svg class="room-mock" viewBox="0 0 800 1000" preserveAspectRatio="none">
+        <g stroke="#b89650" stroke-width="2" fill="none">
+          <path d="M 0 100 L 400 300 L 800 100" />
+          <path d="M 0 900 L 400 700 L 800 900" />
+          <path d="M 0 100 L 0 900" />
+          <path d="M 800 100 L 800 900" />
+          <path d="M 400 300 L 400 700" />
+        </g>
+      </svg>
+
+      <div class="status-bar" style="color:#fff">
+        <span>9:41</span>
+        <span class="right" style="color:#fff">
+          <span class="bars"><span style="background:#fff"></span><span style="background:#fff"></span><span style="background:#fff"></span><span style="background:#fff"></span></span>
+          <span>5G</span>
+          <span class="battery" style="border-color:#fff"></span>
+        </span>
+      </div>
+
+      <div class="hud-top">
+        <div>
+          <p class="eyebrow">Scan your room</p>
+          <p class="room">Kitchen</p>
+        </div>
+        <div class="close">Close</div>
+      </div>
+
+      <!-- AR reticle (matches the one in RoomScanOverlay) -->
+      <div class="reticle">
+        <svg viewBox="0 0 200 200">
+          <circle cx="100" cy="100" r="72" fill="none" stroke="#b89650" stroke-width="1.5" stroke-dasharray="8 6" />
+          <line x1="100" y1="20"  x2="100" y2="60"  stroke="#b89650" stroke-width="2" />
+          <line x1="100" y1="140" x2="100" y2="180" stroke="#b89650" stroke-width="2" />
+          <line x1="20"  y1="100" x2="60"  y2="100" stroke="#b89650" stroke-width="2" />
+          <line x1="140" y1="100" x2="180" y2="100" stroke="#b89650" stroke-width="2" />
+          <circle cx="100" cy="100" r="4" fill="#b89650" />
+        </svg>
+      </div>
+
+      <div class="modes">
+        <span class="chip">LiDAR / AR</span>
+        <span class="chip active">Corner mark</span>
+        <span class="chip" style="opacity:0.45">Video soon</span>
+      </div>
+      <div class="hint" style="margin-top:18px;color:#b89650;font-weight:600">Tap corner 1 of 4 — three times to average jitter.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:14px;font-size:14px;letter-spacing:1.6px;font-weight:700;text-transform:uppercase;">
+        <span style="background:rgba(184,150,80,0.18);color:#b89650;border-radius:999px;padding:6px 14px;">Calibrated · 1620 px</span>
+        <span style="background:rgba(156,226,156,0.22);color:#9ce29c;border-radius:999px;padding:6px 14px;">Acc High</span>
+        <span style="background:rgba(244,168,156,0.18);color:#f4a89c;border-radius:999px;padding:6px 14px;">Hold still</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN 4 — SCAN REVIEW (the key differentiator)                    -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="screen-4-stage">
+  <div class="caption">
+    <p class="eyebrow">Verified before you submit</p>
+    <h2 class="caption-title">Check every<br/><em>measurement</em></h2>
+    <p class="caption-sub">Confidence ratings on every wall<br/>so nothing slips through.</p>
+  </div>
+  <div class="stage">
+    <div class="phone">
+      <div class="status-bar">
+        <span>9:41</span>
+        <span class="right">
+          <span class="bars"><span></span><span></span><span></span><span></span></span>
+          <span style="letter-spacing:1px;">5G</span>
+          <span class="battery"></span>
+        </span>
+      </div>
+      <div class="app-header">
+        <div class="back">arrow_back</div>
+        <div>
+          <p class="label">Scan review · Kitchen</p>
+          <h1>Check the numbers</h1>
+        </div>
+      </div>
+
+      <!-- Wireframe 3D preview hero -->
+      <div class="hero-panel">
+        <span class="tag">3D preview</span>
+        <svg viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">
+          <g stroke="#b89650" stroke-width="2.5" fill="none" stroke-linejoin="round">
+            <!-- Floor -->
+            <path d="M 140 440 L 380 540 L 660 470 L 420 380 Z" />
+            <!-- Back wall -->
+            <path d="M 420 380 L 420 160 L 140 220 L 140 440 Z" />
+            <!-- Right wall -->
+            <path d="M 420 380 L 420 160 L 660 260 L 660 470 Z" />
+            <!-- Ceiling edges -->
+            <path d="M 140 220 L 380 320 L 660 260" stroke-dasharray="6 6" />
+            <path d="M 380 320 L 380 540" stroke-dasharray="6 6" />
+          </g>
+          <g fill="#b89650">
+            <circle cx="140" cy="220" r="5" />
+            <circle cx="420" cy="160" r="5" />
+            <circle cx="660" cy="260" r="5" />
+            <circle cx="380" cy="540" r="5" />
+            <circle cx="140" cy="440" r="5" />
+            <circle cx="660" cy="470" r="5" />
+          </g>
+        </svg>
+        <div class="toggle">
+          <span class="on">3D</span>
+          <span>Plan</span>
+        </div>
+      </div>
+
+      <!-- Dimension list with confidence chips -->
+      <div class="dims">
+        <p class="heading">Detected dimensions · 6 of 6</p>
+        <div class="dim-row">
+          <div>
+            <div class="label">Wall 1 · North</div>
+          </div>
+          <div class="value">4.20<small>m</small></div>
+          <span class="chip high">High</span>
+        </div>
+        <div class="dim-row">
+          <div>
+            <div class="label">Wall 2 · East</div>
+          </div>
+          <div class="value">3.85<small>m</small></div>
+          <span class="chip high">High</span>
+        </div>
+        <div class="dim-row">
+          <div>
+            <div class="label">Ceiling height</div>
+          </div>
+          <div class="value">2.41<small>m</small></div>
+          <span class="chip med">Medium</span>
+        </div>
+        <div class="dim-row">
+          <div>
+            <div class="label">Door · patio</div>
+          </div>
+          <div class="value">0.92<small>m</small></div>
+          <span class="chip high">High</span>
+        </div>
+      </div>
+
+      <div class="confirm">Confirm &amp; continue</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN 5 — SUBMIT                                                   -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<section class="screen" id="screen-5-stage">
+  <div class="caption">
+    <p class="eyebrow">Drawings in 2 weeks</p>
+    <h2 class="caption-title">Your designer starts<br/><em>tomorrow</em></h2>
+    <p class="caption-sub">Submit directly to the TM drawing team.<br/>No email back-and-forth.</p>
+  </div>
+  <div class="stage">
+    <div class="phone">
+      <div class="status-bar">
+        <span>9:41</span>
+        <span class="right">
+          <span class="bars"><span></span><span></span><span></span><span></span></span>
+          <span style="letter-spacing:1px;">5G</span>
+          <span class="battery"></span>
+        </span>
+      </div>
+      <div class="app-header">
+        <div class="back">arrow_back</div>
+        <div>
+          <p class="label">Step 3 of 3</p>
+          <h1>Submission summary</h1>
+        </div>
+      </div>
+
+      <div class="proj-meta">
+        <h2>Rear extension — 12 Smith Street</h2>
+        <p>Harry Marchant · harry@tmdesigns.co.uk · 2 rooms · Metric primary</p>
+      </div>
+
+      <div class="room-card first">
+        <h3>Kitchen</h3>
+        <div class="grid">
+          <div class="cell">
+            <div class="k">Wall 1 · North</div>
+            <div class="v">4.20<span class="v2"> m · 13'9"</span></div>
+          </div>
+          <div class="cell">
+            <div class="k">Wall 2 · East</div>
+            <div class="v">3.85<span class="v2"> m · 12'8"</span></div>
+          </div>
+          <div class="cell">
+            <div class="k">Ceiling</div>
+            <div class="v">2.41<span class="v2"> m · 7'11"</span></div>
+          </div>
+          <div class="cell">
+            <div class="k">Door · patio</div>
+            <div class="v">0.92<span class="v2"> m · 3'0"</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="room-card second">
+        <h3>Living room</h3>
+        <div class="grid">
+          <div class="cell">
+            <div class="k">Wall 1</div>
+            <div class="v">5.10<span class="v2"> m · 16'9"</span></div>
+          </div>
+          <div class="cell">
+            <div class="k">Wall 2</div>
+            <div class="v">4.30<span class="v2"> m · 14'1"</span></div>
+          </div>
+          <div class="cell">
+            <div class="k">Ceiling</div>
+            <div class="v">2.44<span class="v2"> m · 8'0"</span></div>
+          </div>
+          <div class="cell">
+            <div class="k">Windows</div>
+            <div class="v">2<span class="v2"> · bay + casement</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="submit-row">
+        <div class="btn ghost">Edit</div>
+        <div class="btn primary">Submit to TM</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>
