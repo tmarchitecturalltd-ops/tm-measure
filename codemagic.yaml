@@ -87,9 +87,7 @@ workflows:
         script: npx cap sync android
       - name: Bump versionCode from build number
         script: |
-          cd android
-          NEW_CODE=$(($BUILD_NUMBER + 1000))
-          sed -i "s/^\(\s*versionCode\s\)[0-9]*/\1$NEW_CODE/" app/build.gradle
+          node -e "const fs=require('fs');const f='android/app/build.gradle';const c=parseInt(process.env.BUILD_NUMBER||'0',10)+1000;fs.writeFileSync(f,fs.readFileSync(f,'utf8').replace(/versionCode\s+\d+/,'versionCode '+c));console.log('versionCode = '+c);"
       - name: Build & sign release AAB
         script: |
           cd android
