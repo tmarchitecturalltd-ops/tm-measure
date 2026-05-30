@@ -76,7 +76,7 @@ workflows:
       # in Codemagic → Settings → Code signing identities → Android.
       # Until then, gradle uses the debug keystore — fine for build
       # validation but not for Play Store upload.
-      java: 17
+      java: 21
       node: 22
     scripts:
       - name: Install JS dependencies
