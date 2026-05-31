@@ -72,10 +72,8 @@ workflows:
     environment:
       groups:
         - app_runtime
-      # android_signing block re-enable once the keystore is uploaded
-      # in Codemagic → Settings → Code signing identities → Android.
-      # Until then, gradle uses the debug keystore — fine for build
-      # validation but not for Play Store upload.
+      android_signing:
+        - tmmeasure
       java: 21
       node: 22
     scripts:
