@@ -53,6 +53,13 @@ type Connection = {
   widthM?: number;
   notes?: string;
 };
+type ExteriorBlock = {
+  bySide?: Record<"front" | "back" | "left" | "right", Photo[]>;
+};
+type ProposalBlock = {
+  description?: string;
+  sketches?: Photo[];
+};
 type Submission = {
   submissionId?: string;
   customerName?: string;
@@ -63,6 +70,8 @@ type Submission = {
   approvedAt?: string | null;
   rooms?: Room[];
   connections?: Connection[];
+  exterior?: ExteriorBlock;
+  proposal?: ProposalBlock;
 };
 
 function fmtMeters(v: unknown): string {
@@ -349,6 +358,102 @@ export default function ArchitectReviewPage() {
                 </article>
               ))}
             </section>
+
+            {/* Exterior 2×2 grid */}
+            {submission.exterior?.bySide && (
+              <section className="rounded-xl border border-outline-variant/20 bg-surface-container-low p-5">
+                <h2 className="font-headline text-xl text-on-surface">Exterior</h2>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {(["front", "back", "left", "right"] as const).map((side) => {
+                    const photos = submission.exterior?.bySide?.[side] ?? [];
+                    return (
+                      <div
+                        key={side}
+                        className="rounded-md border border-outline-variant/30 bg-surface-container-lowest p-3"
+                      >
+                        <p className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                          {side === "front" && "Front (street)"}
+                          {side === "back" && "Back (garden)"}
+                          {side === "left" && "Left"}
+                          {side === "right" && "Right"}
+                        </p>
+                        {photos.length === 0 ? (
+                          <p className="mt-1 text-xs italic text-on-surface-variant">
+                            No photo.
+                          </p>
+                        ) : (
+                          <ul className="mt-1 space-y-1">
+                            {photos.map((p, i) =>
+                              p.driveUrl ? (
+                                <li key={p.id ?? i}>
+                                  <a
+                                    href={p.driveUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-primary underline"
+                                  >
+                                    {p.name || `photo-${i + 1}`}
+                                  </a>
+                                </li>
+                              ) : (
+                                <li key={p.id ?? i} className="text-xs text-on-surface">
+                                  {p.name || `photo-${i + 1}`}
+                                </li>
+                              ),
+                            )}
+                          </ul>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* Proposal description + sketches */}
+            {submission.proposal &&
+              ((submission.proposal.description?.trim() ?? "") !== "" ||
+                (submission.proposal.sketches?.length ?? 0) > 0) && (
+                <section className="rounded-xl border border-outline-variant/20 bg-surface-container-low p-5">
+                  <h2 className="font-headline text-xl text-on-surface">Proposal</h2>
+                  {submission.proposal.description && (
+                    <p className="mt-3 whitespace-pre-wrap rounded-md border-l-2 border-primary bg-surface-container-lowest p-3 text-sm text-on-surface">
+                      {submission.proposal.description}
+                    </p>
+                  )}
+                  {submission.proposal.sketches &&
+                    submission.proposal.sketches.length > 0 && (
+                      <div className="mt-4">
+                        <p className="font-label mb-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                          Sketches ({submission.proposal.sketches.length})
+                        </p>
+                        <ul className="flex flex-wrap gap-2">
+                          {submission.proposal.sketches.map((p, i) =>
+                            p.driveUrl ? (
+                              <li key={p.id ?? i}>
+                                <a
+                                  href={p.driveUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-3 py-1 text-xs text-primary hover:bg-primary/20"
+                                >
+                                  {p.name || `sketch-${i + 1}`}
+                                </a>
+                              </li>
+                            ) : (
+                              <li
+                                key={p.id ?? i}
+                                className="rounded-md bg-surface-container-high px-3 py-1 text-xs text-on-surface"
+                              >
+                                {p.name || `sketch-${i + 1}`}
+                              </li>
+                            ),
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                </section>
+              )}
 
             {/* Connections */}
             {submission.connections && submission.connections.length > 0 && (

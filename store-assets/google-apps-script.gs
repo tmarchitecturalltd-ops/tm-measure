@@ -355,16 +355,29 @@ function approveSubmission_(id) {
  */
 function uploadPhotos_(payload, submissionId) {
   const rooms = Array.isArray(payload.rooms) ? payload.rooms : [];
-  if (!rooms.length) return;
+  const exterior = payload.exterior && payload.exterior.bySide ? payload.exterior.bySide : null;
+  const proposal = payload.proposal && Array.isArray(payload.proposal.sketches) ? payload.proposal : null;
+  if (!rooms.length && !exterior && !proposal) return;
 
   // Only touch Drive if at least one photo has data to upload —
-  // includes both room-level and per-wall photos.
-  const hasData = rooms.some(function (r) {
-    if ((r.photos || []).some(function (p) { return p && p.dataUri; })) return true;
-    return (r.walls || []).some(function (w) {
-      return (w.photos || []).some(function (p) { return p && p.dataUri; });
-    });
-  });
+  // includes room-level, per-wall, exterior, and proposal photos.
+  const hasData = (function () {
+    if (rooms.some(function (r) {
+      if ((r.photos || []).some(function (p) { return p && p.dataUri; })) return true;
+      return (r.walls || []).some(function (w) {
+        return (w.photos || []).some(function (p) { return p && p.dataUri; });
+      });
+    })) return true;
+    if (exterior) {
+      const sides = ['front', 'back', 'left', 'right'];
+      for (let i = 0; i < sides.length; i++) {
+        const arr = exterior[sides[i]] || [];
+        if (arr.some(function (p) { return p && p.dataUri; })) return true;
+      }
+    }
+    if (proposal && proposal.sketches.some(function (p) { return p && p.dataUri; })) return true;
+    return false;
+  })();
   if (!hasData) return;
 
   // Find-or-create a single root folder for all submissions; per-
@@ -445,6 +458,21 @@ function uploadPhotos_(payload, submissionId) {
       });
     });
   });
+
+  if (exterior) {
+    const sides = ['front', 'back', 'left', 'right'];
+    sides.forEach(function (side) {
+      const arr = exterior[side] || [];
+      arr.forEach(function (photo, pi) {
+        uploadPhoto(photo, 'exterior-' + side + '-photo-' + (pi + 1));
+      });
+    });
+  }
+  if (proposal) {
+    proposal.sketches.forEach(function (photo, pi) {
+      uploadPhoto(photo, 'proposal-sketch-' + (pi + 1));
+    });
+  }
 }
 
 function findOrCreateFolder_(parent, name) {
@@ -795,6 +823,10 @@ function buildHtmlEmail_(payload, submissionId) {
         // Floor plan — one block per floor, only if any rooms are placed
         floorPlanHtmlBlock_(payload, gold, cream, dark, mid, border) +
 
+        // Exterior + proposal — only if the customer added them.
+        exteriorHtmlBlock_(payload, gold, cream, dark, mid, border) +
+        proposalHtmlBlock_(payload, gold, cream, dark, mid, border) +
+
         // Footer
         '<div style="padding:16px 28px;border-top:1px solid ' + border + ';background:#fafafa;font-size:12px;color:' + mid + ';">' +
           'This submission was sent automatically from the TM Measure app. The full row is stored in your Submissions sheet. Reply to this email to contact the customer directly.' +
@@ -807,6 +839,76 @@ function buildHtmlEmail_(payload, submissionId) {
 /**
  * Render a "Room connections" section for the HTML email, if any.
  */
+/**
+ * Render the four sides of the building envelope as a 2×2 photo grid
+ * inside the email. Drives off the uploaded Drive links so the
+ * architect can open each at full resolution. Returns "" if the
+ * customer skipped the Exterior step.
+ */
+function exteriorHtmlBlock_(payload, gold, cream, dark, mid, border) {
+  const ext = payload.exterior && payload.exterior.bySide ? payload.exterior.bySide : null;
+  if (!ext) return '';
+  const sides = [
+    { key: 'front', label: 'Front (street side)' },
+    { key: 'back',  label: 'Back (garden side)' },
+    { key: 'left',  label: 'Left' },
+    { key: 'right', label: 'Right' },
+  ];
+  const cells = sides.map(function (s) {
+    const arr = ext[s.key] || [];
+    const inner = arr.length
+      ? arr.map(function (p) {
+          return p.driveUrl
+            ? '<div style="font-size:13px;"><a href="' + p.driveUrl + '" style="color:' + gold + ';text-decoration:none;">→ ' + escapeHtml_(p.name || 'photo') + '</a></div>'
+            : '<div style="font-size:13px;color:' + mid + ';">→ ' + escapeHtml_(p.name || 'photo') + '</div>';
+        }).join('')
+      : '<div style="font-size:12px;color:' + mid + ';font-style:italic;">No photo provided.</div>';
+    return '<td style="padding:10px;vertical-align:top;width:50%;border:1px solid ' + border + ';">' +
+      '<div style="font-size:11px;color:' + mid + ';text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">' + s.label + ' (' + arr.length + ')</div>' +
+      inner +
+    '</td>';
+  });
+  return '<div style="padding:0 28px 24px 28px;">' +
+    '<h2 style="margin:20px 0 10px 0;font-size:16px;color:' + dark + ';font-weight:600;">Exterior photos</h2>' +
+    '<table style="width:100%;border-collapse:collapse;">' +
+      '<tr>' + cells[0] + cells[1] + '</tr>' +
+      '<tr>' + cells[2] + cells[3] + '</tr>' +
+    '</table>' +
+  '</div>';
+}
+
+/**
+ * Render the customer's proposal: text description + any sketches /
+ * inspiration they attached. Returns "" if both are empty.
+ */
+function proposalHtmlBlock_(payload, gold, cream, dark, mid, border) {
+  const prop = payload.proposal;
+  if (!prop) return '';
+  const desc = (prop.description || '').trim();
+  const sketches = Array.isArray(prop.sketches) ? prop.sketches : [];
+  if (!desc && !sketches.length) return '';
+  const descBlock = desc
+    ? '<div style="padding:12px 14px;background:' + cream + ';border-left:3px solid ' + gold + ';color:' + dark + ';font-size:14px;line-height:1.5;white-space:pre-wrap;">' +
+        escapeHtml_(desc) +
+      '</div>'
+    : '';
+  const sketchBlock = sketches.length
+    ? '<div style="margin-top:14px;">' +
+        '<div style="font-size:11px;color:' + mid + ';text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Sketches / inspiration (' + sketches.length + ')</div>' +
+        sketches.map(function (p) {
+          return p.driveUrl
+            ? '<div style="font-size:13px;"><a href="' + p.driveUrl + '" style="color:' + gold + ';text-decoration:none;">→ ' + escapeHtml_(p.name || 'sketch') + '</a></div>'
+            : '<div style="font-size:13px;color:' + mid + ';">→ ' + escapeHtml_(p.name || 'sketch') + '</div>';
+        }).join('') +
+      '</div>'
+    : '';
+  return '<div style="padding:0 28px 24px 28px;">' +
+    '<h2 style="margin:20px 0 10px 0;font-size:16px;color:' + dark + ';font-weight:600;">Proposal — what the customer wants</h2>' +
+    descBlock +
+    sketchBlock +
+  '</div>';
+}
+
 function connectionsHtmlBlock_(payload, gold, cream, dark, mid, border) {
   const conns = Array.isArray(payload.connections) ? payload.connections : [];
   if (!conns.length) return '';
@@ -992,17 +1094,59 @@ function renderFloorSvg_(floorRooms, gold, cream, dark, mid) {
     const rot = p.rotationDeg || 0;
     const transform = 'translate(' + p.positionM.x + ',' + p.positionM.z + ') rotate(' + rot + ' 0 0)';
     const name = escapeHtml_(r.name || 'Room');
+    const w = size.widthM;
+    const h = size.lengthM;
+    // Build the floor polygon path (rectangle by default, L-shape if
+    // the customer flagged it on the rooms step).
+    let pathD = 'M 0 0 L ' + w + ' 0 L ' + w + ' ' + h + ' L 0 ' + h + ' Z';
+    if (r.shape === 'l-shape') {
+      const nw = Math.min(Math.max(Number(r.notchWidthM) || 0, 0), w * 0.95);
+      const nl = Math.min(Math.max(Number(r.notchLengthM) || 0, 0), h * 0.95);
+      if (nw > 0 && nl > 0) {
+        pathD = 'M 0 0 L ' + w + ' 0 L ' + w + ' ' + (h - nl) +
+                ' L ' + (w - nw) + ' ' + (h - nl) +
+                ' L ' + (w - nw) + ' ' + h +
+                ' L 0 ' + h + ' Z';
+      }
+    }
+    // Door / window tick marks. Map wallIndex 0..3 → top / right /
+    // bottom / left of the bounding rectangle, then place an offset
+    // segment of width = opening width.
+    const openings = []
+      .concat((r.doors || []).map(function (d) { return Object.assign({}, d, { kind: 'door' }); }))
+      .concat((r.windows || []).map(function (wn) { return Object.assign({}, wn, { kind: 'window' }); }));
+    const openingsSvg = openings.map(function (op) {
+      const widthM = Number(op.widthM) || 0;
+      if (widthM <= 0) return '';
+      const wallIndex = (Number(op.wallIndex) || 0) % 4;
+      let x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+      if (wallIndex === 0) { x1 = 0; y1 = 0; x2 = w; y2 = 0; }
+      else if (wallIndex === 1) { x1 = w; y1 = 0; x2 = w; y2 = h; }
+      else if (wallIndex === 2) { x1 = w; y1 = h; x2 = 0; y2 = h; }
+      else { x1 = 0; y1 = h; x2 = 0; y2 = 0; }
+      const wallLen = Math.hypot(x2 - x1, y2 - y1);
+      const centre = Number(op.positionM) > 0 ? Number(op.positionM) : wallLen / 2;
+      const t1 = Math.max(0, centre - widthM / 2) / wallLen;
+      const t2 = Math.min(wallLen, centre + widthM / 2) / wallLen;
+      const px1 = x1 + (x2 - x1) * t1;
+      const py1 = y1 + (y2 - y1) * t1;
+      const px2 = x1 + (x2 - x1) * t2;
+      const py2 = y1 + (y2 - y1) * t2;
+      const colour = op.kind === 'door' ? gold : '#5a6a80';
+      return '<line x1="' + px1 + '" y1="' + py1 + '" x2="' + px2 + '" y2="' + py2 +
+        '" stroke="' + colour + '" stroke-width="4" vector-effect="non-scaling-stroke"/>';
+    }).join('');
     return '<g transform="' + transform + '">' +
-      '<rect x="0" y="0" width="' + size.widthM + '" height="' + size.lengthM + '" ' +
-        'fill="#fff8ea" fill-opacity="0.92" stroke="' + gold + '" stroke-width="1.6" ' +
-        'vector-effect="non-scaling-stroke" rx="0.05"/>' +
-      '<text x="' + (size.widthM / 2) + '" y="' + (size.lengthM / 2 - 0.05) + '" ' +
+      '<path d="' + pathD + '" fill="#fff8ea" fill-opacity="0.92" stroke="' + gold +
+        '" stroke-width="1.6" vector-effect="non-scaling-stroke"/>' +
+      openingsSvg +
+      '<text x="' + (w / 2) + '" y="' + (h / 2 - 0.05) + '" ' +
         'font-size="0.42" fill="' + dark + '" font-weight="600" text-anchor="middle" ' +
         'font-family="Helvetica,Arial,sans-serif">' + name + '</text>' +
-      '<text x="' + (size.widthM / 2) + '" y="' + (size.lengthM / 2 + 0.45) + '" ' +
+      '<text x="' + (w / 2) + '" y="' + (h / 2 + 0.45) + '" ' +
         'font-size="0.3" fill="' + mid + '" text-anchor="middle" ' +
         'font-family="Helvetica,Arial,sans-serif">' +
-        size.widthM.toFixed(2) + ' × ' + size.lengthM.toFixed(2) + ' m</text>' +
+        w.toFixed(2) + ' × ' + h.toFixed(2) + ' m</text>' +
     '</g>';
   }).join('');
 

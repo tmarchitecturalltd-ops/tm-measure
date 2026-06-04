@@ -48,6 +48,16 @@ const ICON_MAP: Record<string, string> = {
   fullscreen: "⛶",
   center_focus_strong: "🎯",
   restart_alt: "↻",
+  mail: "✉",
+  home: "⌂",
+  settings: "⚙",
+  delete: "🗑",
+  edit: "✎",
+  arrow_drop_down: "▾",
+  arrow_drop_up: "▴",
+  refresh: "↻",
+  download: "⬇",
+  upload: "⬆",
 };
 
 const REPLACED_ATTR = "data-icon-replaced";
