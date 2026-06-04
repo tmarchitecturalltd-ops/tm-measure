@@ -16,14 +16,13 @@ export default function RootLayout({
   return (
     <html lang="en" className="scroll-smooth h-full antialiased">
       <head>
-        {/* Explicit font preloads — the CSS @import in globals.css
-            sometimes loses the race against first paint on Capacitor's
-            WKWebView, leaving every icon rendered as its raw glyph
-            name ("arrow_forward", "photo_camera", etc). Loading the
-            stylesheet via <link> guarantees the font request fires
-            before the body renders. font-display=block keeps the
-            icon container invisible until the font has loaded
-            instead of flashing the literal text. */}
+        {/* Favicon = same brand mark as the marketing site. We point
+            at the SVG version of the app icon so the browser renders
+            crisp at any size; falls back to /favicon.ico if SVG
+            unsupported. */}
+        <link rel="icon" type="image/svg+xml" href="/brand-mark.svg" />
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/brand-mark.svg" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"

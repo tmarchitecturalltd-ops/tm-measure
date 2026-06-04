@@ -17,6 +17,17 @@ export type Opening = {
   id: string;
   widthM: string;
   note: string;
+  /**
+   * Which wall the opening sits on (0 = first wall, 1 = second, …).
+   * Optional so older drafts still parse; defaults to wall 0 if absent.
+   */
+  wallIndex?: number;
+  /**
+   * Distance in metres from the wall's start corner to the centre of
+   * the opening. Used by FloorPlanEditor to draw the door/window in
+   * the right place. Optional — half the wall length if absent.
+   */
+  positionM?: string;
 };
 
 /** Cross-platform photo reference (web: blob URI; native: file/content URI). */
@@ -53,6 +64,15 @@ export type RoomPlacement = {
   floor: number;
 };
 
+/**
+ * Room shape. "rectangle" is the default and uses walls[0]/walls[1]
+ * as width / length. "l-shape" carves an axis-aligned bite out of one
+ * corner — captured with two extra numbers (notchW × notchL).
+ * "custom" uses an explicit `floorPolygonM` array of (x, z) points
+ * traced by the customer; falls back to rectangle if absent.
+ */
+export type RoomShape = "rectangle" | "l-shape" | "custom";
+
 export type RoomDraft = {
   id: string;
   name: string;
@@ -69,6 +89,33 @@ export type RoomDraft = {
    * absent, the UI treats the room as unplaced on the ground floor.
    */
   placement?: RoomPlacement;
+  /** Shape preset; absent → "rectangle". */
+  shape?: RoomShape;
+  /** L-shape notch dimensions in metres (string for form binding). */
+  notchWidthM?: string;
+  notchLengthM?: string;
+  /** Custom polygon — array of (x, z) metre points anti-clockwise. */
+  floorPolygonM?: { x: number; z: number }[];
+};
+
+/**
+ * Optional exterior + proposal pack — captured on a dedicated step
+ * after the rooms. Each side of the house has its own photo slot so
+ * the architect can visualise the building envelope; the proposal
+ * block lets the customer paste a short brief plus optional sketches.
+ */
+export type ExteriorSide = "front" | "back" | "left" | "right";
+
+export type ExteriorPhotos = {
+  /** Photos keyed by side. Each side may have 0..N photos. */
+  bySide: Record<ExteriorSide, RoomPhoto[]>;
+};
+
+export type ProposalDraft = {
+  /** Plain-text description of what the customer wants. */
+  description: string;
+  /** Free-form sketches / inspiration photos. */
+  sketches: RoomPhoto[];
 };
 
 export type ProjectDraft = {
@@ -77,4 +124,6 @@ export type ProjectDraft = {
   projectName: string;
   unit: UnitPreference;
   rooms: RoomDraft[];
+  exterior?: ExteriorPhotos;
+  proposal?: ProposalDraft;
 };

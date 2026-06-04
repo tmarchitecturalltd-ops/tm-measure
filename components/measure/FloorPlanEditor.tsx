@@ -390,28 +390,36 @@ export default function FloorPlanEditor({
             );
           })}
 
-          {/* Room rectangles */}
+          {/* Room shapes — rectangle by default; L-shape carves a
+              corner notch from the bottom-right of the bounding box. */}
           {roomsOnFloor.map((r) => {
             const p = placementFor(r.id);
             if (!p.positionM) return null;
             const size = roomFootprint(r);
-            // SVG rotation rotates about the origin; we translate so
-            // the room's top-left anchor lands at positionM then rotate
-            // about that anchor (rotationDeg, 0 0).
             const transform = `translate(${p.positionM.x} ${p.positionM.z}) rotate(${p.rotationDeg} 0 0)`;
+            const w = size.widthM;
+            const h = size.lengthM;
+            // Build the floor polygon path. Rectangle: 4 corners.
+            // L-shape: 6 corners with the bite taken from (w, h).
+            let pathD = `M 0 0 L ${w} 0 L ${w} ${h} L 0 ${h} Z`;
+            if (r.shape === "l-shape") {
+              const nw = Math.min(parseFloat(r.notchWidthM ?? "0") || 0, w * 0.95);
+              const nl = Math.min(parseFloat(r.notchLengthM ?? "0") || 0, h * 0.95);
+              if (nw > 0 && nl > 0) {
+                pathD =
+                  `M 0 0 L ${w} 0 L ${w} ${h - nl} ` +
+                  `L ${w - nw} ${h - nl} L ${w - nw} ${h} L 0 ${h} Z`;
+              }
+            }
             return (
               <g key={r.id} transform={transform}>
-                <rect
-                  x={0}
-                  y={0}
-                  width={size.widthM}
-                  height={size.lengthM}
+                <path
+                  d={pathD}
                   fill="#fff8ea"
                   fillOpacity={0.92}
                   stroke={GOLD}
                   strokeWidth={1.6}
                   vectorEffect="non-scaling-stroke"
-                  rx={0.05}
                   style={{ cursor: "grab" }}
                   onPointerDown={(e) => onRoomPointerDown(r.id, e)}
                   onPointerMove={onRoomPointerMove}
@@ -439,6 +447,55 @@ export default function FloorPlanEditor({
                 >
                   {size.widthM.toFixed(2)} × {size.lengthM.toFixed(2)} m
                 </text>
+
+                {/* Door / window tick marks. We map each opening to
+                    its parent wall (0 = top, 1 = right, 2 = bottom,
+                    3 = left in the rectangle's local frame) and draw a
+                    short coloured segment at the offset along that
+                    wall. Doors are gold-on-cream, windows are slate. */}
+                {[
+                  ...(r.doors || []).map((d) => ({ ...d, kind: "door" as const })),
+                  ...(r.windows || []).map((wn) => ({ ...wn, kind: "window" as const })),
+                ].map((op, oi) => {
+                  const widthM = parseFloat(op.widthM) || 0;
+                  if (widthM <= 0) return null;
+                  const wallIndex = op.wallIndex ?? 0;
+                  const offset = parseFloat(op.positionM ?? "") ;
+                  // Resolve wall start/end points in the local frame.
+                  let x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+                  if (wallIndex % 4 === 0) {
+                    // Top wall — runs left to right at y=0
+                    x1 = 0; y1 = 0; x2 = w; y2 = 0;
+                  } else if (wallIndex % 4 === 1) {
+                    x1 = w; y1 = 0; x2 = w; y2 = h;
+                  } else if (wallIndex % 4 === 2) {
+                    x1 = w; y1 = h; x2 = 0; y2 = h;
+                  } else {
+                    x1 = 0; y1 = h; x2 = 0; y2 = 0;
+                  }
+                  const wallLen = Math.hypot(x2 - x1, y2 - y1);
+                  const centre = Number.isFinite(offset) && offset > 0 ? offset : wallLen / 2;
+                  const t1 = Math.max(0, centre - widthM / 2) / wallLen;
+                  const t2 = Math.min(wallLen, centre + widthM / 2) / wallLen;
+                  const px1 = x1 + (x2 - x1) * t1;
+                  const py1 = y1 + (y2 - y1) * t1;
+                  const px2 = x1 + (x2 - x1) * t2;
+                  const py2 = y1 + (y2 - y1) * t2;
+                  const colour = op.kind === "door" ? "#b89650" : "#5a6a80";
+                  return (
+                    <line
+                      key={`op-${oi}`}
+                      x1={px1}
+                      y1={py1}
+                      x2={px2}
+                      y2={py2}
+                      stroke={colour}
+                      strokeWidth={4}
+                      vectorEffect="non-scaling-stroke"
+                      pointerEvents="none"
+                    />
+                  );
+                })}
 
                 {/* Rotate chip — top-right of the unrotated rectangle */}
                 <g

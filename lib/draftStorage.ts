@@ -23,7 +23,7 @@ const STORAGE_KEY = "tm-measure:project-draft:v1";
 export type ProjectDraftSnapshot = {
   version: 1;
   savedAt: string; // ISO timestamp
-  step: "project" | "rooms" | "plan" | "review";
+  step: "project" | "rooms" | "exterior" | "proposal" | "plan" | "review";
   customerName: string;
   email: string;
   projectName: string;

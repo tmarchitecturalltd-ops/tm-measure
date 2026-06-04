@@ -29,6 +29,7 @@ import {
   makeRoomConnectionDraft,
   normalizeConnections,
   type ConnectionKind,
+  type ExteriorSide,
   type FieldIssue,
   type Opening,
   type ProjectDraft,
@@ -37,6 +38,7 @@ import {
   type RoomPhoto,
   type RoomPlacement,
   type ScanResult,
+  type StairsShape,
   type WallSegment,
 } from "@tm-designs/measure-core";
 import type { ScanDimensions } from "@/components/measure/RoomScanOverlay";
@@ -81,7 +83,7 @@ function emptyRoom(): RoomDraft {
   };
 }
 
-type Step = "project" | "rooms" | "plan" | "review";
+type Step = "project" | "rooms" | "exterior" | "proposal" | "plan" | "review";
 
 export default function MeasureIntakeForm() {
   const [step, setStep] = useState<Step>("project");
@@ -101,9 +103,23 @@ export default function MeasureIntakeForm() {
   const [arReason, setArReason] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
+    // Race the RoomPlan probe against a 2 s timeout so a hung promise
+    // (e.g. the Capacitor web fallback never resolving in dev mode)
+    // doesn't leave the Project step stuck on "Checking AR capability…"
+    // forever. After the timeout we assume corner-tap only.
+    const timeout = new Promise<{ supported: false; reason: string }>((resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            supported: false,
+            reason: "AR check timed out — using corner-tap mode.",
+          }),
+        2000,
+      ),
+    );
     (async () => {
       try {
-        const r = await RoomPlan.isSupported();
+        const r = await Promise.race([RoomPlan.isSupported(), timeout]);
         if (!alive) return;
         if (r.supported) {
           setArSupport("yes");
@@ -524,6 +540,74 @@ export default function MeasureIntakeForm() {
    *  means the next picked files go to the room (legacy path). */
   const [photoTargetWall, setPhotoTargetWall] = useState<{ roomId: string; wallId: string } | null>(null);
 
+  // ── Exterior (4-sides) photos ──────────────────────────────────────
+  const [exteriorPhotos, setExteriorPhotos] = useState<
+    Record<ExteriorSide, RoomPhoto[]>
+  >({ front: [], back: [], left: [], right: [] });
+  const [exteriorTargetSide, setExteriorTargetSide] = useState<ExteriorSide | null>(null);
+
+  const attachExteriorPhotos = useCallback(
+    (side: ExteriorSide, files: FileList | null) => {
+      if (!files?.length) return;
+      setExteriorPhotos((prev) => {
+        const next = [...prev[side]];
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          if (!file.type.startsWith("image/")) continue;
+          next.push({
+            id: newId(),
+            uri: URL.createObjectURL(file),
+            name: file.name,
+            mimeType: file.type,
+            sizeBytes: file.size,
+          });
+        }
+        return { ...prev, [side]: next };
+      });
+    },
+    [],
+  );
+
+  const removeExteriorPhoto = useCallback((side: ExteriorSide, photoId: string) => {
+    setExteriorPhotos((prev) => {
+      const photo = prev[side].find((p) => p.id === photoId);
+      if (photo) URL.revokeObjectURL(photo.uri);
+      return { ...prev, [side]: prev[side].filter((p) => p.id !== photoId) };
+    });
+  }, []);
+
+  // ── Proposal (description + sketches) ──────────────────────────────
+  const [proposalDescription, setProposalDescription] = useState("");
+  const [proposalSketches, setProposalSketches] = useState<RoomPhoto[]>([]);
+  const [proposalSketchTarget, setProposalSketchTarget] = useState(false);
+
+  const attachProposalSketches = useCallback((files: FileList | null) => {
+    if (!files?.length) return;
+    setProposalSketches((prev) => {
+      const next = [...prev];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.type.startsWith("image/")) continue;
+        next.push({
+          id: newId(),
+          uri: URL.createObjectURL(file),
+          name: file.name,
+          mimeType: file.type,
+          sizeBytes: file.size,
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  const removeProposalSketch = useCallback((photoId: string) => {
+    setProposalSketches((prev) => {
+      const photo = prev.find((p) => p.id === photoId);
+      if (photo) URL.revokeObjectURL(photo.uri);
+      return prev.filter((p) => p.id !== photoId);
+    });
+  }, []);
+
   const goRooms = () => {
     const v: FieldIssue[] = [];
     if (!customerName.trim()) v.push({ path: "name", message: "Enter your name." });
@@ -659,15 +743,22 @@ export default function MeasureIntakeForm() {
           .map((d) => ({
             widthM: parseMeters(d.widthM),
             note: d.note || undefined,
+            wallIndex: d.wallIndex,
+            positionM: d.positionM ? parseMeters(d.positionM) : undefined,
           })),
         windows: r.windows
           .filter((w) => w.widthM.trim())
           .map((w) => ({
             widthM: parseMeters(w.widthM),
             note: w.note || undefined,
+            wallIndex: w.wallIndex,
+            positionM: w.positionM ? parseMeters(w.positionM) : undefined,
           })),
         irregularShapeNotes: r.irregularNotes.trim() || undefined,
         notes: r.notes.trim() || undefined,
+        shape: r.shape ?? "rectangle",
+        notchWidthM: r.notchWidthM ? parseMeters(r.notchWidthM) : undefined,
+        notchLengthM: r.notchLengthM ? parseMeters(r.notchLengthM) : undefined,
         photos: r.photos.map((p) => ({
           name: p.name,
           sizeBytes: p.sizeBytes,
@@ -685,6 +776,7 @@ export default function MeasureIntakeForm() {
         ? rooms.find((r) => r.id === c.roomBId)?.name?.trim() || undefined
         : undefined,
       kind: c.kind,
+      stairsShape: c.stairsShape,
       widthM: c.widthM,
       notes: c.notes,
     }));
@@ -933,11 +1025,17 @@ export default function MeasureIntakeForm() {
           // shows its standard Take Photo / Photo Library action sheet.
           className="hidden"
           onChange={(e) => {
-            // Wall target takes priority over room target — set by the
-            // per-wall "Add photo" button.
+            // Targets routed in priority order. Set by the button the
+            // user just tapped — wall, room, exterior side, proposal.
             if (photoTargetWall) {
               attachPhotosToWall(photoTargetWall.roomId, photoTargetWall.wallId, e.target.files);
               setPhotoTargetWall(null);
+            } else if (exteriorTargetSide) {
+              attachExteriorPhotos(exteriorTargetSide, e.target.files);
+              setExteriorTargetSide(null);
+            } else if (proposalSketchTarget) {
+              attachProposalSketches(e.target.files);
+              setProposalSketchTarget(false);
             } else if (photoTargetRoomId) {
               attachPhotos(photoTargetRoomId, e.target.files);
             }
@@ -1065,8 +1163,10 @@ export default function MeasureIntakeForm() {
           {([
             { key: "project", label: "1. Your details" },
             { key: "rooms", label: "2. Rooms" },
-            { key: "plan", label: "3. Floor plan" },
-            { key: "review", label: "4. Review" },
+            { key: "exterior", label: "3. Exterior" },
+            { key: "proposal", label: "4. Proposal" },
+            { key: "plan", label: "5. Floor plan" },
+            { key: "review", label: "6. Review" },
           ] as const).map((s) => {
             const active = step === s.key;
             return (
@@ -1237,9 +1337,38 @@ export default function MeasureIntakeForm() {
                 className="rounded-xl border border-outline-variant/20 bg-surface-container-low p-6 md:p-8"
               >
                 <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-                  <h2 className="font-headline text-xl text-on-surface">
-                    Room {ri + 1}
-                  </h2>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h2 className="font-headline text-xl text-on-surface">
+                      Room {ri + 1}
+                    </h2>
+                    {/* Multi-storey selector — small inline dropdown so
+                        the customer can flag which storey this room is
+                        on. Stored as `placement.floor` (integer). */}
+                    <label className="inline-flex items-center gap-2 text-[11px] text-on-surface-variant">
+                      <span className="uppercase tracking-widest">On floor</span>
+                      <select
+                        value={placements[room.id]?.floor ?? 0}
+                        onChange={(e) => {
+                          const floor = parseInt(e.target.value, 10);
+                          setPlacements((prev) => ({
+                            ...prev,
+                            [room.id]: {
+                              positionM: prev[room.id]?.positionM ?? null,
+                              rotationDeg: prev[room.id]?.rotationDeg ?? 0,
+                              floor,
+                            },
+                          }));
+                        }}
+                        className="rounded border border-outline-variant/40 bg-surface-container-lowest px-2 py-1 text-sm text-on-surface"
+                      >
+                        <option value={-1}>Basement</option>
+                        <option value={0}>Ground</option>
+                        <option value={1}>First</option>
+                        <option value={2}>Second</option>
+                        <option value={3}>Third</option>
+                      </select>
+                    </label>
+                  </div>
                   <div className="flex flex-wrap items-center gap-3">
                     <button
                       type="button"
@@ -1276,6 +1405,64 @@ export default function MeasureIntakeForm() {
                     <p className="mt-1 text-xs text-error">
                       {issueFor(`room-${ri}-name`)}
                     </p>
+                  )}
+                </div>
+
+                {/* Room shape selector. Most rooms are rectangular —
+                    we surface that as the default and only ask for
+                    the notch dimensions when the customer flips to
+                    L-shape. Custom polygon is a power-user option. */}
+                <div className="mb-6">
+                  <h3 className="font-label mb-2 text-xs font-bold uppercase tracking-widest text-primary">
+                    Room shape
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {(["rectangle", "l-shape"] as const).map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setRoom(room.id, { shape: s })}
+                        className={`rounded-full px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest transition ${
+                          (room.shape ?? "rectangle") === s
+                            ? "bg-primary text-on-primary"
+                            : "bg-surface-container-high text-on-surface"
+                        }`}
+                      >
+                        {s === "rectangle" ? "Rectangle" : "L-shape"}
+                      </button>
+                    ))}
+                  </div>
+                  {room.shape === "l-shape" && (
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <label className="text-xs text-on-surface-variant">
+                        Notch width (m)
+                        <input
+                          inputMode="decimal"
+                          value={room.notchWidthM ?? ""}
+                          onChange={(e) =>
+                            setRoom(room.id, { notchWidthM: e.target.value })
+                          }
+                          placeholder="0.00"
+                          className="mt-1 w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                        />
+                      </label>
+                      <label className="text-xs text-on-surface-variant">
+                        Notch length (m)
+                        <input
+                          inputMode="decimal"
+                          value={room.notchLengthM ?? ""}
+                          onChange={(e) =>
+                            setRoom(room.id, { notchLengthM: e.target.value })
+                          }
+                          placeholder="0.00"
+                          className="mt-1 w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                        />
+                      </label>
+                      <p className="sm:col-span-2 text-[11px] text-on-surface-variant">
+                        Imagine the room as a rectangle with a rectangular bite cut
+                        out of one corner. Width × length here is the size of that bite.
+                      </p>
+                    </div>
                   )}
                 </div>
 
@@ -1458,6 +1645,45 @@ export default function MeasureIntakeForm() {
                               </p>
                             )}
                           </div>
+                          <div className="flex-1">
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                              On wall
+                            </label>
+                            <select
+                              value={d.wallIndex ?? 0}
+                              onChange={(e) => {
+                                const wi = parseInt(e.target.value, 10);
+                                const doors = room.doors.map((x) =>
+                                  x.id === d.id ? { ...x, wallIndex: wi } : x,
+                                );
+                                setRoom(room.id, { doors });
+                              }}
+                              className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                            >
+                              {room.walls.map((w, i) => (
+                                <option key={w.id} value={i}>
+                                  Wall {i + 1}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex-1">
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                              Offset (m)
+                            </label>
+                            <input
+                              inputMode="decimal"
+                              value={d.positionM ?? ""}
+                              onChange={(e) => {
+                                const doors = room.doors.map((x) =>
+                                  x.id === d.id ? { ...x, positionM: e.target.value } : x,
+                                );
+                                setRoom(room.id, { doors });
+                              }}
+                              placeholder="from wall start"
+                              className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                            />
+                          </div>
                           <div className="flex-[2]">
                             <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
                               Note (optional)
@@ -1536,6 +1762,45 @@ export default function MeasureIntakeForm() {
                                 {issueFor(`room-${ri}-window-${wi}`)}
                               </p>
                             )}
+                          </div>
+                          <div className="flex-1">
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                              On wall
+                            </label>
+                            <select
+                              value={w.wallIndex ?? 0}
+                              onChange={(e) => {
+                                const idx = parseInt(e.target.value, 10);
+                                const windows = room.windows.map((x) =>
+                                  x.id === w.id ? { ...x, wallIndex: idx } : x,
+                                );
+                                setRoom(room.id, { windows });
+                              }}
+                              className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                            >
+                              {room.walls.map((wallSeg, i) => (
+                                <option key={wallSeg.id} value={i}>
+                                  Wall {i + 1}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex-1">
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                              Offset (m)
+                            </label>
+                            <input
+                              inputMode="decimal"
+                              value={w.positionM ?? ""}
+                              onChange={(e) => {
+                                const windows = room.windows.map((x) =>
+                                  x.id === w.id ? { ...x, positionM: e.target.value } : x,
+                                );
+                                setRoom(room.id, { windows });
+                              }}
+                              placeholder="from wall start"
+                              className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                            />
                           </div>
                           <div className="flex-[2]">
                             <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
@@ -1750,6 +2015,22 @@ export default function MeasureIntakeForm() {
                               </option>
                             ))}
                           </select>
+                          {c.kind === "stairs" && (
+                            <select
+                              value={c.stairsShape ?? "straight"}
+                              onChange={(e) =>
+                                updateConnection(c.id, {
+                                  stairsShape: e.target.value as StairsShape,
+                                })
+                              }
+                              className="mt-2 w-full rounded border border-outline bg-surface px-2 py-2 text-sm text-on-surface"
+                              aria-label="Stair shape"
+                            >
+                              <option value="straight">Straight flight</option>
+                              <option value="winder-l">L-winder (90° turn)</option>
+                              <option value="winder-single">Single winder step</option>
+                            </select>
+                          )}
                         </label>
 
                         {c.kind !== "external" && (
@@ -1854,11 +2135,16 @@ export default function MeasureIntakeForm() {
               </button>
               <button
                 type="button"
-                onClick={goPlan}
+                onClick={() => {
+                  const v = nonBlockingIssues(rooms);
+                  setIssues(v);
+                  if (v.length) return;
+                  setStep("exterior");
+                }}
                 className="inline-flex items-center gap-3 rounded-full bg-primary px-7 py-3 text-sm font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/30 transition-all hover:bg-surface-tint hover:shadow-xl active:scale-[0.97]"
-                aria-label="Continue to floor plan"
+                aria-label="Continue to exterior photos"
               >
-                <span>Floor plan</span>
+                <span>Exterior photos</span>
                 <span
                   className="material-symbols-outlined"
                   aria-hidden
@@ -1869,6 +2155,171 @@ export default function MeasureIntakeForm() {
               </button>
             </div>
           </div>
+        )}
+
+        {step === "exterior" && (
+          <section className="space-y-6 rounded-xl bg-surface-container-low p-6 md:p-8">
+            <header>
+              <h2 className="font-headline text-2xl text-on-surface">
+                Exterior photos
+              </h2>
+              <p className="mt-1 text-sm text-on-surface-variant">
+                Optional but really helpful: one photo of each side of the
+                house so we can see the envelope. Skip any side you can&apos;t
+                access.
+              </p>
+            </header>
+            {(["front", "back", "left", "right"] as const).map((side) => (
+              <div
+                key={side}
+                className="rounded-lg border border-outline-variant/30 bg-surface-container-lowest p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                      {side === "front" && "Front (street side)"}
+                      {side === "back" && "Back (garden side)"}
+                      {side === "left" && "Left (looking at the front)"}
+                      {side === "right" && "Right (looking at the front)"}
+                    </p>
+                    <p className="mt-1 text-xs text-on-surface-variant">
+                      {exteriorPhotos[side].length} photo
+                      {exteriorPhotos[side].length === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExteriorTargetSide(side);
+                      fileInputRef.current?.click();
+                    }}
+                    className="rounded border border-primary px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary hover:text-on-primary"
+                  >
+                    + Add photo
+                  </button>
+                </div>
+                {exteriorPhotos[side].length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {exteriorPhotos[side].map((p) => (
+                      <div
+                        key={p.id}
+                        className="relative h-16 w-16 overflow-hidden rounded border border-outline-variant/30"
+                      >
+                        <img
+                          src={p.uri}
+                          alt={p.name}
+                          className="h-full w-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeExteriorPhoto(side, p.id)}
+                          className="absolute right-0.5 top-0.5 rounded bg-inverse-surface/80 px-1 text-[10px] text-surface"
+                          aria-label="Remove photo"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            <div className="flex justify-between pt-2">
+              <button
+                type="button"
+                onClick={() => setStep("rooms")}
+                className="rounded-full border-2 border-outline-variant/40 px-5 py-2 text-xs font-bold uppercase tracking-widest text-on-surface"
+              >
+                ← Back
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep("proposal")}
+                className="rounded-full bg-primary px-7 py-2 text-xs font-bold uppercase tracking-widest text-on-primary"
+              >
+                Proposal →
+              </button>
+            </div>
+          </section>
+        )}
+
+        {step === "proposal" && (
+          <section className="space-y-6 rounded-xl bg-surface-container-low p-6 md:p-8">
+            <header>
+              <h2 className="font-headline text-2xl text-on-surface">
+                What are you hoping to build?
+              </h2>
+              <p className="mt-1 text-sm text-on-surface-variant">
+                A few sentences about the project plus any sketches,
+                Pinterest images, or reference photos you&apos;ve been collecting.
+              </p>
+            </header>
+            <div>
+              <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                Description
+              </label>
+              <textarea
+                value={proposalDescription}
+                onChange={(e) => setProposalDescription(e.target.value)}
+                rows={6}
+                placeholder="e.g. Rear single-storey extension off the kitchen, open onto the garden, room for a 6-seat dining table…"
+                className="w-full rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/40 focus:ring-2"
+              />
+            </div>
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <label className="font-label block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  Sketches / inspiration
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProposalSketchTarget(true);
+                    fileInputRef.current?.click();
+                  }}
+                  className="rounded border border-primary px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary hover:text-on-primary"
+                >
+                  + Add image
+                </button>
+              </div>
+              {proposalSketches.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {proposalSketches.map((p) => (
+                    <div
+                      key={p.id}
+                      className="relative h-20 w-20 overflow-hidden rounded border border-outline-variant/30"
+                    >
+                      <img src={p.uri} alt={p.name} className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeProposalSketch(p.id)}
+                        className="absolute right-0.5 top-0.5 rounded bg-inverse-surface/80 px-1 text-[10px] text-surface"
+                        aria-label="Remove sketch"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-between pt-2">
+              <button
+                type="button"
+                onClick={() => setStep("exterior")}
+                className="rounded-full border-2 border-outline-variant/40 px-5 py-2 text-xs font-bold uppercase tracking-widest text-on-surface"
+              >
+                ← Back
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep("plan")}
+                className="rounded-full bg-primary px-7 py-2 text-xs font-bold uppercase tracking-widest text-on-primary"
+              >
+                Floor plan →
+              </button>
+            </div>
+          </section>
         )}
 
         {step === "plan" && (

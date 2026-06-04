@@ -32,6 +32,15 @@ export type ConnectionKind =
   | "external";
 
 /**
+ * Sub-type of stairs — captured separately because the architect
+ * needs to know the geometry to draft the stair pitch correctly.
+ *   straight        — single straight flight, no turn
+ *   winder-l        — L-shaped winder turn (90°)
+ *   winder-single   — single winder step at the turn
+ */
+export type StairsShape = "straight" | "winder-l" | "winder-single";
+
+/**
  * A connection link between two rooms.
  *
  * If `kind === "external"`, `roomBId` is unset — the "other side" is
@@ -47,6 +56,8 @@ export type RoomConnection = {
   roomBId?: string;
   wallBIndex?: number;
   kind: ConnectionKind;
+  /** Stair shape, only meaningful when kind === "stairs". */
+  stairsShape?: StairsShape;
   /** Door/opening width in metres, if applicable. */
   widthM?: number;
   /** Free-text notes. */
@@ -59,6 +70,8 @@ export type RoomConnectionDraft = {
   roomAId: string;
   roomBId: string; // empty string means "external"
   kind: ConnectionKind;
+  /** Stair shape — only used when kind === "stairs". */
+  stairsShape?: StairsShape;
   widthM: string;
   notes: string;
 };
@@ -103,6 +116,7 @@ export function normalizeConnections(
       roomAId: d.roomAId,
       roomBId: d.kind === "external" ? undefined : d.roomBId || undefined,
       kind: d.kind,
+      stairsShape: d.kind === "stairs" ? d.stairsShape : undefined,
       widthM: Number.isFinite(widthM) ? widthM : undefined,
       notes: d.notes.trim() ? d.notes.trim() : undefined,
     });
