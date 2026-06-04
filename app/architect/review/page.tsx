@@ -60,6 +60,8 @@ type ProposalBlock = {
   description?: string;
   sketches?: Photo[];
 };
+type ReviewStatus = "pending" | "in-review" | "approved" | "rejected";
+
 type Submission = {
   submissionId?: string;
   customerName?: string;
@@ -72,6 +74,8 @@ type Submission = {
   connections?: Connection[];
   exterior?: ExteriorBlock;
   proposal?: ProposalBlock;
+  status?: ReviewStatus;
+  internalNote?: string;
 };
 
 function fmtMeters(v: unknown): string {
@@ -145,6 +149,37 @@ export default function ArchitectReviewPage() {
     a.click();
     URL.revokeObjectURL(a.href);
   }, [submission]);
+
+  const updateStatus = useCallback(
+    async (next: ReviewStatus, note?: string) => {
+      if (!submission?.submissionId || !endpoint) return;
+      try {
+        const r = await fetch(endpoint, {
+          method: "POST",
+          mode: "cors",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "set_status",
+            id: submission.submissionId,
+            status: next,
+            note: note ?? submission.internalNote ?? "",
+            secret,
+          }),
+        });
+        if (!r.ok) throw new Error(`Server responded ${r.status}`);
+        const data: { ok?: boolean; error?: string } = await r.json();
+        if (data.ok === false) throw new Error(data.error || "Status update failed.");
+        setSubmission({
+          ...submission,
+          status: next,
+          internalNote: note ?? submission.internalNote,
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [submission, endpoint, secret],
+  );
 
   const approve = useCallback(async () => {
     if (!submission?.submissionId || !endpoint) return;
@@ -260,6 +295,54 @@ export default function ArchitectReviewPage() {
                       : "Approve & export"}
                 </button>
               </div>
+            </section>
+
+            {/* Workflow status + internal notes */}
+            <section className="rounded-xl border border-outline-variant/20 bg-surface-container-low p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="font-headline text-xl text-on-surface">Workflow</h2>
+                <div className="flex flex-wrap gap-2">
+                  {(["pending", "in-review", "approved", "rejected"] as const).map((s) => {
+                    const active = (submission.status ?? "pending") === s;
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => void updateStatus(s)}
+                        className={`rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition ${
+                          active
+                            ? "bg-primary text-on-primary shadow-sm"
+                            : "bg-surface-container-high text-on-surface"
+                        }`}
+                      >
+                        {s.replace("-", " ")}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <label
+                htmlFor="internal-note"
+                className="font-label mt-4 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant"
+              >
+                Internal note (visible to architect only)
+              </label>
+              <textarea
+                id="internal-note"
+                rows={3}
+                value={submission.internalNote ?? ""}
+                onChange={(e) =>
+                  setSubmission({ ...submission, internalNote: e.target.value })
+                }
+                onBlur={() =>
+                  void updateStatus(
+                    submission.status ?? "pending",
+                    submission.internalNote ?? "",
+                  )
+                }
+                placeholder="Notes only visible to the TM team — pricing assumptions, follow-ups, anything off-the-record."
+                className="mt-1 w-full rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-2 text-sm outline-none ring-primary/40 focus:ring-2"
+              />
             </section>
 
             {/* Rooms */}

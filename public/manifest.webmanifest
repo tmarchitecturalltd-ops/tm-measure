@@ -1,0 +1,19 @@
+{
+  "name": "TM Measure",
+  "short_name": "TM Measure",
+  "description": "Measure rooms and submit to TM Architectural Designs Ltd.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fcf9f5",
+  "theme_color": "#b89650",
+  "icons": [
+    {
+      "src": "/brand-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["productivity", "utilities"]
+}

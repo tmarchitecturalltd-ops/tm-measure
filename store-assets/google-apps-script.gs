@@ -117,6 +117,17 @@ function doPost(e) {
         approvedAt: approveSubmission_(String(payload.id || '')),
       });
     }
+    if (action === 'set_status') {
+      requireAdminSecret_(payload.secret);
+      return jsonResponse_({
+        ok: true,
+        status: setSubmissionStatus_(
+          String(payload.id || ''),
+          String(payload.status || ''),
+          typeof payload.note === 'string' ? payload.note : '',
+        ),
+      });
+    }
 
     validatePayload_(payload);
 
@@ -204,6 +215,8 @@ function listSubmissions_() {
   const cEmail = idxOf('Email');
   const cProject = idxOf('Project Name');
   const cApproved = idxOf('Approved At'); // -1 if column not present yet
+  const cStatus = idxOf('Status');
+  const cNote = idxOf('Internal note');
 
   const byId = {};
   rows.forEach(function (row) {
@@ -220,6 +233,8 @@ function listSubmissions_() {
         approvedAt: cApproved >= 0 && row[cApproved]
           ? (row[cApproved] instanceof Date ? row[cApproved].toISOString() : String(row[cApproved]))
           : null,
+        status: cStatus >= 0 ? String(row[cStatus] || 'pending') : 'pending',
+        internalNote: cNote >= 0 ? String(row[cNote] || '') : '',
       };
     }
     byId[id].roomCount += 1;
@@ -289,6 +304,8 @@ function getSubmission_(id) {
   const cId = headers.indexOf('Submission ID');
   const cRaw = headers.indexOf('Raw payload');
   const cApproved = headers.indexOf('Approved At');
+  const cStatus = headers.indexOf('Status');
+  const cNote = headers.indexOf('Internal note');
   const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
   const match = rows.find(function (r) { return String(r[cId] || '') === id; });
   if (!match) throw new Error('Submission not found: ' + id);
@@ -301,6 +318,8 @@ function getSubmission_(id) {
   parsed.approvedAt = cApproved >= 0 && match[cApproved]
     ? (match[cApproved] instanceof Date ? match[cApproved].toISOString() : String(match[cApproved]))
     : null;
+  parsed.status = cStatus >= 0 ? String(match[cStatus] || 'pending') : 'pending';
+  parsed.internalNote = cNote >= 0 ? String(match[cNote] || '') : '';
   return parsed;
 }
 
@@ -336,6 +355,54 @@ function approveSubmission_(id) {
   }
   if (!touched) throw new Error('Submission not found: ' + id);
   return now.toISOString();
+}
+
+/**
+ * Set the architect-side workflow status + optional internal note on
+ * every row of a submission. Used by the architect console to flag
+ * progress without having to touch the sheet directly.
+ *   Valid statuses: pending | in-review | approved | rejected.
+ * Auto-adds the "Status" and "Internal note" columns the first time
+ * they're written.
+ */
+function setSubmissionStatus_(id, status, note) {
+  if (!id) throw new Error('Missing id.');
+  const allowed = ['pending', 'in-review', 'approved', 'rejected'];
+  if (allowed.indexOf(status) === -1) {
+    throw new Error('Invalid status: ' + status);
+  }
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.sheetName);
+  if (!sheet) throw new Error('No Submissions sheet found.');
+  let lastCol = sheet.getLastColumn();
+  let headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+  // Ensure "Status" and "Internal note" columns exist.
+  const ensure = function (name) {
+    let idx = headers.indexOf(name);
+    if (idx < 0) {
+      sheet.insertColumnAfter(lastCol);
+      sheet.getRange(1, lastCol + 1).setValue(name)
+        .setFontWeight('bold').setBackground('#1c1c1a').setFontColor('#fcf9f5');
+      idx = lastCol;
+      lastCol = sheet.getLastColumn();
+      headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+    }
+    return idx;
+  };
+  const cStatus = ensure('Status');
+  const cNote = ensure('Internal note');
+  const cId = headers.indexOf('Submission ID');
+  const lastRow = sheet.getLastRow();
+  const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  let touched = 0;
+  for (let i = 0; i < rows.length; i++) {
+    if (String(rows[i][cId] || '') === id) {
+      sheet.getRange(i + 2, cStatus + 1).setValue(status);
+      if (note) sheet.getRange(i + 2, cNote + 1).setValue(note);
+      touched++;
+    }
+  }
+  if (!touched) throw new Error('Submission not found: ' + id);
+  return status;
 }
 
 // ─── PHOTO UPLOAD ──────────────────────────────────────────
@@ -693,6 +760,70 @@ function sendEmail_(payload, submissionId) {
     htmlBody: buildHtmlEmail_(payload, submissionId),
     body: buildPlainTextEmail_(payload, submissionId),
   });
+
+  // Customer confirmation — short branded receipt so they know we
+  // got their submission, with the submission ID for the status page
+  // and our reply timeline expectation. Best-effort: failures here
+  // shouldn't take down the architect email.
+  if (validEmail_(payload.email)) {
+    try {
+      MailApp.sendEmail({
+        to: payload.email,
+        replyTo: CONFIG.recipientEmail,
+        subject: 'TM Measure — we\'ve got your submission (' + submissionId + ')',
+        htmlBody: buildCustomerHtmlEmail_(payload, submissionId),
+        body: buildCustomerPlainTextEmail_(payload, submissionId),
+      });
+    } catch (err) {
+      console.warn('Customer confirmation email failed:', err);
+    }
+  }
+}
+
+function buildCustomerHtmlEmail_(payload, submissionId) {
+  const gold = '#b89650';
+  const cream = '#fcf9f5';
+  const dark = '#1c1c1a';
+  const mid = '#6e6a63';
+  const border = '#e8e2d5';
+  const name = escapeHtml_(String(payload.customerName || '').split(' ')[0] || 'there');
+  const project = escapeHtml_(payload.projectName || 'your project');
+  return '' +
+    '<div style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Helvetica,Arial,sans-serif;background:#f4efe5;padding:32px 16px;">' +
+      '<div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.06);">' +
+        '<div style="padding:24px 28px;border-bottom:1px solid ' + border + ';">' +
+          '<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:' + gold + ';font-weight:700;">TM Measure</div>' +
+          '<h1 style="margin:6px 0 0 0;font-size:22px;color:' + dark + ';font-weight:600;">Thanks, ' + name + '.</h1>' +
+        '</div>' +
+        '<div style="padding:20px 28px;color:' + dark + ';font-size:15px;line-height:1.55;">' +
+          '<p style="margin:0 0 12px 0;">We\'ve received your measurements for <strong>' + project + '</strong>.</p>' +
+          '<p style="margin:0 0 12px 0;">Your architect will review the dimensions and reply within <strong>two working days</strong>. If you don\'t hear back by then, just reply to this email.</p>' +
+          '<div style="margin:18px 0 6px 0;padding:14px;background:' + cream + ';border-left:3px solid ' + gold + ';">' +
+            '<div style="font-size:11px;color:' + mid + ';text-transform:uppercase;letter-spacing:1px;">Your submission ID</div>' +
+            '<div style="font-family:monospace;font-size:18px;color:' + gold + ';margin-top:4px;">' + submissionId + '</div>' +
+            '<div style="font-size:12px;color:' + mid + ';margin-top:6px;">Save this. You can check progress any time on the Project status page in the app.</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="padding:14px 28px;border-top:1px solid ' + border + ';background:#fafafa;font-size:12px;color:' + mid + ';">' +
+          'TM Architectural Designs Ltd. · inquiries@tmdesignsltd.com' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+}
+
+function buildCustomerPlainTextEmail_(payload, submissionId) {
+  const name = String(payload.customerName || '').split(' ')[0] || 'there';
+  return [
+    'Thanks, ' + name + '.',
+    '',
+    'We\'ve received your TM Measure submission for ' + (payload.projectName || 'your project') + '.',
+    'Your architect will reply within two working days.',
+    '',
+    'Submission ID: ' + submissionId,
+    '',
+    '— TM Architectural Designs Ltd.',
+    'inquiries@tmdesignsltd.com',
+  ].join('\n');
 }
 
 function buildHtmlEmail_(payload, submissionId) {

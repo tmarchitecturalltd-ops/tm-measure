@@ -24,6 +24,8 @@ type SubmissionSummary = {
   projectName: string;
   roomCount: number;
   approvedAt: string | null;
+  status?: "pending" | "in-review" | "approved" | "rejected";
+  internalNote?: string;
 };
 
 const ENDPOINT_KEY = "tm.architect.endpoint";
@@ -116,8 +118,12 @@ export default function ArchitectListPage() {
 
   const filtered = useMemo(() => {
     if (!submissions) return [];
-    if (filter === "pending") return submissions.filter((s) => !s.approvedAt);
-    if (filter === "approved") return submissions.filter((s) => !!s.approvedAt);
+    if (filter === "pending") {
+      return submissions.filter((s) => (s.status ?? "pending") === "pending");
+    }
+    if (filter === "approved") {
+      return submissions.filter((s) => (s.status ?? "pending") === "approved" || !!s.approvedAt);
+    }
     return submissions;
   }, [submissions, filter]);
 
@@ -253,15 +259,20 @@ export default function ArchitectListPage() {
                     <p className="mt-1 text-xs text-on-surface-variant">
                       {s.roomCount} room{s.roomCount === 1 ? "" : "s"} · ID {s.id}
                     </p>
-                    {s.approvedAt ? (
-                      <span className="mt-2 inline-block rounded-full bg-primary/15 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-primary">
-                        Approved
-                      </span>
-                    ) : (
-                      <span className="mt-2 inline-block rounded-full bg-surface-container-high px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                        Pending
-                      </span>
-                    )}
+                    {(() => {
+                      const status = s.status ?? (s.approvedAt ? "approved" : "pending");
+                      const tones: Record<string, string> = {
+                        approved: "bg-primary/15 text-primary",
+                        "in-review": "bg-amber-200/30 text-amber-700",
+                        rejected: "bg-error/15 text-error",
+                        pending: "bg-surface-container-high text-on-surface-variant",
+                      };
+                      return (
+                        <span className={`mt-2 inline-block rounded-full px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest ${tones[status] ?? tones.pending}`}>
+                          {status.replace("-", " ")}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
               </Link>
