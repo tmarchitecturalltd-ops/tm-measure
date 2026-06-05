@@ -18,6 +18,7 @@
  */
 
 import Link from "next/link";
+import PhotoAnnotator from "@/components/PhotoAnnotator";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const ENDPOINT_KEY = "tm.architect.endpoint";
@@ -108,6 +109,12 @@ export default function ArchitectReviewPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [approving, setApproving] = useState(false);
+  /** Currently-open annotation target: the Drive URL of the photo
+   *  being drawn on plus a friendly name for the saved copy. */
+  const [annotating, setAnnotating] = useState<
+    | { url: string; name: string; appendTo: (driveUrl: string) => void }
+    | null
+  >(null);
 
   // Pull endpoint + ID on mount (static-export-safe — runtime only).
   useEffect(() => {
@@ -410,18 +417,31 @@ export default function ArchitectReviewPage() {
                       <ul className="flex flex-wrap gap-2">
                         {r.photos.map((p, i) =>
                           p.driveUrl ? (
-                            <li key={p.id ?? i}>
+                            <li key={p.id ?? i} className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs text-primary">
                               <a
                                 href={p.driveUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-3 py-1 text-xs text-primary hover:bg-primary/20"
+                                className="inline-flex items-center gap-1"
                               >
-                                <span className="material-symbols-outlined" style={{ fontSize: "14px" }} aria-hidden>
-                                  open_in_new
-                                </span>
+                                <span className="material-symbols-outlined" style={{ fontSize: "14px" }} aria-hidden>open_in_new</span>
                                 {p.name || `photo-${i + 1}`}
                               </a>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const captured = p;
+                                  setAnnotating({
+                                    url: captured.driveUrl ?? "",
+                                    name: captured.name || `photo-${i + 1}`,
+                                    appendTo: () => {/* no-op for room photos */},
+                                  });
+                                }}
+                                title="Annotate"
+                                className="ml-1 rounded px-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary/15"
+                              >
+                                ✎
+                              </button>
                             </li>
                           ) : (
                             <li
@@ -562,6 +582,18 @@ export default function ArchitectReviewPage() {
           </>
         )}
       </main>
+      {annotating && (
+        <PhotoAnnotator
+          open
+          imageUrl={annotating.url}
+          suggestedName={annotating.name}
+          endpoint={endpoint}
+          secret={secret}
+          submissionId={submission?.submissionId ?? submissionId ?? ""}
+          onClose={() => setAnnotating(null)}
+          onSaved={(driveUrl) => annotating.appendTo(driveUrl)}
+        />
+      )}
     </div>
   );
 }

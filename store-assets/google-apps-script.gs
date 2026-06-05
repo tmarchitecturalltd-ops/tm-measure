@@ -128,6 +128,17 @@ function doPost(e) {
         ),
       });
     }
+    if (action === 'save_annotation') {
+      requireAdminSecret_(payload.secret);
+      return jsonResponse_({
+        ok: true,
+        driveUrl: saveAnnotation_(
+          String(payload.id || ''),
+          String(payload.name || 'annotation'),
+          String(payload.dataUri || ''),
+        ),
+      });
+    }
 
     validatePayload_(payload);
 
@@ -403,6 +414,50 @@ function setSubmissionStatus_(id, status, note) {
   }
   if (!touched) throw new Error('Submission not found: ' + id);
   return status;
+}
+
+/**
+ * Save an architect-drawn annotation. Drops a new JPEG into the
+ * submission's Drive folder named `<safe>-annotated-<ts>.jpg` and
+ * returns its public URL. Uses the same MIME / size guards as the
+ * customer upload path so a hostile actor with the admin secret
+ * can't dump executables onto Drive.
+ */
+function saveAnnotation_(submissionId, suggestedName, dataUri) {
+  if (!submissionId) throw new Error('Missing submission ID.');
+  if (!dataUri) throw new Error('Missing dataUri.');
+  const match = String(dataUri).match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) throw new Error('Malformed dataUri.');
+  const mime = String(match[1]).toLowerCase();
+  if (CONFIG.photoAllowedMimes.indexOf(mime) === -1) {
+    throw new Error('Disallowed MIME: ' + mime);
+  }
+  const bytes = Utilities.base64Decode(match[2]);
+  if (bytes.length > CONFIG.photoMaxBytes) {
+    throw new Error('Annotation too large.');
+  }
+  const root = findOrCreateFolder_(DriveApp.getRootFolder(), 'TM Measure Submissions');
+  const subfolders = root.getFolders();
+  let folder = null;
+  while (subfolders.hasNext()) {
+    const f = subfolders.next();
+    if (f.getName().indexOf(submissionId) === 0) { folder = f; break; }
+  }
+  if (!folder) {
+    // No existing folder — create one. Lets the architect annotate
+    // submissions made before the Drive-upload feature shipped.
+    folder = root.createFolder(submissionId + ' — annotations');
+  }
+  const ts = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd-HHmmss');
+  const safe = String(suggestedName || 'photo')
+    .replace(/[^A-Za-z0-9_-]/g, '_')
+    .substring(0, 80);
+  const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+  const file = folder.createFile(
+    Utilities.newBlob(bytes, mime, safe + '-annotated-' + ts + '.' + ext),
+  );
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return file.getUrl();
 }
 
 // ─── PHOTO UPLOAD ──────────────────────────────────────────
