@@ -488,7 +488,7 @@ export default function ArchitectReviewPage() {
                           <ul className="mt-1 space-y-1">
                             {photos.map((p, i) =>
                               p.driveUrl ? (
-                                <li key={p.id ?? i}>
+                                <li key={p.id ?? i} className="flex items-center gap-2">
                                   <a
                                     href={p.driveUrl}
                                     target="_blank"
@@ -497,6 +497,20 @@ export default function ArchitectReviewPage() {
                                   >
                                     {p.name || `photo-${i + 1}`}
                                   </a>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setAnnotating({
+                                        url: p.driveUrl ?? "",
+                                        name: `exterior-${side}-${p.name || i + 1}`,
+                                        appendTo: () => {/* no-op */},
+                                      })
+                                    }
+                                    title="Annotate"
+                                    className="rounded px-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary/15"
+                                  >
+                                    ✎
+                                  </button>
                                 </li>
                               ) : (
                                 <li key={p.id ?? i} className="text-xs text-on-surface">
@@ -533,15 +547,29 @@ export default function ArchitectReviewPage() {
                         <ul className="flex flex-wrap gap-2">
                           {submission.proposal.sketches.map((p, i) =>
                             p.driveUrl ? (
-                              <li key={p.id ?? i}>
+                              <li key={p.id ?? i} className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs text-primary">
                                 <a
                                   href={p.driveUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-3 py-1 text-xs text-primary hover:bg-primary/20"
+                                  className="inline-flex items-center gap-1"
                                 >
                                   {p.name || `sketch-${i + 1}`}
                                 </a>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setAnnotating({
+                                      url: p.driveUrl ?? "",
+                                      name: `proposal-${p.name || `sketch-${i + 1}`}`,
+                                      appendTo: () => {/* no-op */},
+                                    })
+                                  }
+                                  title="Annotate"
+                                  className="rounded px-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary/15"
+                                >
+                                  ✎
+                                </button>
                               </li>
                             ) : (
                               <li

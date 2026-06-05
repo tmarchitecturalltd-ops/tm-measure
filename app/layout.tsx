@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import IconFallback from "@/components/IconFallback";
+import RegisterSW from "@/components/RegisterSW";
 
 export const metadata: Metadata = {
   title: "TM Designs Ltd | Architectural Excellence",
@@ -41,6 +42,7 @@ export default function RootLayout({
       </head>
       <body className="bg-surface text-on-surface font-body min-h-full flex flex-col">
         <IconFallback />
+        <RegisterSW />
         {children}
       </body>
     </html>
