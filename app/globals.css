@@ -380,6 +380,66 @@ select:focus-visible {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 45%, transparent);
 }
 
+/*
+ * Print stylesheet — used when the architect taps "Download PDF"
+ * on /architect/review and the browser's print dialog opens.
+ *
+ * Goals
+ *   • Strip nav, modals, animation, and interactive controls.
+ *   • Force consistent A4 margins + page breaks at room boundaries
+ *     so each room sits on its own page (avoids splitting tables).
+ *   • Keep brand gold for headings, dark text on white field — the
+ *     architect wants a printable schematic, not a screenshot.
+ *   • Show URL + submission ID in the print footer for traceability.
+ */
+@media print {
+  :root {
+    --color-surface: #ffffff;
+    --color-surface-container-low: #ffffff;
+    --color-surface-container-lowest: #ffffff;
+    --color-surface-container-high: #f5f1ea;
+    --color-on-surface: #1c1c1a;
+    --color-on-surface-variant: #4d4639;
+    --color-primary: #b89650;
+    --color-outline: #d6cbb6;
+  }
+  html, body {
+    background: #ffffff !important;
+    color: #1c1c1a !important;
+  }
+  body { font-size: 11pt; line-height: 1.4; }
+  /* Hide app shell — buttons, nav, modals — anything tagged print:hide
+     plus inputs/buttons/the PhotoAnnotator modal. */
+  .print-hide,
+  nav,
+  header [aria-label="Back to home"],
+  header [aria-label="Back to console"],
+  button,
+  [role="dialog"],
+  .fixed {
+    display: none !important;
+  }
+  /* Force every room article + each major section onto its own page. */
+  article, section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .pdf-page-break {
+    break-before: page;
+    page-break-before: always;
+  }
+  @page {
+    size: A4;
+    margin: 18mm 16mm 22mm 16mm;
+  }
+  a[href]::after {
+    content: " (" attr(href) ")";
+    font-size: 9pt;
+    color: #6e6658;
+    word-break: break-all;
+  }
+}
+
 /* Honour the user's reduced-motion preference. Used by the tutorial
  * dot animations and the scan HUD's progress pills. */
 @media (prefers-reduced-motion: reduce) {

@@ -291,6 +291,18 @@ export default function ArchitectReviewPage() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => {
+                    // Lean on the browser's native PDF print path —
+                    // the print stylesheet in globals.css strips the
+                    // app shell and forces page breaks per section.
+                    if (typeof window !== "undefined") window.print();
+                  }}
+                  className="rounded-full border border-primary px-5 py-2 text-xs font-bold uppercase tracking-widest text-primary"
+                >
+                  Download PDF
+                </button>
+                <button
+                  type="button"
                   onClick={approve}
                   disabled={approving || !!submission.approvedAt}
                   className="rounded-full bg-primary px-5 py-2 text-xs font-bold uppercase tracking-widest text-on-primary disabled:cursor-not-allowed disabled:opacity-50"
@@ -464,7 +476,7 @@ export default function ArchitectReviewPage() {
 
             {/* Exterior 2×2 grid */}
             {submission.exterior?.bySide && (
-              <section className="rounded-xl border border-outline-variant/20 bg-surface-container-low p-5">
+              <section className="pdf-page-break rounded-xl border border-outline-variant/20 bg-surface-container-low p-5">
                 <h2 className="font-headline text-xl text-on-surface">Exterior</h2>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   {(["front", "back", "left", "right"] as const).map((side) => {
@@ -531,7 +543,7 @@ export default function ArchitectReviewPage() {
             {submission.proposal &&
               ((submission.proposal.description?.trim() ?? "") !== "" ||
                 (submission.proposal.sketches?.length ?? 0) > 0) && (
-                <section className="rounded-xl border border-outline-variant/20 bg-surface-container-low p-5">
+                <section className="pdf-page-break rounded-xl border border-outline-variant/20 bg-surface-container-low p-5">
                   <h2 className="font-headline text-xl text-on-surface">Proposal</h2>
                   {submission.proposal.description && (
                     <p className="mt-3 whitespace-pre-wrap rounded-md border-l-2 border-primary bg-surface-container-lowest p-3 text-sm text-on-surface">
@@ -588,7 +600,7 @@ export default function ArchitectReviewPage() {
 
             {/* Connections */}
             {submission.connections && submission.connections.length > 0 && (
-              <section className="rounded-xl border border-outline-variant/20 bg-surface-container-low p-5">
+              <section className="pdf-page-break rounded-xl border border-outline-variant/20 bg-surface-container-low p-5">
                 <h2 className="font-headline text-xl text-on-surface">Room connections</h2>
                 <ul className="mt-3 space-y-2 text-sm text-on-surface">
                   {submission.connections.map((c, i) => (
