@@ -410,6 +410,12 @@ export default function FloorPlanEditor({
                   `M 0 0 L ${w} 0 L ${w} ${h - nl} ` +
                   `L ${w - nw} ${h - nl} L ${w - nw} ${h} L 0 ${h} Z`;
               }
+            } else if (r.shape === "custom" && r.floorPolygonM && r.floorPolygonM.length >= 3) {
+              // Custom polygon traced on CustomShapeEditor. Points are
+              // already in metres relative to the room's bounding box.
+              pathD = r.floorPolygonM
+                .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.z}`)
+                .join(" ") + " Z";
             }
             return (
               <g key={r.id} transform={transform}>

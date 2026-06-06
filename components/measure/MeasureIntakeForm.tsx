@@ -45,6 +45,7 @@ import type { ScanDimensions } from "@/components/measure/RoomScanOverlay";
 import RoomScanReviewFlow from "@/components/measure/RoomScanReviewFlow";
 import FloorPlanEditor from "@/components/measure/FloorPlanEditor";
 import TutorialOverlay from "@/components/measure/TutorialOverlay";
+import CustomShapeEditor from "@/components/measure/CustomShapeEditor";
 import { RoomPlan } from "@tm-designs/capacitor-roomplan";
 import {
   clearDraft,
@@ -759,6 +760,7 @@ export default function MeasureIntakeForm() {
         shape: r.shape ?? "rectangle",
         notchWidthM: r.notchWidthM ? parseMeters(r.notchWidthM) : undefined,
         notchLengthM: r.notchLengthM ? parseMeters(r.notchLengthM) : undefined,
+        floorPolygonM: r.shape === "custom" ? r.floorPolygonM : undefined,
         photos: r.photos.map((p) => ({
           name: p.name,
           sizeBytes: p.sizeBytes,
@@ -1417,7 +1419,7 @@ export default function MeasureIntakeForm() {
                     Room shape
                   </h3>
                   <div className="flex flex-wrap gap-2">
-                    {(["rectangle", "l-shape"] as const).map((s) => (
+                    {(["rectangle", "l-shape", "custom"] as const).map((s) => (
                       <button
                         key={s}
                         type="button"
@@ -1428,7 +1430,11 @@ export default function MeasureIntakeForm() {
                             : "bg-surface-container-high text-on-surface"
                         }`}
                       >
-                        {s === "rectangle" ? "Rectangle" : "L-shape"}
+                        {s === "rectangle"
+                          ? "Rectangle"
+                          : s === "l-shape"
+                            ? "L-shape"
+                            : "Custom"}
                       </button>
                     ))}
                   </div>
@@ -1463,6 +1469,12 @@ export default function MeasureIntakeForm() {
                         out of one corner. Width × length here is the size of that bite.
                       </p>
                     </div>
+                  )}
+                  {room.shape === "custom" && (
+                    <CustomShapeEditor
+                      room={room}
+                      onPatch={(patch) => setRoom(room.id, patch)}
+                    />
                   )}
                 </div>
 

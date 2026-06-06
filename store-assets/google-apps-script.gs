@@ -1294,6 +1294,10 @@ function renderFloorSvg_(floorRooms, gold, cream, dark, mid) {
                 ' L ' + (w - nw) + ' ' + h +
                 ' L 0 ' + h + ' Z';
       }
+    } else if (r.shape === 'custom' && Array.isArray(r.floorPolygonM) && r.floorPolygonM.length >= 3) {
+      pathD = r.floorPolygonM.map(function (p, i) {
+        return (i === 0 ? 'M ' : 'L ') + p.x + ' ' + p.z;
+      }).join(' ') + ' Z';
     }
     // Door / window tick marks. Map wallIndex 0..3 → top / right /
     // bottom / left of the bounding rectangle, then place an offset
