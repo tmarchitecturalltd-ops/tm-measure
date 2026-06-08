@@ -40,6 +40,21 @@ export type RoomPhoto = {
 };
 
 /**
+ * Cross-platform audio reference (voice memo). Same shape as a
+ * RoomPhoto so the upload pipeline can treat them uniformly; the
+ * extra `durationMs` lets the architect console show how long
+ * each clip is without having to load it.
+ */
+export type RoomAudio = {
+  id: string;
+  uri: string;
+  name: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  durationMs?: number;
+};
+
+/**
  * Rotation applied to a room rectangle on the floor plan canvas.
  *
  * Restricted to the four cardinal rotations so adjacent rooms can snap
@@ -96,6 +111,8 @@ export type RoomDraft = {
   notchLengthM?: string;
   /** Custom polygon — array of (x, z) metre points anti-clockwise. */
   floorPolygonM?: { x: number; z: number }[];
+  /** Voice memos captured for this room. Optional; defaults to none. */
+  voiceMemos?: RoomAudio[];
 };
 
 /**

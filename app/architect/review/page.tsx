@@ -27,6 +27,13 @@ const SECRET_KEY = "tm.architect.secret";
 type Wall = { id?: string; label?: string; lengthM?: number | string };
 type Opening = { id?: string; widthM?: number | string; note?: string };
 type Photo = { id?: string; name?: string; uri?: string; driveUrl?: string };
+type VoiceMemo = {
+  id?: string;
+  name?: string;
+  driveUrl?: string;
+  durationMs?: number;
+  type?: string;
+};
 type Placement = {
   floor?: number;
   rotationDeg?: number;
@@ -42,6 +49,7 @@ type Room = {
   irregularShapeNotes?: string;
   notes?: string;
   photos?: Photo[];
+  voiceMemos?: VoiceMemo[];
   placement?: Placement;
 };
 type Connection = {
@@ -468,6 +476,42 @@ export default function ArchitectReviewPage() {
                       <p className="mt-2 text-[11px] text-on-surface-variant">
                         Photos with the open-in-new icon are hosted on the project Drive folder; older submissions list filenames only.
                       </p>
+                    </div>
+                  )}
+                  {r.voiceMemos && r.voiceMemos.length > 0 && (
+                    <div className="mt-4">
+                      <p className="font-label mb-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                        Voice memos ({r.voiceMemos.length})
+                      </p>
+                      <ul className="space-y-2">
+                        {r.voiceMemos.map((m, i) =>
+                          m.driveUrl ? (
+                            <li
+                              key={m.id ?? i}
+                              className="flex flex-wrap items-center gap-3 rounded-md border border-outline-variant/30 bg-surface-container-lowest p-2 text-xs"
+                            >
+                              <span aria-hidden>🎙</span>
+                              <a
+                                href={m.driveUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary underline"
+                              >
+                                {m.name || `voice-${i + 1}`}
+                              </a>
+                              {typeof m.durationMs === "number" && (
+                                <span className="text-on-surface-variant">
+                                  {(m.durationMs / 1000).toFixed(1)}s
+                                </span>
+                              )}
+                            </li>
+                          ) : (
+                            <li key={m.id ?? i} className="text-xs text-on-surface">
+                              {m.name || `voice-${i + 1}`}
+                            </li>
+                          ),
+                        )}
+                      </ul>
                     </div>
                   )}
                 </article>

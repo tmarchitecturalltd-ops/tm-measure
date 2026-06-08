@@ -34,6 +34,15 @@ const CONFIG = {
   // but a malicious caller could send anything via raw fetch.
   photoMaxBytes: 5 * 1024 * 1024,           // 5 MB per photo
   photoAllowedMimes: ['image/jpeg', 'image/png', 'image/webp'],
+
+  // Voice-memo upload limits.
+  audioMaxBytes: 8 * 1024 * 1024,           // 8 MB ≈ 5 min @ 200 kbps
+  audioAllowedMimes: [
+    'audio/webm', 'audio/webm;codecs=opus',
+    'audio/ogg', 'audio/ogg;codecs=opus',
+    'audio/mp4', 'audio/mpeg', 'audio/aac',
+    'audio/wav',
+  ],
 };
 
 /**
@@ -486,6 +495,7 @@ function uploadPhotos_(payload, submissionId) {
   const hasData = (function () {
     if (rooms.some(function (r) {
       if ((r.photos || []).some(function (p) { return p && p.dataUri; })) return true;
+      if ((r.voiceMemos || []).some(function (m) { return m && m.dataUri; })) return true;
       return (r.walls || []).some(function (w) {
         return (w.photos || []).some(function (p) { return p && p.dataUri; });
       });
@@ -570,6 +580,47 @@ function uploadPhotos_(payload, submissionId) {
     }
   };
 
+  /**
+   * Upload one voice memo. Audio gets its own MIME allowlist and
+   * size cap separate from photos. Drops the heavy base64 once the
+   * file is in Drive.
+   */
+  const audioExt = function (mime) {
+    if (mime.indexOf('mp4') >= 0) return 'm4a';
+    if (mime.indexOf('mpeg') >= 0) return 'mp3';
+    if (mime.indexOf('aac') >= 0) return 'aac';
+    if (mime.indexOf('wav') >= 0) return 'wav';
+    if (mime.indexOf('ogg') >= 0) return 'ogg';
+    return 'webm';
+  };
+  const uploadAudio = function (memo, fallbackName) {
+    if (!memo || !memo.dataUri) return;
+    try {
+      const match = String(memo.dataUri).match(/^data:([^;]+);base64,(.+)$/);
+      if (!match) return;
+      const mime = String(match[1]).toLowerCase();
+      if (CONFIG.audioAllowedMimes.indexOf(mime.split(';')[0]) === -1
+          && CONFIG.audioAllowedMimes.indexOf(mime) === -1) {
+        console.warn('Rejected audio with disallowed MIME:', mime, fallbackName);
+        return;
+      }
+      const bytes = Utilities.base64Decode(match[2]);
+      if (bytes.length > CONFIG.audioMaxBytes) {
+        console.warn('Rejected oversized voice memo:', bytes.length, 'bytes', fallbackName);
+        return;
+      }
+      const safeName = safeFilename(memo.name, fallbackName);
+      const file = folder.createFile(
+        Utilities.newBlob(bytes, mime, safeName + '.' + audioExt(mime)),
+      );
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      memo.driveUrl = file.getUrl();
+      delete memo.dataUri;
+    } catch (err) {
+      console.error('Audio upload failed', err);
+    }
+  };
+
   rooms.forEach(function (room, ri) {
     (room.photos || []).forEach(function (photo, pi) {
       uploadPhoto(photo, 'room-' + (ri + 1) + '-photo-' + (pi + 1));
@@ -578,6 +629,9 @@ function uploadPhotos_(payload, submissionId) {
       (wall.photos || []).forEach(function (photo, pi) {
         uploadPhoto(photo, 'room-' + (ri + 1) + '-wall-' + (wi + 1) + '-photo-' + (pi + 1));
       });
+    });
+    (room.voiceMemos || []).forEach(function (memo, mi) {
+      uploadAudio(memo, 'room-' + (ri + 1) + '-voice-' + (mi + 1));
     });
   });
 
@@ -963,6 +1017,17 @@ function buildHtmlEmail_(payload, submissionId) {
         '</div>'
       : '';
 
+    const uploadedMemos = (room.voiceMemos || []).filter(function (m) { return m && m.driveUrl; });
+    const memosBlock = uploadedMemos.length
+      ? '<div style="margin-top:12px;padding:0 12px;">' +
+          '<div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:' + mid + ';margin-bottom:4px;">Voice memos (' + uploadedMemos.length + ')</div>' +
+          uploadedMemos.map(function (m) {
+            const dur = m.durationMs ? ' · ' + (m.durationMs / 1000).toFixed(1) + 's' : '';
+            return '<div style="font-size:13px;line-height:1.5;">🎙 <a href="' + m.driveUrl + '" style="color:' + gold + ';text-decoration:none;">' + escapeHtml_(m.name || 'voice memo') + '</a>' + dur + '</div>';
+          }).join('') +
+        '</div>'
+      : '';
+
     return '<div style="margin-top:20px;border:1px solid ' + border + ';border-radius:8px;overflow:hidden;">' +
       '<div style="padding:12px 16px;background:' + dark + ';color:' + cream + ';font-weight:600;font-size:15px;">' +
         escapeHtml_(room.label || 'Room') +
@@ -972,6 +1037,7 @@ function buildHtmlEmail_(payload, submissionId) {
       '</table>' +
       (notesBlock ? '<div style="padding:0 12px 12px 12px;">' + notesBlock + '</div>' : '') +
       (photosBlock ? '<div style="padding:0 0 12px 0;">' + photosBlock + '</div>' : '') +
+      (memosBlock ? '<div style="padding:0 0 12px 0;">' + memosBlock + '</div>' : '') +
     '</div>';
   }).join('');
 

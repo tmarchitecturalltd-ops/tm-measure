@@ -34,6 +34,7 @@ import {
   type Opening,
   type ProjectDraft,
   type RoomConnectionDraft,
+  type RoomAudio,
   type RoomDraft,
   type RoomPhoto,
   type RoomPlacement,
@@ -46,6 +47,7 @@ import RoomScanReviewFlow from "@/components/measure/RoomScanReviewFlow";
 import FloorPlanEditor from "@/components/measure/FloorPlanEditor";
 import TutorialOverlay from "@/components/measure/TutorialOverlay";
 import CustomShapeEditor from "@/components/measure/CustomShapeEditor";
+import VoiceRecorder from "@/components/measure/VoiceRecorder";
 import { RoomPlan } from "@tm-designs/capacitor-roomplan";
 import {
   clearDraft,
@@ -879,9 +881,28 @@ export default function MeasureIntakeForm() {
       // down the whole submission).
       const photoUriByRoom: Record<string, Record<string, string>> = {};
       const wallPhotoUriByRoom: Record<string, Record<string, Record<string, string>>> = {};
+      const voiceUriByRoom: Record<string, Record<string, string>> = {};
+
+      // Audio blobs aren't down-sampled — they're already small (a 30s
+      // memo at ~32 kbps is ~120 KB). Just base64 them.
+      const audioToDataUri = async (uri: string): Promise<string | null> => {
+        try {
+          const blob = await fetch(uri).then((r) => r.blob());
+          const reader = new FileReader();
+          return await new Promise((resolve) => {
+            reader.onload = () =>
+              resolve(typeof reader.result === "string" ? reader.result : null);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          });
+        } catch {
+          return null;
+        }
+      };
       for (const r of rooms) {
         photoUriByRoom[r.id] = {};
         wallPhotoUriByRoom[r.id] = {};
+        voiceUriByRoom[r.id] = {};
         for (const p of r.photos) {
           const dataUri = await compressPhotoForUpload(p.uri);
           if (dataUri) photoUriByRoom[r.id][p.id] = dataUri;
@@ -893,6 +914,10 @@ export default function MeasureIntakeForm() {
             if (dataUri) wallPhotoUriByRoom[r.id][w.id][p.id] = dataUri;
           }
         }
+        for (const m of r.voiceMemos ?? []) {
+          const dataUri = await audioToDataUri(m.uri);
+          if (dataUri) voiceUriByRoom[r.id][m.id] = dataUri;
+        }
       }
       const enrichedPayload = {
         ...payload,
@@ -901,6 +926,7 @@ export default function MeasureIntakeForm() {
           if (!sourceRoom) return r;
           const uriMap = photoUriByRoom[sourceRoom.id] ?? {};
           const wallUriMap = wallPhotoUriByRoom[sourceRoom.id] ?? {};
+          const voiceMap = voiceUriByRoom[sourceRoom.id] ?? {};
           return {
             ...r,
             photos: r.photos.map((photo, pi) => {
@@ -917,6 +943,17 @@ export default function MeasureIntakeForm() {
                   const dataUri = wallUris[photo.id];
                   return dataUri ? { ...photo, dataUri } : photo;
                 }),
+              };
+            }),
+            voiceMemos: (sourceRoom.voiceMemos ?? []).map((m) => {
+              const dataUri = voiceMap[m.id];
+              return {
+                id: m.id,
+                name: m.name,
+                type: m.mimeType,
+                sizeBytes: m.sizeBytes,
+                durationMs: m.durationMs,
+                ...(dataUri ? { dataUri } : {}),
               };
             }),
           };
@@ -1922,6 +1959,20 @@ export default function MeasureIntakeForm() {
                         </p>
                       </div>
                     ))}
+                  </div>
+                  <div className="mt-4 border-t border-outline-variant/20 pt-4">
+                    <label className="font-label mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                      Voice memo (optional)
+                    </label>
+                    <p className="mb-1 text-xs text-on-surface-variant">
+                      Faster than typing. Note anything tricky — radiators,
+                      chimney breasts, an awkward corner — and the architect
+                      hears it in your own words.
+                    </p>
+                    <VoiceRecorder
+                      memos={room.voiceMemos ?? []}
+                      onChange={(next) => setRoom(room.id, { voiceMemos: next })}
+                    />
                   </div>
                 </div>
               </section>
