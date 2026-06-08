@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  TM Designs adaptive icon foreground.
+  108 dp adaptive viewport; safe zone is the central 66 dp circle.
+  Two-building line-art mark scaled to fit inside the safe zone with
+  generous bleed so the mask never crops the louvres or peak.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+  <path
+      android:strokeColor="#1c1c1a"
+      android:strokeWidth="2.6"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round"
+      android:fillColor="#00000000"
+      android:pathData="M 30 84 L 30 32 L 60 19 L 60 84 Z" />
+  <path
+      android:strokeColor="#1c1c1a"
+      android:strokeWidth="2.6"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round"
+      android:fillColor="#00000000"
+      android:pathData="M 60 35 L 88 35 L 88 84 L 60 84 Z" />
+  <path
+      android:strokeColor="#1c1c1a"
+      android:strokeWidth="2.6"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round"
+      android:fillColor="#00000000"
+      android:pathData="M 60 45 L 88 45" />
+  <path
+      android:strokeColor="#1c1c1a"
+      android:strokeWidth="2.6"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round"
+      android:fillColor="#00000000"
+      android:pathData="M 60 55 L 88 55" />
+  <path
+      android:strokeColor="#1c1c1a"
+      android:strokeWidth="2.6"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round"
+      android:fillColor="#00000000"
+      android:pathData="M 60 65 L 88 65" />
+  <path
+      android:strokeColor="#1c1c1a"
+      android:strokeWidth="2.6"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round"
+      android:fillColor="#00000000"
+      android:pathData="M 60 75 L 88 75" />
+  <path
+      android:strokeColor="#1c1c1a"
+      android:strokeWidth="2.6"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round"
+      android:fillColor="#00000000"
+      android:pathData="M 22 87 L 92 87" />
+</vector>

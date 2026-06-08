@@ -207,8 +207,9 @@ export default function RoomScanOverlay({
   const TAPS_PER_CORNER = 3;
 
   /** Collapsed HUD shrinks the corner-tap panel to a single
-   *  prompt + progress line so the camera view isn't obscured. */
-  const [hudCollapsed, setHudCollapsed] = useState(false);
+   *  prompt + progress line so the camera view isn't obscured.
+   *  Defaults to collapsed so first-time users see the room. */
+  const [hudCollapsed, setHudCollapsed] = useState(true);
 
   /** Median of an array of numbers — small helper so we can median
    *  x and y independently to robustly absorb a single mis-tap. */
@@ -946,8 +947,9 @@ export default function RoomScanOverlay({
               >
                 <div className="flex items-start justify-between gap-2">
                   <p style={{ color: GOLD }} className="mb-1 flex-1 font-semibold">
-                    {cornerCount === 0 && `Tap corner 1 of 4, ${TAPS_PER_CORNER} times.`}
-                    {cornerCount === 1 && `Now corner 2 — clockwise from the first.`}
+                    {cornerCount === 0 &&
+                      `Stand in the middle of the room. Tap corner 1 (any floor corner), ${TAPS_PER_CORNER} times.`}
+                    {cornerCount === 1 && `Now corner 2 — clockwise from corner 1.`}
                     {cornerCount === 2 && `Corner 3 — diagonally opposite corner 1.`}
                     {cornerCount === 3 && `Last one — corner 4 closes the loop.`}
                     {cornerCount >= 4 && "Measuring…"}

@@ -1326,8 +1326,9 @@ export default function MeasureIntakeForm() {
                 <button
                   type="button"
                   onClick={openBannerAutoScan}
-                  className="shrink-0 rounded-lg bg-primary px-8 py-4 text-sm font-bold uppercase tracking-widest text-on-primary transition-colors hover:bg-surface-tint"
+                  className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-primary px-8 py-4 text-sm font-bold uppercase tracking-widest text-on-primary transition-colors hover:bg-surface-tint"
                 >
+                  <span className="material-symbols-outlined" style={{ fontSize: "20px" }} aria-hidden>photo_camera</span>
                   Auto-Scan Room
                 </button>
               </div>
@@ -1888,9 +1889,10 @@ export default function MeasureIntakeForm() {
                       setPhotoTargetRoomId(room.id);
                       fileInputRef.current?.click();
                     }}
-                    className="mb-4 rounded border border-primary px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
+                    className="mb-4 inline-flex items-center gap-2 rounded border border-primary px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
                   >
-                    Upload photos
+                    <span className="material-symbols-outlined" style={{ fontSize: "16px" }} aria-hidden>add_a_photo</span>
+                    Take photo or upload
                   </button>
                   {issueFor(`room-${ri}-photos`) && (
                     <p className="mb-3 text-xs text-error">
@@ -2552,19 +2554,25 @@ export default function MeasureIntakeForm() {
                     type="button"
                     onClick={downloadJson}
                     disabled={submitStatus === "submitting"}
-                    className="rounded bg-inverse-surface px-6 py-3 text-sm font-bold uppercase tracking-widest text-surface hover:opacity-90 disabled:opacity-50"
+                    className="inline-flex items-center gap-2 rounded bg-inverse-surface px-6 py-3 text-sm font-bold uppercase tracking-widest text-surface hover:opacity-90 disabled:opacity-50"
                   >
+                    <span className="material-symbols-outlined" style={{ fontSize: "18px" }} aria-hidden>download</span>
                     Download JSON (backup)
                   </button>
                   <button
                     type="button"
                     onClick={submitToBackend}
                     disabled={submitStatus === "submitting"}
-                    className="rounded bg-primary px-6 py-3 text-sm font-bold uppercase tracking-widest text-on-primary hover:bg-surface-tint disabled:opacity-60"
+                    className="inline-flex items-center gap-2 rounded bg-primary px-6 py-3 text-sm font-bold uppercase tracking-widest text-on-primary hover:bg-surface-tint disabled:opacity-60"
                   >
                     {submitStatus === "submitting"
                       ? "Sending…"
-                      : "Send to TM Designs"}
+                      : (
+                        <>
+                          <span className="material-symbols-outlined" style={{ fontSize: "18px" }} aria-hidden>send</span>
+                          Send to TM Designs
+                        </>
+                      )}
                   </button>
                 </div>
                 {submitStatus === "error" && submitError && (
