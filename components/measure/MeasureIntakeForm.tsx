@@ -343,6 +343,107 @@ export default function MeasureIntakeForm() {
     setRooms((prev) => [...prev, emptyRoom()]);
   }, []);
 
+  /**
+   * Project templates — pre-built room sets for the most common UK
+   * residential typologies. Skipping the empty-state ten-minute-think
+   * is the goal; the customer still tweaks dimensions per room.
+   *
+   * Each entry returns an array of {name, floor} pairs. Wall slots
+   * and ceiling default to the empty-room blanks so the user has to
+   * type the actual dimensions, but the structure is laid out.
+   */
+  const TEMPLATES: Record<string, { name: string; rooms: { name: string; floor: number }[] }> = {
+    flat1: {
+      name: "1-bed flat",
+      rooms: [
+        { name: "Living / kitchen", floor: 0 },
+        { name: "Bedroom", floor: 0 },
+        { name: "Bathroom", floor: 0 },
+        { name: "Hallway", floor: 0 },
+      ],
+    },
+    flat2: {
+      name: "2-bed flat",
+      rooms: [
+        { name: "Living room", floor: 0 },
+        { name: "Kitchen", floor: 0 },
+        { name: "Bedroom 1", floor: 0 },
+        { name: "Bedroom 2", floor: 0 },
+        { name: "Bathroom", floor: 0 },
+        { name: "Hallway", floor: 0 },
+      ],
+    },
+    semi3: {
+      name: "3-bed semi-detached",
+      rooms: [
+        { name: "Living room", floor: 0 },
+        { name: "Kitchen / diner", floor: 0 },
+        { name: "Downstairs WC", floor: 0 },
+        { name: "Hallway", floor: 0 },
+        { name: "Bedroom 1", floor: 1 },
+        { name: "Bedroom 2", floor: 1 },
+        { name: "Bedroom 3", floor: 1 },
+        { name: "Bathroom", floor: 1 },
+        { name: "Landing", floor: 1 },
+      ],
+    },
+    detached4: {
+      name: "4-bed detached",
+      rooms: [
+        { name: "Living room", floor: 0 },
+        { name: "Dining room", floor: 0 },
+        { name: "Kitchen", floor: 0 },
+        { name: "Utility", floor: 0 },
+        { name: "Downstairs WC", floor: 0 },
+        { name: "Hallway", floor: 0 },
+        { name: "Bedroom 1 (master)", floor: 1 },
+        { name: "Ensuite", floor: 1 },
+        { name: "Bedroom 2", floor: 1 },
+        { name: "Bedroom 3", floor: 1 },
+        { name: "Bedroom 4", floor: 1 },
+        { name: "Family bathroom", floor: 1 },
+        { name: "Landing", floor: 1 },
+      ],
+    },
+  };
+
+  const applyTemplate = useCallback(
+    (key: keyof typeof TEMPLATES) => {
+      const t = TEMPLATES[key];
+      if (!t) return;
+      setRooms((prev) => {
+        // Replace blank first room if it's truly empty, otherwise
+        // append the template after whatever's already there.
+        const allBlank =
+          prev.length === 1 &&
+          !prev[0].name.trim() &&
+          prev[0].walls.every((w) => !w.lengthM.trim()) &&
+          !prev[0].ceilingHeightM.trim();
+        const generated: RoomDraft[] = t.rooms.map((r) => ({
+          ...emptyRoom(),
+          name: r.name,
+        }));
+        // Stamp the floor onto placements so the multi-storey selector
+        // already reflects the template's assumption.
+        const ids = generated.map((g) => g.id);
+        setPlacements((pp) => {
+          const next = { ...pp };
+          generated.forEach((g, i) => {
+            next[ids[i]] = {
+              positionM: null,
+              rotationDeg: 0,
+              floor: t.rooms[i].floor,
+            };
+          });
+          return next;
+        });
+        return allBlank ? generated : [...prev, ...generated];
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   const removeRoom = useCallback((id: string) => {
     setRooms((prev) => {
       const next = prev.filter((r) => r.id !== id);
@@ -357,6 +458,57 @@ export default function MeasureIntakeForm() {
       if (!(id in prev)) return prev;
       const { [id]: _dropped, ...rest } = prev;
       return rest;
+    });
+  }, []);
+
+  /**
+   * Move a room up or down in the list. Order matters in the
+   * architect email and the floor-plan rendering so the customer
+   * gets to control the sequence.
+   */
+  const moveRoom = useCallback((id: string, dir: -1 | 1) => {
+    setRooms((prev) => {
+      const idx = prev.findIndex((r) => r.id === id);
+      if (idx < 0) return prev;
+      const targetIdx = idx + dir;
+      if (targetIdx < 0 || targetIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+      return next;
+    });
+  }, []);
+
+  /**
+   * Clone a room. Re-IDs the room, its walls, doors, windows, photos
+   * and voice memos so references stay disjoint. Photos and audio
+   * blobs are shared via URL — the blob backs both entries until the
+   * page reloads, which is fine for the submit-then-clear lifecycle.
+   */
+  const duplicateRoom = useCallback((id: string) => {
+    setRooms((prev) => {
+      const idx = prev.findIndex((r) => r.id === id);
+      if (idx < 0) return prev;
+      const src = prev[idx];
+      const copy: RoomDraft = {
+        ...src,
+        id: newId(),
+        name: src.name ? `${src.name} (copy)` : "",
+        walls: src.walls.map((w) => ({
+          ...w,
+          id: newId(),
+          photos: (w.photos ?? []).map((p) => ({ ...p, id: newId() })),
+        })),
+        doors: src.doors.map((d) => ({ ...d, id: newId() })),
+        windows: src.windows.map((w) => ({ ...w, id: newId() })),
+        photos: src.photos.map((p) => ({ ...p, id: newId() })),
+        voiceMemos: (src.voiceMemos ?? []).map((m) => ({ ...m, id: newId() })),
+        // Reset placement so the duplicate appears in the unplaced
+        // palette instead of stacking on top of the original.
+        placement: undefined,
+      };
+      const next = [...prev];
+      next.splice(idx + 1, 0, copy);
+      return next;
     });
   }, []);
 
@@ -1345,6 +1497,31 @@ export default function MeasureIntakeForm() {
 
         {step === "rooms" && (
           <div className="space-y-10">
+            {/* Quick-start templates — pre-build the room list for the
+                most common UK property types. The customer still tweaks
+                wall lengths / ceilings, but skips the typing. */}
+            <section className="rounded-xl border border-outline-variant/30 bg-surface-container-low p-5">
+              <h2 className="font-headline text-lg text-on-surface">
+                Quick start
+              </h2>
+              <p className="mt-1 text-xs text-on-surface-variant">
+                Pick a typical layout and we&apos;ll add the rooms for you. Tap a
+                room afterwards to fill in dimensions.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(Object.keys(TEMPLATES) as Array<keyof typeof TEMPLATES>).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => applyTemplate(key)}
+                    className="rounded-full border border-primary/50 px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest text-primary hover:bg-primary hover:text-on-primary"
+                  >
+                    {TEMPLATES[key].name}
+                  </button>
+                ))}
+              </div>
+            </section>
+
             <div className="rounded-xl border-2 border-primary/40 bg-inverse-surface p-6 text-on-primary shadow-lg md:p-8">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
@@ -1416,6 +1593,34 @@ export default function MeasureIntakeForm() {
                       className="rounded-lg border border-primary bg-primary/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
                     >
                       Auto-Scan this room
+                    </button>
+                    {/* Reorder + duplicate cluster. The duplicate helper
+                        deep-clones the room (new IDs throughout) and the
+                        arrows nudge it up or down in the list. */}
+                    <button
+                      type="button"
+                      onClick={() => moveRoom(room.id, -1)}
+                      disabled={ri === 0}
+                      aria-label="Move room up"
+                      className="rounded border border-outline-variant/40 px-2 py-1 text-xs text-on-surface hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveRoom(room.id, 1)}
+                      disabled={ri === rooms.length - 1}
+                      aria-label="Move room down"
+                      className="rounded border border-outline-variant/40 px-2 py-1 text-xs text-on-surface hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => duplicateRoom(room.id)}
+                      className="rounded border border-outline-variant/40 px-2 py-1 text-xs font-bold uppercase tracking-widest text-on-surface hover:border-primary"
+                    >
+                      Duplicate
                     </button>
                     {rooms.length > 1 && (
                       <button
