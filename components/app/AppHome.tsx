@@ -311,6 +311,7 @@ export default function AppHome() {
               </span>
               Privacy
             </Link>
+            {process.env.NEXT_PUBLIC_ENABLE_SCAN === "1" && (
             <button
               type="button"
               onClick={() => {
@@ -342,6 +343,7 @@ export default function AppHome() {
               </span>
               Reset calibration
             </button>
+            )}
           </p>
 
           {/* Tile grid — each tile keeps the cream surface base but
@@ -458,7 +460,7 @@ export default function AppHome() {
           )}
         </section>
 
-        {calib && (
+        {calib && process.env.NEXT_PUBLIC_ENABLE_SCAN === "1" && (
           <p className="mt-8 text-center text-[10px] uppercase tracking-widest text-on-surface-variant">
             Camera calibrated · <span className="font-mono text-primary">{Math.round(calib.focalPx)} px</span> ·{" "}
             {Math.max(1, Math.round((Date.now() - calib.savedAt) / 86400000))} d ago

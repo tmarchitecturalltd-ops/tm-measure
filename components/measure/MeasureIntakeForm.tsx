@@ -88,6 +88,17 @@ function emptyRoom(): RoomDraft {
 
 type Step = "project" | "rooms" | "exterior" | "proposal" | "plan" | "review";
 
+/**
+ * Camera / LiDAR scan feature flag.
+ *
+ * The auto-scan path is hidden in the customer-facing build until the
+ * accuracy work is finished. Set `NEXT_PUBLIC_ENABLE_SCAN=1` in
+ * `.env.local` to surface the buttons again for internal testing —
+ * the underlying RoomScanOverlay + RoomPlan plugin code is left
+ * intact so the feature can be flipped back on without a refactor.
+ */
+const SCAN_ENABLED = process.env.NEXT_PUBLIC_ENABLE_SCAN === "1";
+
 export default function MeasureIntakeForm() {
   const [step, setStep] = useState<Step>("project");
   const [customerName, setCustomerName] = useState("");
@@ -1458,6 +1469,7 @@ export default function MeasureIntakeForm() {
                     : "Pick once — units lock when you continue. Entries are stored in metres; the review step shows both."}
                 </p>
               </div>
+              {SCAN_ENABLED && (
               <div>
                 <span className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
                   Device capability
@@ -1467,15 +1479,16 @@ export default function MeasureIntakeForm() {
                 )}
                 {arSupport === "yes" && (
                   <p className="rounded-md bg-primary/10 px-3 py-2 text-xs text-primary">
-                    AR scan available — you'll get the option to LiDAR-scan each room.
+                    AR scan available — you&apos;ll get the option to LiDAR-scan each room.
                   </p>
                 )}
                 {arSupport === "no" && (
                   <p className="rounded-md bg-surface-container-high px-3 py-2 text-xs text-on-surface-variant">
-                    Manual / corner-tap mode only{arReason ? ` — ${arReason}` : "."} You'll still get accurate dimensions from photo taps.
+                    Manual / corner-tap mode only{arReason ? ` — ${arReason}` : "."} You&apos;ll still get accurate dimensions from photo taps.
                   </p>
                 )}
               </div>
+              )}
             </div>
             <button
               type="button"
@@ -1522,6 +1535,7 @@ export default function MeasureIntakeForm() {
               </div>
             </section>
 
+            {SCAN_ENABLED && (
             <div className="rounded-xl border-2 border-primary/40 bg-inverse-surface p-6 text-on-primary shadow-lg md:p-8">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
@@ -1547,6 +1561,7 @@ export default function MeasureIntakeForm() {
                 </button>
               </div>
             </div>
+            )}
 
             {rooms.map((room, ri) => (
               <section
@@ -1587,6 +1602,7 @@ export default function MeasureIntakeForm() {
                     </label>
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
+                    {SCAN_ENABLED && (
                     <button
                       type="button"
                       onClick={() => setScanRoomId(room.id)}
@@ -1594,6 +1610,7 @@ export default function MeasureIntakeForm() {
                     >
                       Auto-Scan this room
                     </button>
+                    )}
                     {/* Reorder + duplicate cluster. The duplicate helper
                         deep-clones the room (new IDs throughout) and the
                         arrows nudge it up or down in the list. */}
