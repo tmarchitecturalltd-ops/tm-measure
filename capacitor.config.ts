@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.tmdesigns.portal",
-  appName: "TM Designs Portal",
+  appId: "ltd.tmdesigns.tmmeasure",
+  appName: "TM Measure",
   webDir: "out",
   server: {
     androidScheme: "https",
