@@ -16,10 +16,28 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Signing config wired to the Codemagic environment variables
+    // injected by the `android_signing: tmmeasure` block in
+    // codemagic.yaml. Falls back to the debug keystore for local
+    // Android Studio builds so devs aren't forced to set the env vars.
+    signingConfigs {
+        release {
+            def storePath = System.getenv("CM_KEYSTORE_PATH")
+            if (storePath) {
+                storeFile file(storePath)
+                storePassword System.getenv("CM_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("CM_KEY_ALIAS")
+                keyPassword System.getenv("CM_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (System.getenv("CM_KEYSTORE_PATH")) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
