@@ -25,6 +25,17 @@ import {
   type RoomPlanScanResult,
 } from "@tm-designs/capacitor-roomplan";
 
+/**
+ * LIDAR_ENABLED — build-time gate for the Apple RoomPlan / LiDAR path.
+ *
+ * Set NEXT_PUBLIC_ENABLE_LIDAR=1 in the build environment to re-enable.
+ * When false the isSupported() probe is short-circuited so the overlay
+ * always defaults to the camera corner-tap method; the LiDAR chip in the
+ * mode picker still renders (so the UI stays intact) but shows the
+ * "not available" fallback message rather than the Start button.
+ */
+const LIDAR_ENABLED = process.env.NEXT_PUBLIC_ENABLE_LIDAR === "1";
+
 const HUD = "#1c1c1a";
 const GOLD = "#b89650";
 
@@ -651,9 +662,18 @@ export default function RoomScanOverlay({
    * Runs on every platform — the plugin's web fallback cleanly reports
    * `supported: false` on Android / desktop, so no platform sniff is
    * needed on the React side.
+   *
+   * Gated by LIDAR_ENABLED: when false we skip the native probe entirely
+   * and immediately report "no" so the overlay stays on corner-tap mode.
+   * Re-enable by setting NEXT_PUBLIC_ENABLE_LIDAR=1 at build time.
    */
   useEffect(() => {
     if (!open) return;
+    if (!LIDAR_ENABLED) {
+      setRoomPlanSupport("no");
+      setRoomPlanReason("LiDAR scanning is not enabled in this build.");
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
