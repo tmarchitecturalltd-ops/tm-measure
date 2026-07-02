@@ -1209,8 +1209,15 @@ export default function MeasureIntakeForm() {
               </h1>
             </div>
           </div>
-          <span className="hidden text-xs text-on-surface-variant sm:block">
-            Web · Manual entry (PRD §4.2)
+          <span className="hidden items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3 py-1.5 text-[11px] font-semibold text-on-surface-variant sm:inline-flex">
+            <span
+              className="material-symbols-outlined text-primary"
+              style={{ fontSize: "14px" }}
+              aria-hidden
+            >
+              schedule
+            </span>
+            10–15 min per room
           </span>
         </div>
       </header>
@@ -1246,13 +1253,14 @@ export default function MeasureIntakeForm() {
           }}
         />
         <p className="mb-8 max-w-3xl text-sm leading-relaxed text-on-surface-variant">
-          Guided room capture per{" "}
-          <strong className="text-on-surface">FR-01–FR-04</strong>: walls, doors,
-          windows, validation, notes, and photos. Use{" "}
-          <strong className="text-on-surface">Auto-Scan Room</strong> for camera-led
-          capture (video / corner / LiDAR placeholder), then refine in{" "}
-          <strong className="text-on-surface">metres</strong> (imperial shown on
-          review per FR-25).
+          We&apos;ll walk you through each room —{" "}
+          <strong className="font-semibold text-on-surface">
+            walls, doors, windows, photos and notes
+          </strong>{" "}
+          — then a quick floor plan. Enter lengths in{" "}
+          <strong className="font-semibold text-on-surface">metres</strong>; the
+          review step shows metric and imperial side by side before anything is
+          sent.
         </p>
 
         {activeScanContext && scanRoomId && (
@@ -1311,7 +1319,7 @@ export default function MeasureIntakeForm() {
                       <span className="font-semibold text-on-surface">
                         {roomDisplayLabel(room, ri)}
                       </span>
-                      <span className="shrink-0 rounded bg-inverse-surface/10 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                      <span className="shrink-0 rounded-full bg-inverse-surface/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
                         #{ri + 1}
                       </span>
                     </button>
@@ -1361,24 +1369,56 @@ export default function MeasureIntakeForm() {
           </div>
         )}
 
-        <ol className="mb-10 flex flex-wrap gap-3 text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
+        <ol className="mb-10 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
           {([
-            { key: "project", label: "1. Your details" },
-            { key: "rooms", label: "2. Rooms" },
-            { key: "exterior", label: "3. Exterior" },
-            { key: "proposal", label: "4. Proposal" },
-            { key: "plan", label: "5. Floor plan" },
-            { key: "review", label: "6. Review" },
-          ] as const).map((s) => {
+            { key: "project", label: "Your details" },
+            { key: "rooms", label: "Rooms" },
+            { key: "exterior", label: "Exterior" },
+            { key: "proposal", label: "Proposal" },
+            { key: "plan", label: "Floor plan" },
+            { key: "review", label: "Review" },
+          ] as const).map((s, i, arr) => {
             const active = step === s.key;
+            // Steps before the current one render as "done" — gold tick
+            // in a tinted pill — so the customer can see progress at a
+            // glance. Purely visual; every pill stays clickable.
+            const curIdx = arr.findIndex((x) => x.key === step);
+            const done = i < curIdx;
             return (
               <li key={s.key}>
                 <button
                   type="button"
                   onClick={() => setStep(s.key)}
                   aria-current={active ? "step" : undefined}
-                  className={`rounded-full px-4 py-2 transition ${active ? "bg-primary text-on-primary shadow-sm" : "bg-surface-container-low hover:bg-surface-container-high"}`}
+                  className={`inline-flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-4 transition ${
+                    active
+                      ? "bg-primary text-on-primary shadow-md shadow-primary/25"
+                      : done
+                        ? "border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15"
+                        : "border border-outline-variant/30 bg-surface-container-low hover:bg-surface-container-high"
+                  }`}
                 >
+                  <span
+                    className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${
+                      active
+                        ? "bg-on-primary/20 text-on-primary"
+                        : done
+                          ? "bg-primary/15 text-primary"
+                          : "bg-surface-container-high text-on-surface-variant"
+                    }`}
+                    aria-hidden
+                  >
+                    {done ? (
+                      <span
+                        className="material-symbols-outlined"
+                        style={{ fontSize: "14px" }}
+                      >
+                        check
+                      </span>
+                    ) : (
+                      i + 1
+                    )}
+                  </span>
                   {s.label}
                 </button>
               </li>
@@ -1387,7 +1427,7 @@ export default function MeasureIntakeForm() {
         </ol>
 
         {step === "project" && (
-          <section className="space-y-6 rounded-xl bg-surface-container-low p-6 md:p-8">
+          <section className="space-y-6 tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 md:p-8">
             <h2 className="font-headline text-2xl text-on-surface">Project details</h2>
             <div className="grid gap-6 md:grid-cols-2">
               <div>
@@ -1397,7 +1437,7 @@ export default function MeasureIntakeForm() {
                 <input
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/40 focus:ring-2"
+                  className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                 />
                 {issueFor("name") && (
                   <p className="mt-1 text-xs text-error">{issueFor("name")}</p>
@@ -1411,7 +1451,7 @@ export default function MeasureIntakeForm() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/40 focus:ring-2"
+                  className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                 />
                 {issueFor("email") && (
                   <p className="mt-1 text-xs text-error">{issueFor("email")}</p>
@@ -1425,7 +1465,7 @@ export default function MeasureIntakeForm() {
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value)}
                   placeholder="e.g. Rear extension — 12 Smith Street"
-                  className="w-full rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/40 focus:ring-2"
+                  className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                 />
                 {issueFor("project") && (
                   <p className="mt-1 text-xs text-error">{issueFor("project")}</p>
@@ -1441,7 +1481,7 @@ export default function MeasureIntakeForm() {
                     onClick={() => !unitLocked && setUnit("metric")}
                     disabled={unitLocked}
                     aria-disabled={unitLocked}
-                    className={`rounded px-4 py-2 text-xs font-semibold uppercase transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    className={`rounded-lg px-4 py-2 text-xs font-semibold uppercase transition disabled:cursor-not-allowed disabled:opacity-60 ${
                       unit === "metric"
                         ? "bg-primary text-on-primary"
                         : "bg-surface-container-high text-on-surface"
@@ -1454,7 +1494,7 @@ export default function MeasureIntakeForm() {
                     onClick={() => !unitLocked && setUnit("imperial")}
                     disabled={unitLocked}
                     aria-disabled={unitLocked}
-                    className={`rounded px-4 py-2 text-xs font-semibold uppercase transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    className={`rounded-lg px-4 py-2 text-xs font-semibold uppercase transition disabled:cursor-not-allowed disabled:opacity-60 ${
                       unit === "imperial"
                         ? "bg-primary text-on-primary"
                         : "bg-surface-container-high text-on-surface"
@@ -1513,7 +1553,7 @@ export default function MeasureIntakeForm() {
             {/* Quick-start templates — pre-build the room list for the
                 most common UK property types. The customer still tweaks
                 wall lengths / ceilings, but skips the typing. */}
-            <section className="rounded-xl border border-outline-variant/30 bg-surface-container-low p-5">
+            <section className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-5">
               <h2 className="font-headline text-lg text-on-surface">
                 Quick start
               </h2>
@@ -1566,7 +1606,7 @@ export default function MeasureIntakeForm() {
             {rooms.map((room, ri) => (
               <section
                 key={room.id}
-                className="rounded-xl border border-outline-variant/20 bg-surface-container-low p-6 md:p-8"
+                className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 md:p-8"
               >
                 <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
                   <div className="flex flex-wrap items-center gap-3">
@@ -1591,7 +1631,7 @@ export default function MeasureIntakeForm() {
                             },
                           }));
                         }}
-                        className="rounded border border-outline-variant/40 bg-surface-container-lowest px-2 py-1 text-sm text-on-surface"
+                        className="rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-2 py-1 text-sm text-on-surface outline-none focus:border-primary/70"
                       >
                         <option value={-1}>Basement</option>
                         <option value={0}>Ground</option>
@@ -1619,7 +1659,7 @@ export default function MeasureIntakeForm() {
                       onClick={() => moveRoom(room.id, -1)}
                       disabled={ri === 0}
                       aria-label="Move room up"
-                      className="rounded border border-outline-variant/40 px-2 py-1 text-xs text-on-surface hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-lg border border-outline-variant/40 px-2.5 py-1.5 text-xs text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       ↑
                     </button>
@@ -1628,14 +1668,14 @@ export default function MeasureIntakeForm() {
                       onClick={() => moveRoom(room.id, 1)}
                       disabled={ri === rooms.length - 1}
                       aria-label="Move room down"
-                      className="rounded border border-outline-variant/40 px-2 py-1 text-xs text-on-surface hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-lg border border-outline-variant/40 px-2.5 py-1.5 text-xs text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       ↓
                     </button>
                     <button
                       type="button"
                       onClick={() => duplicateRoom(room.id)}
-                      className="rounded border border-outline-variant/40 px-2 py-1 text-xs font-bold uppercase tracking-widest text-on-surface hover:border-primary"
+                      className="rounded-lg border border-outline-variant/40 px-2.5 py-1.5 text-xs font-bold uppercase tracking-widest text-on-surface transition-colors hover:border-primary hover:text-primary"
                     >
                       Duplicate
                     </button>
@@ -1661,7 +1701,7 @@ export default function MeasureIntakeForm() {
                       setRoom(room.id, { name: e.target.value })
                     }
                     placeholder="e.g. Kitchen, Master bedroom"
-                    className="w-full max-w-md rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/40 focus:ring-2"
+                    className="w-full max-w-md rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                   />
                   {issueFor(`room-${ri}-name`) && (
                     <p className="mt-1 text-xs text-error">
@@ -1709,7 +1749,7 @@ export default function MeasureIntakeForm() {
                             setRoom(room.id, { notchWidthM: e.target.value })
                           }
                           placeholder="0.00"
-                          className="mt-1 w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                          className="mt-1 w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                         />
                       </label>
                       <label className="text-xs text-on-surface-variant">
@@ -1721,7 +1761,7 @@ export default function MeasureIntakeForm() {
                             setRoom(room.id, { notchLengthM: e.target.value })
                           }
                           placeholder="0.00"
-                          className="mt-1 w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                          className="mt-1 w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                         />
                       </label>
                       <p className="sm:col-span-2 text-[11px] text-on-surface-variant">
@@ -1741,7 +1781,7 @@ export default function MeasureIntakeForm() {
                 <div className="mb-8">
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="font-label text-xs font-bold uppercase tracking-widest text-primary">
-                      Wall lengths (FR-01 / irregular FR-02)
+                      Wall lengths
                     </h3>
                     <button
                       type="button"
@@ -1771,7 +1811,7 @@ export default function MeasureIntakeForm() {
                               );
                               setRoom(room.id, { walls });
                             }}
-                            className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                            className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                           />
                         </div>
                         <div className="w-full sm:w-40">
@@ -1790,7 +1830,7 @@ export default function MeasureIntakeForm() {
                               setRoom(room.id, { walls });
                             }}
                             placeholder="0.00"
-                            className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                            className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                           />
                           {issueFor(`room-${ri}-wall-${wi}`) && (
                             <p className="mt-1 text-xs text-error">
@@ -1825,7 +1865,7 @@ export default function MeasureIntakeForm() {
                             {(w.photos ?? []).map((p) => (
                               <div
                                 key={p.id}
-                                className="relative h-16 w-16 overflow-hidden rounded border border-outline-variant/30"
+                                className="relative h-16 w-16 overflow-hidden rounded-lg border border-outline-variant/30"
                               >
                                 <img
                                   src={p.uri}
@@ -1860,7 +1900,7 @@ export default function MeasureIntakeForm() {
                       setRoom(room.id, { ceilingHeightM: e.target.value })
                     }
                     placeholder="e.g. 2.45"
-                    className="w-full max-w-xs rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/40 focus:ring-2"
+                    className="w-full max-w-xs rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                   />
                   {issueFor(`room-${ri}-ceiling`) && (
                     <p className="mt-1 text-xs text-error">
@@ -1909,7 +1949,7 @@ export default function MeasureIntakeForm() {
                                 );
                                 setRoom(room.id, { doors });
                               }}
-                              className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                              className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             />
                             {issueFor(`room-${ri}-door-${di}`) && (
                               <p className="mt-1 text-xs text-error">
@@ -1930,7 +1970,7 @@ export default function MeasureIntakeForm() {
                                 );
                                 setRoom(room.id, { doors });
                               }}
-                              className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                              className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             >
                               {room.walls.map((w, i) => (
                                 <option key={w.id} value={i}>
@@ -1953,7 +1993,7 @@ export default function MeasureIntakeForm() {
                                 setRoom(room.id, { doors });
                               }}
                               placeholder="from wall start"
-                              className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                              className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             />
                           </div>
                           <div className="flex-[2]">
@@ -1971,7 +2011,7 @@ export default function MeasureIntakeForm() {
                                 setRoom(room.id, { doors });
                               }}
                               placeholder="e.g. Patio — sliding"
-                              className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                              className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             />
                           </div>
                           <button
@@ -2027,7 +2067,7 @@ export default function MeasureIntakeForm() {
                                 );
                                 setRoom(room.id, { windows });
                               }}
-                              className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                              className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             />
                             {issueFor(`room-${ri}-window-${wi}`) && (
                               <p className="mt-1 text-xs text-error">
@@ -2048,7 +2088,7 @@ export default function MeasureIntakeForm() {
                                 );
                                 setRoom(room.id, { windows });
                               }}
-                              className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                              className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             >
                               {room.walls.map((wallSeg, i) => (
                                 <option key={wallSeg.id} value={i}>
@@ -2071,7 +2111,7 @@ export default function MeasureIntakeForm() {
                                 setRoom(room.id, { windows });
                               }}
                               placeholder="from wall start"
-                              className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                              className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             />
                           </div>
                           <div className="flex-[2]">
@@ -2089,7 +2129,7 @@ export default function MeasureIntakeForm() {
                                 setRoom(room.id, { windows });
                               }}
                               placeholder="e.g. Bay — centre"
-                              className="w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
+                              className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             />
                           </div>
                           <button
@@ -2109,7 +2149,7 @@ export default function MeasureIntakeForm() {
 
                 <div className="mb-6">
                   <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                    Irregular room (FR-02) — describe bays, angles, L-shape
+                    Irregular room — describe bays, angles, L-shape
                   </label>
                   <textarea
                     value={room.irregularNotes}
@@ -2118,20 +2158,20 @@ export default function MeasureIntakeForm() {
                     }
                     rows={3}
                     placeholder="e.g. Fifth wall 1.2 m at 135° to wall 4; bay 0.9 m deep…"
-                    className="w-full rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/40 focus:ring-2"
+                    className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                   />
                 </div>
 
                 <div className="mb-6">
                   <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                    Notes for this room (FR-04)
+                    Notes for this room
                   </label>
                   <textarea
                     value={room.notes}
                     onChange={(e) => setRoom(room.id, { notes: e.target.value })}
                     rows={3}
                     placeholder="Anything else the designer should know…"
-                    className="w-full rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/40 focus:ring-2"
+                    className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                   />
                 </div>
 
@@ -2148,7 +2188,7 @@ export default function MeasureIntakeForm() {
                       setPhotoTargetRoomId(room.id);
                       fileInputRef.current?.click();
                     }}
-                    className="mb-4 inline-flex items-center gap-2 rounded border border-primary px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
+                    className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/60 px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: "16px" }} aria-hidden>add_a_photo</span>
                     Take photo or upload
@@ -2205,7 +2245,7 @@ export default function MeasureIntakeForm() {
               onClick={addRoom}
               className="w-full rounded-xl border border-dashed border-outline py-4 text-sm font-bold uppercase tracking-widest text-primary transition-colors hover:bg-surface-container-low"
             >
-              + Add another room (FR-06)
+              + Add another room
             </button>
 
             {issues.some((i) => i.path === "rooms") && (
@@ -2264,7 +2304,7 @@ export default function MeasureIntakeForm() {
                             onChange={(e) =>
                               updateConnection(c.id, { roomAId: e.target.value })
                             }
-                            className="mt-1 w-full rounded border border-outline bg-surface px-2 py-2 text-sm text-on-surface"
+                            className="mt-1 w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-2 py-2 text-sm text-on-surface outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                           >
                             <option value="">— pick a room —</option>
                             {rooms.map((r, i) => (
@@ -2286,7 +2326,7 @@ export default function MeasureIntakeForm() {
                                 kind: e.target.value as ConnectionKind,
                               })
                             }
-                            className="mt-1 w-full rounded border border-outline bg-surface px-2 py-2 text-sm text-on-surface"
+                            className="mt-1 w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-2 py-2 text-sm text-on-surface outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                           >
                             {(
                               [
@@ -2310,7 +2350,7 @@ export default function MeasureIntakeForm() {
                                   stairsShape: e.target.value as StairsShape,
                                 })
                               }
-                              className="mt-2 w-full rounded border border-outline bg-surface px-2 py-2 text-sm text-on-surface"
+                              className="mt-2 w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-2 py-2 text-sm text-on-surface outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                               aria-label="Stair shape"
                             >
                               <option value="straight">Straight flight</option>
@@ -2330,7 +2370,7 @@ export default function MeasureIntakeForm() {
                               onChange={(e) =>
                                 updateConnection(c.id, { roomBId: e.target.value })
                               }
-                              className="mt-1 w-full rounded border border-outline bg-surface px-2 py-2 text-sm text-on-surface"
+                              className="mt-1 w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-2 py-2 text-sm text-on-surface outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             >
                               <option value="">— pick a room —</option>
                               {rooms
@@ -2360,7 +2400,7 @@ export default function MeasureIntakeForm() {
                                 updateConnection(c.id, { widthM: e.target.value })
                               }
                               placeholder="0.80"
-                              className="mt-1 w-full rounded border border-outline bg-surface px-2 py-2 text-sm text-on-surface"
+                              className="mt-1 w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-2 py-2 text-sm text-on-surface outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             />
                           </label>
                         )}
@@ -2370,7 +2410,7 @@ export default function MeasureIntakeForm() {
                             type="button"
                             onClick={() => removeConnection(c.id)}
                             aria-label={`Remove connection ${idx + 1}`}
-                            className="rounded border border-outline px-3 py-2 text-xs font-bold uppercase tracking-widest text-on-surface-variant hover:bg-surface-container-low"
+                            className="rounded-lg border border-outline px-3 py-2 text-xs font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:bg-surface-container-low"
                           >
                             ✕
                           </button>
@@ -2387,7 +2427,7 @@ export default function MeasureIntakeForm() {
                               updateConnection(c.id, { notes: e.target.value })
                             }
                             placeholder="e.g. door is double, opens into kitchen"
-                            className="mt-1 w-full rounded border border-outline bg-surface px-2 py-2 text-sm text-on-surface"
+                            className="mt-1 w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-2 py-2 text-sm text-on-surface outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                           />
                         </label>
                       </div>
@@ -2397,7 +2437,7 @@ export default function MeasureIntakeForm() {
                   <button
                     type="button"
                     onClick={addConnection}
-                    className="w-full rounded border border-dashed border-outline py-3 text-xs font-bold uppercase tracking-widest text-primary transition-colors hover:bg-surface-container-low"
+                    className="w-full rounded-xl border border-dashed border-outline py-3 text-xs font-bold uppercase tracking-widest text-primary transition-colors hover:bg-surface-container-low"
                   >
                     + Add connection
                   </button>
@@ -2445,7 +2485,7 @@ export default function MeasureIntakeForm() {
         )}
 
         {step === "exterior" && (
-          <section className="space-y-6 rounded-xl bg-surface-container-low p-6 md:p-8">
+          <section className="space-y-6 tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 md:p-8">
             <header>
               <h2 className="font-headline text-2xl text-on-surface">
                 Exterior photos
@@ -2480,7 +2520,7 @@ export default function MeasureIntakeForm() {
                       setExteriorTargetSide(side);
                       fileInputRef.current?.click();
                     }}
-                    className="rounded border border-primary px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary hover:text-on-primary"
+                    className="rounded-full border border-primary/60 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
                   >
                     + Add photo
                   </button>
@@ -2490,7 +2530,7 @@ export default function MeasureIntakeForm() {
                     {exteriorPhotos[side].map((p) => (
                       <div
                         key={p.id}
-                        className="relative h-16 w-16 overflow-hidden rounded border border-outline-variant/30"
+                        className="relative h-16 w-16 overflow-hidden rounded-lg border border-outline-variant/30"
                       >
                         <img
                           src={p.uri}
@@ -2515,14 +2555,14 @@ export default function MeasureIntakeForm() {
               <button
                 type="button"
                 onClick={() => setStep("rooms")}
-                className="rounded-full border-2 border-outline-variant/40 px-5 py-2 text-xs font-bold uppercase tracking-widest text-on-surface"
+                className="rounded-full border-2 border-outline-variant/40 px-5 py-2 text-xs font-bold uppercase tracking-widest text-on-surface transition-colors hover:border-primary/60 hover:bg-surface-container-low"
               >
                 ← Back
               </button>
               <button
                 type="button"
                 onClick={() => setStep("proposal")}
-                className="rounded-full bg-primary px-7 py-2 text-xs font-bold uppercase tracking-widest text-on-primary"
+                className="rounded-full bg-primary px-7 py-2 text-xs font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 transition-all hover:bg-surface-tint active:scale-[0.97]"
               >
                 Proposal →
               </button>
@@ -2531,7 +2571,7 @@ export default function MeasureIntakeForm() {
         )}
 
         {step === "proposal" && (
-          <section className="space-y-6 rounded-xl bg-surface-container-low p-6 md:p-8">
+          <section className="space-y-6 tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 md:p-8">
             <header>
               <h2 className="font-headline text-2xl text-on-surface">
                 What are you hoping to build?
@@ -2550,7 +2590,7 @@ export default function MeasureIntakeForm() {
                 onChange={(e) => setProposalDescription(e.target.value)}
                 rows={6}
                 placeholder="e.g. Rear single-storey extension off the kitchen, open onto the garden, room for a 6-seat dining table…"
-                className="w-full rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/40 focus:ring-2"
+                className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
               />
             </div>
             <div>
@@ -2564,7 +2604,7 @@ export default function MeasureIntakeForm() {
                     setProposalSketchTarget(true);
                     fileInputRef.current?.click();
                   }}
-                  className="rounded border border-primary px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary hover:bg-primary hover:text-on-primary"
+                  className="rounded-full border border-primary/60 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
                 >
                   + Add image
                 </button>
@@ -2574,7 +2614,7 @@ export default function MeasureIntakeForm() {
                   {proposalSketches.map((p) => (
                     <div
                       key={p.id}
-                      className="relative h-20 w-20 overflow-hidden rounded border border-outline-variant/30"
+                      className="relative h-20 w-20 overflow-hidden rounded-lg border border-outline-variant/30"
                     >
                       <img src={p.uri} alt={p.name} className="h-full w-full object-cover" />
                       <button
@@ -2594,14 +2634,14 @@ export default function MeasureIntakeForm() {
               <button
                 type="button"
                 onClick={() => setStep("exterior")}
-                className="rounded-full border-2 border-outline-variant/40 px-5 py-2 text-xs font-bold uppercase tracking-widest text-on-surface"
+                className="rounded-full border-2 border-outline-variant/40 px-5 py-2 text-xs font-bold uppercase tracking-widest text-on-surface transition-colors hover:border-primary/60 hover:bg-surface-container-low"
               >
                 ← Back
               </button>
               <button
                 type="button"
                 onClick={() => setStep("plan")}
-                className="rounded-full bg-primary px-7 py-2 text-xs font-bold uppercase tracking-widest text-on-primary"
+                className="rounded-full bg-primary px-7 py-2 text-xs font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 transition-all hover:bg-surface-tint active:scale-[0.97]"
               >
                 Floor plan →
               </button>
@@ -2611,7 +2651,7 @@ export default function MeasureIntakeForm() {
 
         {step === "plan" && (
           <div className="space-y-8">
-            <section className="rounded-xl bg-surface-container-low p-6 md:p-8">
+            <section className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 md:p-8">
               <header className="mb-4">
                 <h2 className="font-headline text-2xl text-on-surface">
                   Arrange your floor plan
@@ -2672,7 +2712,7 @@ export default function MeasureIntakeForm() {
 
         {step === "review" && (
           <div className="space-y-10">
-            <section className="rounded-xl bg-surface-container-low p-6 md:p-8">
+            <section className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 md:p-8">
               <h2 className="font-headline mb-2 text-2xl text-on-surface">
                 Submission summary
               </h2>
@@ -2777,7 +2817,7 @@ export default function MeasureIntakeForm() {
             </section>
 
             {submitStatus === "success" ? (
-              <div role="status" aria-live="polite" className="rounded border border-primary/40 bg-primary/10 p-6">
+              <div role="status" aria-live="polite" className="tm-lift rounded-2xl border border-primary/40 bg-primary/10 p-6">
                 <p className="font-headline text-lg font-semibold text-on-surface">
                   Thanks — your measurements are on their way.
                 </p>
@@ -2811,7 +2851,7 @@ export default function MeasureIntakeForm() {
                     type="button"
                     onClick={() => setStep("rooms")}
                     disabled={submitStatus === "submitting"}
-                    className="rounded border border-outline px-6 py-3 text-sm font-bold uppercase tracking-widest disabled:opacity-50"
+                    className="rounded-full border border-outline px-6 py-3 text-sm font-bold uppercase tracking-widest transition-colors hover:border-primary/60 hover:bg-surface-container-low disabled:opacity-50"
                   >
                     Edit measurements
                   </button>
@@ -2819,7 +2859,7 @@ export default function MeasureIntakeForm() {
                     type="button"
                     onClick={() => setStep("plan")}
                     disabled={submitStatus === "submitting"}
-                    className="rounded border border-outline px-6 py-3 text-sm font-bold uppercase tracking-widest disabled:opacity-50"
+                    className="rounded-full border border-outline px-6 py-3 text-sm font-bold uppercase tracking-widest transition-colors hover:border-primary/60 hover:bg-surface-container-low disabled:opacity-50"
                   >
                     Edit floor plan
                   </button>
@@ -2827,7 +2867,7 @@ export default function MeasureIntakeForm() {
                     type="button"
                     onClick={downloadJson}
                     disabled={submitStatus === "submitting"}
-                    className="inline-flex items-center gap-2 rounded bg-inverse-surface px-6 py-3 text-sm font-bold uppercase tracking-widest text-surface hover:opacity-90 disabled:opacity-50"
+                    className="inline-flex items-center gap-2 rounded-full bg-inverse-surface px-6 py-3 text-sm font-bold uppercase tracking-widest text-surface transition-opacity hover:opacity-90 disabled:opacity-50"
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: "18px" }} aria-hidden>download</span>
                     Download JSON (backup)
@@ -2836,7 +2876,7 @@ export default function MeasureIntakeForm() {
                     type="button"
                     onClick={submitToBackend}
                     disabled={submitStatus === "submitting"}
-                    className="inline-flex items-center gap-2 rounded bg-primary px-6 py-3 text-sm font-bold uppercase tracking-widest text-on-primary hover:bg-surface-tint disabled:opacity-60"
+                    className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 transition-all hover:bg-surface-tint active:scale-[0.97] disabled:opacity-60"
                   >
                     {submitStatus === "submitting"
                       ? "Sending…"
@@ -2849,7 +2889,7 @@ export default function MeasureIntakeForm() {
                   </button>
                 </div>
                 {submitStatus === "error" && submitError && (
-                  <div role="alert" aria-live="assertive" className="mt-2 rounded border border-error/40 bg-error/10 p-4">
+                  <div role="alert" aria-live="assertive" className="mt-2 rounded-xl border border-error/40 bg-error/10 p-4">
                     <p className="text-sm font-semibold text-error">
                       Couldn&apos;t send right now
                     </p>

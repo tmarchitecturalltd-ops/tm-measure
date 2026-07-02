@@ -195,7 +195,7 @@ export default function AppHome() {
           Logo mark + wordmark on the left, tiny outbound link on the
           right. The hairline gold rule under the header echoes the
           brand colour without being shouty. */}
-      <header className="border-b border-primary/20 bg-surface/95 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-primary/25 bg-surface/90 shadow-[0_1px_0_rgba(184,150,80,0.08),0_8px_24px_-18px_rgba(28,28,26,0.25)] backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-3">
             <BrandMark size={36} />
@@ -225,10 +225,10 @@ export default function AppHome() {
             a low-opacity gold radial that fades into the surface so
             the home feels warmer without saturating the brand. */}
         <section
-          className="relative isolate"
+          className="tm-fade-up relative isolate"
           style={{
             backgroundImage:
-              "radial-gradient(80% 60% at 0% 0%, rgba(184, 150, 80, 0.07) 0%, rgba(184, 150, 80, 0) 70%)",
+              "radial-gradient(80% 60% at 0% 0%, rgba(184, 150, 80, 0.09) 0%, rgba(184, 150, 80, 0) 70%)",
             borderRadius: "24px",
             padding: "8px 4px 0",
           }}
@@ -255,29 +255,29 @@ export default function AppHome() {
           {/* Discreet link to the photo-tips page. Sits just below the
               hero copy so it's findable for first-time users without
               competing with the main tile-grid CTA. */}
-          <p className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+          <p className="mt-4 flex flex-wrap gap-2">
             <Link
               href="/photo-tips"
-              className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-widest text-primary hover:underline"
+              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
             >
               <span
-                className="material-symbols-outlined"
+                className="material-symbols-outlined text-primary"
                 style={{ fontSize: "14px" }}
                 aria-hidden
               >
                 photo_camera
               </span>
-              How to take great room photos
+              Photo tips
             </Link>
             {/* Architect console — internal-use review page. Same app
                 shell on purpose so Harry can open it on any device with
                 the deployed URL; no login (URL-secret only). */}
             <Link
               href="/architect"
-              className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-widest text-primary hover:underline"
+              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
             >
               <span
-                className="material-symbols-outlined"
+                className="material-symbols-outlined text-primary"
                 style={{ fontSize: "14px" }}
                 aria-hidden
               >
@@ -287,10 +287,10 @@ export default function AppHome() {
             </Link>
             <Link
               href="/status"
-              className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-widest text-primary hover:underline"
+              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
             >
               <span
-                className="material-symbols-outlined"
+                className="material-symbols-outlined text-primary"
                 style={{ fontSize: "14px" }}
                 aria-hidden
               >
@@ -300,10 +300,10 @@ export default function AppHome() {
             </Link>
             <Link
               href="/privacy"
-              className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-widest text-primary hover:underline"
+              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
             >
               <span
-                className="material-symbols-outlined"
+                className="material-symbols-outlined text-primary"
                 style={{ fontSize: "14px" }}
                 aria-hidden
               >
@@ -331,7 +331,7 @@ export default function AppHome() {
                     : "No stored calibration to clear.",
                 );
               }}
-              className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-widest text-primary hover:underline"
+              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
               title="Wipes a stale calibration that may be making rooms read tiny or huge"
             >
               <span
@@ -350,16 +350,16 @@ export default function AppHome() {
               adds a hairline of its own architectural-tone tint on
               the icon pill and a barely-there body wash. The hover
               state still lifts to gold for brand cohesion. */}
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <div className="tm-fade-up-late mt-6 grid gap-3 sm:grid-cols-2">
             {TILES.map((t) => (
               <Link
                 key={t.type}
                 href={`/measure?type=${t.type}`}
-                className="group flex items-start gap-3 rounded-xl border border-outline-variant/30 p-4 transition-colors hover:border-primary hover:bg-surface-container-high"
+                className="tm-lift group flex items-start gap-3.5 rounded-2xl border border-outline-variant/40 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/70 hover:shadow-lg hover:shadow-primary/10 active:translate-y-0 active:scale-[0.99]"
                 style={{ backgroundColor: t.tint.bg }}
               >
                 <span
-                  className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                  className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105"
                   style={{
                     backgroundColor: t.tint.pillBg,
                     color: t.tint.iconColor,
@@ -368,15 +368,16 @@ export default function AppHome() {
                   {t.icon}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block font-headline text-sm font-semibold text-on-surface">
+                  <span className="block font-headline text-[15px] font-semibold leading-snug text-on-surface">
                     {t.title}
                   </span>
-                  <span className="mt-0.5 block text-xs leading-snug text-on-surface-variant">
+                  <span className="mt-1 block text-xs leading-snug text-on-surface-variant">
                     {t.blurb}
                   </span>
                 </span>
                 <span
-                  className="material-symbols-outlined shrink-0 self-center text-on-surface-variant transition-transform group-hover:translate-x-0.5 group-hover:text-primary"
+                  className="material-symbols-outlined shrink-0 self-center text-on-surface-variant/60 transition-all group-hover:translate-x-0.5 group-hover:text-primary"
+                  style={{ fontSize: "20px" }}
                   aria-hidden
                 >
                   arrow_forward
@@ -424,18 +425,53 @@ export default function AppHome() {
           </div>
 
           {recents.length === 0 ? (
-            <div className="mt-3 rounded-xl border border-dashed border-outline-variant/40 bg-surface-container-low p-6 text-center">
-              <p className="text-sm text-on-surface-variant">
+            <div className="mt-3 rounded-2xl border border-dashed border-outline-variant/50 bg-surface-container-low p-8 text-center">
+              {/* Tiny "drafted floor plan" illustration — inline SVG so it
+                  inherits the brand gold via currentColor and costs no
+                  network fetch. Purely decorative. */}
+              <svg
+                viewBox="0 0 64 48"
+                width="64"
+                height="48"
+                className="mx-auto text-primary"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <rect x="8" y="6" width="48" height="36" rx="2" opacity="0.9" />
+                <path d="M8 24h20M28 6v18M28 24v8M28 40v2" opacity="0.55" />
+                <path d="M42 6v14M42 28v14" opacity="0.55" />
+                <path d="M14 12h8" opacity="0.35" />
+                <path d="M48 34h4" opacity="0.35" />
+                <circle cx="32" cy="24" r="1.4" fill="currentColor" stroke="none" opacity="0.8" />
+              </svg>
+              <p className="mt-4 text-sm text-on-surface-variant">
                 Nothing here yet. Your submissions will appear in this list once
                 you send your first measurement.
               </p>
+              <Link
+                href="/measure"
+                className="mt-4 inline-flex items-center gap-2 rounded-full border border-primary/50 px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
+              >
+                Start your first measurement
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: "16px" }}
+                  aria-hidden
+                >
+                  arrow_forward
+                </span>
+              </Link>
             </div>
           ) : (
-            <ul className="mt-3 divide-y divide-outline-variant/20 rounded-xl border border-outline-variant/20 bg-surface-container-low">
+            <ul className="tm-lift mt-3 divide-y divide-outline-variant/20 overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface-container-lowest">
               {recents.map((r) => (
                 <li
                   key={r.id}
-                  className="flex items-center justify-between gap-4 px-4 py-3"
+                  className="flex items-center justify-between gap-4 px-4 py-3.5"
                 >
                   <div className="min-w-0">
                     <p className="truncate font-headline text-sm font-semibold text-on-surface">
@@ -449,10 +485,15 @@ export default function AppHome() {
                     </p>
                   </div>
                   <span
-                    className="material-symbols-outlined shrink-0 text-on-surface-variant"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10"
                     aria-hidden
                   >
-                    check_circle
+                    <span
+                      className="material-symbols-outlined text-primary"
+                      style={{ fontSize: "18px" }}
+                    >
+                      check
+                    </span>
                   </span>
                 </li>
               ))}
@@ -476,14 +517,21 @@ export default function AppHome() {
 
 function Step({ n, title, text }: { n: number; title: string; text: string }) {
   return (
-    <li className="rounded-xl border border-outline-variant/20 bg-surface-container-low p-4">
-      <span className="font-label text-[10px] font-bold uppercase tracking-widest text-primary">
-        Step {n}
-      </span>
-      <p className="font-headline mt-1 text-sm font-semibold text-on-surface">
-        {title}
+    <li className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-4">
+      <div className="flex items-center gap-2.5">
+        <span
+          className="font-headline flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-sm font-bold text-primary"
+          aria-hidden
+        >
+          {n}
+        </span>
+        <p className="font-headline text-sm font-semibold text-on-surface">
+          {title}
+        </p>
+      </div>
+      <p className="mt-2.5 text-xs leading-relaxed text-on-surface-variant">
+        {text}
       </p>
-      <p className="mt-1 text-xs leading-snug text-on-surface-variant">{text}</p>
     </li>
   );
 }

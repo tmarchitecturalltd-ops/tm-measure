@@ -25,7 +25,7 @@ export default function BrandMark({ size = 36 }: { size?: number }) {
         width="36"
         height="36"
         rx="6"
-        fill="none"
+        fill="rgba(184, 150, 80, 0.08)"
         stroke="currentColor"
         strokeWidth="1.5"
       />

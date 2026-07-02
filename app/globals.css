@@ -90,6 +90,63 @@
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.04);
 }
 
+/*
+ * App-shell polish (Capacitor screens).
+ *
+ * • Kill the grey WebKit tap flash so buttons/tiles feel native.
+ * • Give every form control a gentle border/shadow transition so the
+ *   gold focus ring fades in rather than snapping.
+ * • Softer placeholder colour — the old default read like real input.
+ */
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+textarea,
+select,
+button {
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+::placeholder {
+  color: color-mix(in srgb, var(--color-on-surface-variant) 55%, transparent);
+}
+
+/* Soft card elevation used by home tiles and form section cards —
+ * a warm, barely-there lift that matches the cream palette better
+ * than Tailwind's neutral-grey shadow scale. */
+.tm-lift {
+  box-shadow:
+    0 1px 2px rgba(28, 28, 26, 0.04),
+    0 8px 24px -12px rgba(120, 96, 48, 0.18);
+}
+
+/* One-shot entrance for the home hero. Respects prefers-reduced-motion
+ * via the global override at the bottom of this file. */
+@keyframes tmFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tm-fade-up {
+  animation: tmFadeUp 0.45s ease-out both;
+}
+
+.tm-fade-up-late {
+  animation: tmFadeUp 0.45s ease-out 0.12s both;
+}
+
 body::before {
   content: "";
   position: fixed;
