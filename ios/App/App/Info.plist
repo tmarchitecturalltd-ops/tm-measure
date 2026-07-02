@@ -9,7 +9,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>TM Measure uses the camera to scan room dimensions during the auto-scan flow. Scan imagery is processed on your device and is not uploaded.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>The microphone is not used to record audio — iOS requires this entry because video capture APIs can access it. TM Measure does not record sound.</string>
+	<string>TM Measure uses your microphone to record voice notes when measuring rooms.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Allow TM Measure to save scan reference photos to your device.</string>
 	<key>CFBundleExecutable</key>

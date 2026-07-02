@@ -71,9 +71,12 @@ export default function ArchitectListPage() {
     setLoading(true);
     setError(null);
     try {
-      const qs = new URLSearchParams({ action: "list" });
-      if (sec) qs.set("secret", sec);
-      const r = await fetch(`${url}?${qs.toString()}`, { method: "GET" });
+      const r = await fetch(url, {
+        method: "POST",
+        mode: "cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "list", ...(sec ? { secret: sec } : {}) }),
+      });
       if (!r.ok) throw new Error(`Server responded ${r.status}`);
       const data: { ok?: boolean; error?: string; submissions?: SubmissionSummary[] } = await r.json();
       if (data.ok === false) throw new Error(data.error || "Endpoint returned an error.");
