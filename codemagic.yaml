@@ -27,11 +27,11 @@ workflows:
     name: TM Measure — iOS release
     instance_type: mac_mini_m2
     max_build_duration: 60
+    integrations:
+      app_store_connect: TM Measure
     environment:
       groups:
         - app_runtime
-      integrations:
-        app_store_connect: TM Measure
       xcode: latest
       cocoapods: default
       node: 22
