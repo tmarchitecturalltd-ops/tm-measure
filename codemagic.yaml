@@ -51,14 +51,18 @@ workflows:
       - name: Fetch/create signing files
         script: |
           keychain initialize
-          # Create a new iOS distribution certificate (with private key) if
-          # none is available to Codemagic, then fetch/create the profile.
-          app-store-connect create-certificate \
+          # Generate a fresh private key locally, then create a new iOS
+          # distribution certificate signed with it. This gives Codemagic a
+          # certificate WITH a matching private key (the existing cert in the
+          # Apple account has no accessible key on this machine).
+          openssl genrsa -out /tmp/dist_cert_key.pem 2048
+          app-store-connect certificates create \
             --type IOS_DISTRIBUTION \
-            --save \
-            || echo "Distribution certificate already exists and is available"
+            --certificate-key=@file:/tmp/dist_cert_key.pem \
+            --save
           app-store-connect fetch-signing-files "ltd.tmdesigns.tmmeasure" \
             --type IOS_APP_STORE \
+            --certificate-key=@file:/tmp/dist_cert_key.pem \
             --create
           keychain add-certificates
       - name: Build & sign IPA
