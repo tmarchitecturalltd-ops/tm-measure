@@ -30,8 +30,6 @@ workflows:
     integrations:
       app_store_connect: TM Measure
     environment:
-      groups:
-        - app_runtime
       xcode: latest
       cocoapods: default
       node: 22
