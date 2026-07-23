@@ -50,10 +50,16 @@ workflows:
           agvtool new-version -all $(($BUILD_NUMBER + 1000))
       - name: Fetch/create signing files
         script: |
+          keychain initialize
+          # Create a new iOS distribution certificate (with private key) if
+          # none is available to Codemagic, then fetch/create the profile.
+          app-store-connect create-certificate \
+            --type IOS_DISTRIBUTION \
+            --save \
+            || echo "Distribution certificate already exists and is available"
           app-store-connect fetch-signing-files "ltd.tmdesigns.tmmeasure" \
             --type IOS_APP_STORE \
             --create
-          keychain initialize
           keychain add-certificates
       - name: Build & sign IPA
         script: |
