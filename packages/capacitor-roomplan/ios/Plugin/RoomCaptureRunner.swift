@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import simd
 
 #if canImport(RoomPlan)
 import RoomPlan
@@ -231,8 +232,15 @@ enum CaptureSerializer {
         // the device's initial orientation, so a 4 × 3 m room scanned at
         // 45° to world X gave an AABB of ~5 × 5 m — that was the LiDAR-
         // off-by-25% bug field-testers reported.
-        let floorPoly: [(Double, Double)] = captured.floors.flatMap { floor in
-            floor.polygonCorners.map { (Double($0.x), Double($0.z)) }
+        let floorPoly: [(Double, Double)]
+        if #available(iOS 17.0, *) {
+            floorPoly = captured.floors.flatMap { floor in
+                floor.polygonCorners.map { (Double($0.x), Double($0.z)) }
+            }
+        } else {
+            // `floors`/`polygonCorners` are iOS 17+. On iOS 16 fall back to
+            // the wall-endpoint bounding box computed below.
+            floorPoly = []
         }
         let fallbackPts: [(Double, Double)] = captured.walls.flatMap { w in
             wallEndpoints(for: w)
