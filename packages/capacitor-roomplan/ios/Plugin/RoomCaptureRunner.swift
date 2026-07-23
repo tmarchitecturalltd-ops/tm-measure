@@ -69,6 +69,10 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate {
         return nil
     }
 
+    func encode(with coder: NSCoder) {
+        // No encodable state; runner is created programmatically only.
+    }
+
     // MARK: - Present / dismiss
 
     func present(from host: UIViewController) {
