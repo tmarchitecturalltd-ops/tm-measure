@@ -71,10 +71,12 @@ workflows:
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
-    # publishing block is intentionally omitted until Apple Developer
-    # enrolment finishes and the App Store Connect integration is
-    # configured in Codemagic. Builds will produce an .ipa artifact
-    # that you can download from the build page in the meantime.
+    publishing:
+      # Uploads the signed IPA straight to App Store Connect / TestFlight
+      # using the App Store Connect integration configured above.
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
 
   android_release:
     name: TM Measure — Android release
