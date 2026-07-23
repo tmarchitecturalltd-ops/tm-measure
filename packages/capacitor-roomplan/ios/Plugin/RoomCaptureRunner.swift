@@ -62,6 +62,13 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate {
         super.init()
     }
 
+    // Required by NSCoding conformance that RoomCaptureViewDelegate pulls in
+    // under the iOS 26 SDK. This runner is only ever created programmatically,
+    // so decoding is unsupported.
+    required init?(coder: NSCoder) {
+        return nil
+    }
+
     // MARK: - Present / dismiss
 
     func present(from host: UIViewController) {
