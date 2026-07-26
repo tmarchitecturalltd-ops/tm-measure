@@ -83,8 +83,6 @@ workflows:
     # instance_type left at Codemagic default for the free tier.
     max_build_duration: 45
     environment:
-      groups:
-        - app_runtime
       android_signing:
         - tmmeasure
       java: 21
