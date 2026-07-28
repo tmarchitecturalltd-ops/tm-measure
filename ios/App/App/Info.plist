@@ -12,6 +12,8 @@
 	<string>TM Measure uses your microphone to record voice notes when measuring rooms.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Allow TM Measure to save scan reference photos to your device.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>TM Measure lets you attach photos from your library as reference shots for each room you measure.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
