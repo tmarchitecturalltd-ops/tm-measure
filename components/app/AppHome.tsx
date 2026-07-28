@@ -27,6 +27,20 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import AppLogo from "@/components/app/AppLogo";
 import WelcomeScreen, { WELCOME_SEEN_KEY } from "@/components/app/WelcomeScreen";
+import { loadDraft, type ProjectDraftSnapshot } from "@/lib/draftStorage";
+
+/** "3 min ago" / "yesterday" style stamp for the resume card. */
+function formatSavedAt(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "recently";
+  const mins = Math.floor((Date.now() - then) / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hr${hrs === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hrs / 24);
+  return days === 1 ? "yesterday" : `${days} days ago`;
+}
 import {
   getRecentSubmissions,
   projectTypeLabel,
@@ -173,11 +187,14 @@ export default function AppHome() {
   /** Tri-state: null until localStorage has been read on the client, so
    *  we never flash the wrong screen during hydration. */
   const [showWelcome, setShowWelcome] = useState<boolean | null>(null);
+  /** In-flight survey, if any — powers the resume card. */
+  const [draft, setDraft] = useState<ProjectDraftSnapshot | null>(null);
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setRecents(getRecentSubmissions());
     setYear(new Date().getFullYear());
+    setDraft(loadDraft());
     try {
       setShowWelcome(window.localStorage.getItem(WELCOME_SEEN_KEY) !== "1");
     } catch {
@@ -435,6 +452,31 @@ export default function AppHome() {
             />
           </ol>
         </section>
+
+        {/* ── Continue where you left off ──────────────────────── */}
+        {draft && (
+          <section className="mt-12">
+            <Link
+              href="/measure"
+              className="block rounded-2xl border border-primary/40 bg-primary/5 p-5 transition-colors hover:bg-primary/10"
+            >
+              <p className="font-label text-[10px] font-bold uppercase tracking-[0.25em] text-primary">
+                Continue where you left off
+              </p>
+              <p className="mt-2 text-sm font-medium text-on-surface">
+                {draft.projectName?.trim() || "Untitled project"}
+              </p>
+              <p className="mt-1 text-[13px] text-on-surface-variant">
+                {draft.rooms?.length ?? 0} room
+                {(draft.rooms?.length ?? 0) === 1 ? "" : "s"} · saved{" "}
+                {formatSavedAt(draft.savedAt)}
+              </p>
+              <p className="mt-3 text-[11px] font-bold uppercase tracking-widest text-primary">
+                Resume →
+              </p>
+            </Link>
+          </section>
+        )}
 
         {/* ── Recent submissions ───────────────────────────────── */}
         <section className="mt-12">

@@ -107,6 +107,10 @@ export default function MeasureIntakeForm() {
   const [projectType, setProjectType] = useState<ProjectType | null>(null);
   const [unit, setUnit] = useState<ProjectDraft["unit"]>("metric");
   const [unitLocked, setUnitLocked] = useState(false);
+  /** Property-wide ceiling height. Asked once on the project step and
+   *  used to pre-fill every room, which the customer can still override
+   *  room by room inside the Add detail panel. */
+  const [defaultCeilingHeightM, setDefaultCeilingHeightM] = useState("");
 
   /**
    * Capability probe — runs once on mount so the Project step can show the
@@ -188,6 +192,12 @@ export default function MeasureIntakeForm() {
   /** A pending saved draft surfaced as a small banner. null while we
    *  haven't checked storage yet OR after the user has acted on it. */
   const [pendingDraft, setPendingDraft] = useState<ProjectDraftSnapshot | null>(null);
+  /** Timestamp of the most recent autosave, surfaced in the header. The
+   *  save itself already worked silently — showing it is what makes
+   *  people willing to walk away mid-survey and come back. */
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  /** Re-render tick so the "x min ago" label ages without a save. */
+  const [savedTick, setSavedTick] = useState(0);
   const draftSaver = useRef(makeDebouncedSaver<ProjectDraftSnapshot>(400));
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photoTargetRoomId, setPhotoTargetRoomId] = useState<string | null>(
@@ -351,8 +361,14 @@ export default function MeasureIntakeForm() {
   );
 
   const addRoom = useCallback(() => {
-    setRooms((prev) => [...prev, emptyRoom()]);
-  }, []);
+    // New rooms inherit the property-wide ceiling height. Nearly every
+    // home has one ceiling height throughout, so asking per room is
+    // repetitive typing for no extra information.
+    setRooms((prev) => [
+      ...prev,
+      { ...emptyRoom(), ceilingHeightM: defaultCeilingHeightM },
+    ]);
+  }, [defaultCeilingHeightM]);
 
   /**
    * Project templates — pre-built room sets for the most common UK
@@ -546,6 +562,42 @@ export default function MeasureIntakeForm() {
   const removeConnection = useCallback((id: string) => {
     setConnections((prev) => prev.filter((c) => c.id !== id));
   }, []);
+
+  /**
+   * Rectangular rooms: write one dimension onto both of its opposite
+   * walls. A rectangle only has two distinct measurements, so asking for
+   * four numbers is asking the customer to type each one twice — and
+   * gives them two chances to introduce a typo the validator can't spot.
+   *
+   * Slots: walls[0] and walls[2] are the width pair, walls[1] and
+   * walls[3] the length pair, matching the RoomShape contract where
+   * walls[0]/walls[1] are width/length.
+   */
+  const setRectangleDim = useCallback(
+    (roomId: string, which: "width" | "length", value: string) => {
+      const slots = which === "width" ? [0, 2] : [1, 3];
+      setRooms((prev) =>
+        prev.map((r) => {
+          if (r.id !== roomId) return r;
+          const walls = r.walls.map((w, i) =>
+            slots.includes(i) ? { ...w, lengthM: value } : w,
+          );
+          return { ...r, walls };
+        }),
+      );
+    },
+    [],
+  );
+
+  /** Per-room toggle for the manual wall-by-wall editor. */
+  const [openWallsRooms, setOpenWallsRooms] = useState<Record<string, boolean>>({});
+  const isRectangle = (room: RoomDraft) => (room.shape ?? "rectangle") === "rectangle";
+  /** Manual list is forced open for non-rectangles, and whenever a wall
+   *  fails validation so the error is reachable. */
+  const wallsEditorOpen = (room: RoomDraft, ri: number) =>
+    !isRectangle(room) ||
+    (openWallsRooms[room.id] ??
+      issues.some((i) => i.path.startsWith(`room-${ri}-wall-`)));
 
   const addWall = useCallback((roomId: string) => {
     setRooms((prev) =>
@@ -808,11 +860,14 @@ export default function MeasureIntakeForm() {
       projectType,
       unit,
       unitLocked,
+      defaultCeilingHeightM,
       rooms: rooms as unknown as Array<Record<string, unknown>>,
       connections: connections as unknown as Array<Record<string, unknown>>,
       placements: placements as unknown as Record<string, unknown>,
     });
+    setLastSavedAt(Date.now());
   }, [
+    defaultCeilingHeightM,
     draftHydrated,
     pendingDraft,
     step,
@@ -836,6 +891,7 @@ export default function MeasureIntakeForm() {
     setProjectType(pendingDraft.projectType as ProjectType | null);
     setUnit(pendingDraft.unit);
     setUnitLocked(pendingDraft.unitLocked);
+    setDefaultCeilingHeightM(pendingDraft.defaultCeilingHeightM ?? "");
     setRooms(pendingDraft.rooms as unknown as RoomDraft[]);
     setConnections(pendingDraft.connections as unknown as RoomConnectionDraft[]);
     setPlacements(pendingDraft.placements as unknown as Record<string, RoomPlacement>);
@@ -871,6 +927,114 @@ export default function MeasureIntakeForm() {
   };
 
   const issueFor = (path: string) => issues.find((i) => i.path === path)?.message;
+
+  /* ── Progressive disclosure ──────────────────────────────────────
+   * Only the essentials (name, shape, wall lengths, photos) stay on
+   * screen. Doors, windows, ceiling override and free-text notes live
+   * behind a per-room "Add detail" panel, so a simple rectangular room
+   * is a handful of fields rather than a wall of them.
+   */
+  const [openDetailRooms, setOpenDetailRooms] = useState<Record<string, boolean>>({});
+
+  /** Detail-panel fields that can fail validation. If one of them does
+   *  we must force the panel open, otherwise the customer is told to fix
+   *  something they cannot see. */
+  const roomHasDetailIssue = (ri: number) =>
+    issues.some(
+      (i) =>
+        i.path.startsWith(`room-${ri}-`) &&
+        (i.path.includes("-ceiling") ||
+          i.path.includes("-door") ||
+          i.path.includes("-window")),
+    );
+
+  const isDetailOpen = (roomId: string, ri: number) =>
+    openDetailRooms[roomId] ?? roomHasDetailIssue(ri);
+
+  const toggleDetail = (roomId: string, ri: number) =>
+    setOpenDetailRooms((prev) => ({
+      ...prev,
+      [roomId]: !(prev[roomId] ?? roomHasDetailIssue(ri)),
+    }));
+
+  // Age the "saved" label once a minute.
+  useEffect(() => {
+    if (!lastSavedAt) return;
+    const t = setInterval(() => setSavedTick((n) => n + 1), 60_000);
+    return () => clearInterval(t);
+  }, [lastSavedAt]);
+
+  const savedLabel = useMemo(() => {
+    if (!lastSavedAt) return null;
+    void savedTick; // dependency: recompute as the tick advances
+    const mins = Math.floor((Date.now() - lastSavedAt) / 60_000);
+    if (mins < 1) return "Draft saved · just now";
+    if (mins === 1) return "Draft saved · 1 min ago";
+    if (mins < 60) return `Draft saved · ${mins} min ago`;
+    const hrs = Math.floor(mins / 60);
+    return `Draft saved · ${hrs} hr${hrs === 1 ? "" : "s"} ago`;
+  }, [lastSavedAt, savedTick]);
+
+  /* ── Room pager ─────────────────────────────────────────────────
+   * One room on screen at a time. The full list was a very long scroll
+   * with no sense of progress, which is the classic driver of drop-off
+   * on long forms.
+   */
+  const [activeRoomIndex, setActiveRoomIndex] = useState(0);
+
+  // Keep the pointer in range when rooms are removed.
+  useEffect(() => {
+    setActiveRoomIndex((i) => Math.min(i, Math.max(0, rooms.length - 1)));
+  }, [rooms.length]);
+
+  // A validation failure on a room the customer can't see is invisible,
+  // so jump the pager to the first room that has an issue.
+  useEffect(() => {
+    if (!issues.length) return;
+    for (let i = 0; i < rooms.length; i++) {
+      if (issues.some((x) => x.path.startsWith(`room-${i}-`))) {
+        setActiveRoomIndex(i);
+        return;
+      }
+    }
+  }, [issues, rooms.length]);
+
+  /** Push the property default into any room the customer hasn't given
+   *  an explicit ceiling height. Runs whenever the default changes so
+   *  typing it once fills every blank room, without ever clobbering a
+   *  value someone deliberately set. */
+  useEffect(() => {
+    const v = defaultCeilingHeightM.trim();
+    if (!v) return;
+    setRooms((prev) => {
+      if (prev.every((r) => r.ceilingHeightM.trim())) return prev;
+      return prev.map((r) =>
+        r.ceilingHeightM.trim() ? r : { ...r, ceilingHeightM: v },
+      );
+    });
+  }, [defaultCeilingHeightM]);
+
+  /** True when the room simply inherited the property default — drives
+   *  the "same as property" tag so a pre-filled number never looks like
+   *  something the customer typed. */
+  const usesDefaultCeiling = (room: RoomDraft) =>
+    !!defaultCeilingHeightM.trim() &&
+    room.ceilingHeightM.trim() === defaultCeilingHeightM.trim();
+
+  /** Short "2 windows, 1 door" badge so collapsed detail still tells the
+   *  customer what's inside it. */
+  const detailSummary = (room: RoomDraft): string => {
+    const bits: string[] = [];
+    if (room.doors.length)
+      bits.push(`${room.doors.length} door${room.doors.length === 1 ? "" : "s"}`);
+    if (room.windows.length)
+      bits.push(
+        `${room.windows.length} window${room.windows.length === 1 ? "" : "s"}`,
+      );
+    if ((room.notes ?? "").trim() || (room.irregularNotes ?? "").trim())
+      bits.push("notes");
+    return bits.join(", ");
+  };
 
   /**
    * Auto-scroll to the first error.
@@ -1266,6 +1430,15 @@ export default function MeasureIntakeForm() {
             </span>
             10–15 min per room
           </span>
+          {savedLabel && (
+            <span
+              aria-live="polite"
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-medium text-primary"
+            >
+              <span aria-hidden>✓</span>
+              {savedLabel}
+            </span>
+          )}
         </div>
       </header>
 
@@ -1524,6 +1697,23 @@ export default function MeasureIntakeForm() {
                 )}
               </div>
               <div>
+                <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  Ceiling height throughout (m)
+                </label>
+                <input
+                  inputMode="decimal"
+                  value={defaultCeilingHeightM}
+                  onChange={(e) => setDefaultCeilingHeightM(e.target.value)}
+                  placeholder="e.g. 2.40"
+                  className="w-full max-w-xs rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
+                />
+                <p className="mt-1 text-[11px] text-on-surface-variant">
+                  Optional. Most homes are the same throughout — enter it once
+                  and we&apos;ll pre-fill every room. You can change any room
+                  individually under Add detail.
+                </p>
+              </div>
+              <div>
                 <span className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
                   Display units {unitLocked && <span className="ml-1 text-primary">· locked</span>}
                 </span>
@@ -1655,7 +1845,55 @@ export default function MeasureIntakeForm() {
             </div>
             )}
 
-            {rooms.map((room, ri) => (
+            {/* Pager header — position, progress and quick jump. */}
+            <div className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-4">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="font-label text-[11px] font-bold uppercase tracking-widest text-primary">
+                  Room {Math.min(activeRoomIndex + 1, rooms.length)} of {rooms.length}
+                </p>
+                <p className="text-[11px] text-on-surface-variant">
+                  {rooms[activeRoomIndex]?.name?.trim() || "Unnamed room"}
+                </p>
+              </div>
+              <div
+                className="h-1.5 w-full overflow-hidden rounded-full bg-outline-variant/30"
+                role="progressbar"
+                aria-valuemin={1}
+                aria-valuemax={rooms.length}
+                aria-valuenow={activeRoomIndex + 1}
+                aria-label="Room progress"
+              >
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{
+                    width: `${((activeRoomIndex + 1) / Math.max(1, rooms.length)) * 100}%`,
+                  }}
+                />
+              </div>
+              {rooms.length > 1 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {rooms.map((r, i) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => setActiveRoomIndex(i)}
+                      aria-current={i === activeRoomIndex}
+                      className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                        i === activeRoomIndex
+                          ? "bg-primary text-on-primary"
+                          : issues.some((x) => x.path.startsWith(`room-${i}-`))
+                            ? "border border-error/60 text-error"
+                            : "border border-outline-variant/40 text-on-surface-variant hover:border-primary/60"
+                      }`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {rooms.map((room, ri) => ri !== activeRoomIndex ? null : (
               <section
                 key={room.id}
                 className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 md:p-8"
@@ -1835,15 +2073,75 @@ export default function MeasureIntakeForm() {
                     <h3 className="font-label text-xs font-bold uppercase tracking-widest text-primary">
                       Wall lengths
                     </h3>
-                    <button
-                      type="button"
-                      onClick={() => addWall(room.id)}
-                      className="text-xs font-bold uppercase tracking-widest text-primary hover:underline"
-                    >
-                      + Add wall segment
-                    </button>
+                    {wallsEditorOpen(room, ri) && (
+                      <button
+                        type="button"
+                        onClick={() => addWall(room.id)}
+                        className="text-xs font-bold uppercase tracking-widest text-primary hover:underline"
+                      >
+                        + Add wall segment
+                      </button>
+                    )}
                   </div>
-                  <div className="space-y-3">
+
+                  {/* Rectangular rooms only need two numbers. */}
+                  {isRectangle(room) && (
+                    <div className="mb-3 rounded-lg bg-surface-container-lowest p-4">
+                      <p className="mb-3 text-xs text-on-surface-variant">
+                        Just the two dimensions — we&apos;ll apply them to the
+                        opposite walls for you.
+                      </p>
+                      <div className="flex flex-col gap-3 sm:flex-row">
+                        <div className="flex-1">
+                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            Width (m) *
+                          </label>
+                          <input
+                            inputMode="decimal"
+                            value={room.walls[0]?.lengthM ?? ""}
+                            onChange={(e) =>
+                              setRectangleDim(room.id, "width", e.target.value)
+                            }
+                            placeholder="0.00"
+                            className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            Length (m) *
+                          </label>
+                          <input
+                            inputMode="decimal"
+                            value={room.walls[1]?.lengthM ?? ""}
+                            onChange={(e) =>
+                              setRectangleDim(room.id, "length", e.target.value)
+                            }
+                            placeholder="0.00"
+                            className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenWallsRooms((prev) => ({
+                            ...prev,
+                            [room.id]: !wallsEditorOpen(room, ri),
+                          }))
+                        }
+                        className="mt-3 text-[11px] font-bold uppercase tracking-widest text-primary hover:underline"
+                      >
+                        {wallsEditorOpen(room, ri)
+                          ? "Hide individual walls"
+                          : "Edit walls individually"}
+                      </button>
+                    </div>
+                  )}
+
+                  <div
+                    className="space-y-3"
+                    hidden={!wallsEditorOpen(room, ri)}
+                  >
                     {room.walls.map((w, wi) => (
                       <div
                         key={w.id}
@@ -1941,9 +2239,105 @@ export default function MeasureIntakeForm() {
                   </div>
                 </div>
 
-                <div className="mb-8">
+                <div>
                   <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    Photos * — corners, openings, overall context
+                  </label>
+                  <p className="mb-3 text-xs text-on-surface-variant">
+                    Required: at least one reference photo per room so the architect can audit the measurements against what's actually there (radiators, columns, molding, etc.).
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhotoTargetRoomId(room.id);
+                      fileInputRef.current?.click();
+                    }}
+                    className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/60 px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: "16px" }} aria-hidden>add_a_photo</span>
+                    Take photo or upload
+                  </button>
+                  {issueFor(`room-${ri}-photos`) && (
+                    <p data-error-anchor className="mb-3 text-xs text-error">
+                      {issueFor(`room-${ri}-photos`)}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-3">
+                    {room.photos.map((p) => (
+                      <div
+                        key={p.id}
+                        className="relative w-28 shrink-0 overflow-hidden rounded-lg border border-outline-variant/30 bg-surface-container-high"
+                      >
+                        <img
+                          src={p.uri}
+                          alt={p.name}
+                          className="aspect-square h-28 w-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removePhoto(room.id, p.id)}
+                          className="absolute right-1 top-1 rounded bg-inverse-surface/80 px-1 text-[10px] text-surface"
+                        >
+                          ✕
+                        </button>
+                        <p className="truncate p-1 text-[9px] text-on-surface-variant">
+                          {p.name}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 border-t border-outline-variant/20 pt-4">
+                    <label className="font-label mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                      Voice memo (optional)
+                    </label>
+                    <p className="mb-1 text-xs text-on-surface-variant">
+                      Faster than typing. Note anything tricky — radiators,
+                      chimney breasts, an awkward corner — and the architect
+                      hears it in your own words.
+                    </p>
+                    <VoiceRecorder
+                      memos={room.voiceMemos ?? []}
+                      onChange={(next) => setRoom(room.id, { voiceMemos: next })}
+                    />
+                  </div>
+                </div>
+
+
+                <div className="mb-4">
+                  <button
+                    type="button"
+                    onClick={() => toggleDetail(room.id, ri)}
+                    aria-expanded={isDetailOpen(room.id, ri)}
+                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-left transition-colors hover:border-primary/60"
+                  >
+                    <span className="font-label text-xs font-bold uppercase tracking-widest text-primary">
+                      Add detail
+                    </span>
+                    <span className="flex items-center gap-2">
+                      {detailSummary(room) && (
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
+                          {detailSummary(room)}
+                        </span>
+                      )}
+                      <span className="text-[11px] text-on-surface-variant">
+                        {isDetailOpen(room.id, ri) ? "Hide" : "Doors, windows, ceiling, notes"}
+                      </span>
+                      <span aria-hidden className="text-on-surface-variant">
+                        {isDetailOpen(room.id, ri) ? "▴" : "▾"}
+                      </span>
+                    </span>
+                  </button>
+                </div>
+                {isDetailOpen(room.id, ri) && (
+                  <>
+                <div className="mb-8">
+                  <label className="font-label mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
                     Ceiling height (m) *
+                    {usesDefaultCeiling(room) && (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-primary">
+                        Same as property
+                      </span>
+                    )}
                   </label>
                   <input
                     inputMode="decimal"
@@ -1954,6 +2348,12 @@ export default function MeasureIntakeForm() {
                     placeholder="e.g. 2.45"
                     className="w-full max-w-xs rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                   />
+                  {usesDefaultCeiling(room) && (
+                    <p className="mt-1 text-[11px] text-on-surface-variant">
+                      Inherited from the property default — edit here if this
+                      room differs.
+                    </p>
+                  )}
                   {issueFor(`room-${ri}-ceiling`) && (
                     <p data-error-anchor className="mt-1 text-xs text-error">
                       {issueFor(`room-${ri}-ceiling`)}
@@ -2226,75 +2626,42 @@ export default function MeasureIntakeForm() {
                     className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                   />
                 </div>
+                  </>
+                )}
 
-                <div>
-                  <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                    Photos * — corners, openings, overall context
-                  </label>
-                  <p className="mb-3 text-xs text-on-surface-variant">
-                    Required: at least one reference photo per room so the architect can audit the measurements against what's actually there (radiators, columns, molding, etc.).
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPhotoTargetRoomId(room.id);
-                      fileInputRef.current?.click();
-                    }}
-                    className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/60 px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: "16px" }} aria-hidden>add_a_photo</span>
-                    Take photo or upload
-                  </button>
-                  {issueFor(`room-${ri}-photos`) && (
-                    <p data-error-anchor className="mb-3 text-xs text-error">
-                      {issueFor(`room-${ri}-photos`)}
-                    </p>
-                  )}
-                  <div className="flex flex-wrap gap-3">
-                    {room.photos.map((p) => (
-                      <div
-                        key={p.id}
-                        className="relative w-28 shrink-0 overflow-hidden rounded-lg border border-outline-variant/30 bg-surface-container-high"
-                      >
-                        <img
-                          src={p.uri}
-                          alt={p.name}
-                          className="aspect-square h-28 w-full object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removePhoto(room.id, p.id)}
-                          className="absolute right-1 top-1 rounded bg-inverse-surface/80 px-1 text-[10px] text-surface"
-                        >
-                          ✕
-                        </button>
-                        <p className="truncate p-1 text-[9px] text-on-surface-variant">
-                          {p.name}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-4 border-t border-outline-variant/20 pt-4">
-                    <label className="font-label mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                      Voice memo (optional)
-                    </label>
-                    <p className="mb-1 text-xs text-on-surface-variant">
-                      Faster than typing. Note anything tricky — radiators,
-                      chimney breasts, an awkward corner — and the architect
-                      hears it in your own words.
-                    </p>
-                    <VoiceRecorder
-                      memos={room.voiceMemos ?? []}
-                      onChange={(next) => setRoom(room.id, { voiceMemos: next })}
-                    />
-                  </div>
-                </div>
               </section>
             ))}
 
+            {/* Pager navigation */}
+            <div className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setActiveRoomIndex((i) => Math.max(0, i - 1))}
+                disabled={activeRoomIndex === 0}
+                className="rounded-full border border-outline-variant/40 px-5 py-2.5 text-xs font-bold uppercase tracking-widest text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ← Previous room
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setActiveRoomIndex((i) => Math.min(rooms.length - 1, i + 1))
+                }
+                disabled={activeRoomIndex >= rooms.length - 1}
+                className="rounded-full border border-outline-variant/40 px-5 py-2.5 text-xs font-bold uppercase tracking-widest text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next room →
+              </button>
+            </div>
+
             <button
               type="button"
-              onClick={addRoom}
+              onClick={() => {
+                addRoom();
+                // Jump straight to the room just created — otherwise the
+                // pager stays put and the button appears to do nothing.
+                setActiveRoomIndex(rooms.length);
+              }}
               className="w-full rounded-xl border border-dashed border-outline py-4 text-sm font-bold uppercase tracking-widest text-primary transition-colors hover:bg-surface-container-low"
             >
               + Add another room

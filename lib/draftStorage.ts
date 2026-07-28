@@ -30,6 +30,9 @@ export type ProjectDraftSnapshot = {
   projectType: string | null;
   unit: "metric" | "imperial";
   unitLocked: boolean;
+  /** Property-wide ceiling default. Optional so drafts written before
+   *  this field existed still load. */
+  defaultCeilingHeightM?: string;
   rooms: Array<Record<string, unknown>>;
   connections: Array<Record<string, unknown>>;
   placements: Record<string, unknown>;
