@@ -25,7 +25,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import BrandMark from "@/components/app/BrandMark";
+import AppLogo from "@/components/app/AppLogo";
+import WelcomeScreen, { WELCOME_SEEN_KEY } from "@/components/app/WelcomeScreen";
 import {
   getRecentSubmissions,
   projectTypeLabel,
@@ -169,11 +170,21 @@ export default function AppHome() {
   /** Cached focal-length calibration, surfaced as a small at-a-glance
    *  badge so testers can spot a stale/implausible value. */
   const [calib, setCalib] = useState<{ focalPx: number; savedAt: number } | null>(null);
+  /** Tri-state: null until localStorage has been read on the client, so
+   *  we never flash the wrong screen during hydration. */
+  const [showWelcome, setShowWelcome] = useState<boolean | null>(null);
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setRecents(getRecentSubmissions());
     setYear(new Date().getFullYear());
+    try {
+      setShowWelcome(window.localStorage.getItem(WELCOME_SEEN_KEY) !== "1");
+    } catch {
+      // Private mode / storage disabled — show the home screen rather
+      // than trapping the user on the welcome mat every launch.
+      setShowWelcome(false);
+    }
     try {
       for (let i = 0; i < window.localStorage.length; i++) {
         const k = window.localStorage.key(i);
@@ -189,6 +200,20 @@ export default function AppHome() {
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  const dismissWelcome = () => {
+    try {
+      window.localStorage.setItem(WELCOME_SEEN_KEY, "1");
+    } catch {
+      /* noop — dismissal still applies for this session */
+    }
+    setShowWelcome(false);
+  };
+
+  // Hold the first paint until we know which screen to show, avoiding a
+  // flash of the home screen for brand-new installs.
+  if (showWelcome === null) return null;
+  if (showWelcome) return <WelcomeScreen onGetStarted={dismissWelcome} />;
+
   return (
     <div className="min-h-screen bg-surface pb-20">
       {/* Brand header — slimmer than the marketing nav, no menu links.
@@ -198,7 +223,7 @@ export default function AppHome() {
       <header className="sticky top-0 z-40 border-b border-primary/25 bg-surface/90 shadow-[0_1px_0_rgba(184,150,80,0.08),0_8px_24px_-18px_rgba(28,28,26,0.25)] backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-3">
-            <BrandMark size={36} />
+            <AppLogo size={36} className="text-primary" />
             <div>
               <p className="font-label text-[10px] font-bold uppercase tracking-[0.25em] text-primary">
                 TM Designs Ltd

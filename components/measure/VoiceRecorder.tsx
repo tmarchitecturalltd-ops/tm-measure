@@ -51,6 +51,23 @@ export default function VoiceRecorder({ memos, onChange }: VoiceRecorderProps) {
   const start = async () => {
     setError(null);
     try {
+      // Guard the API itself: an insecure origin or an old WebView leaves
+      // mediaDevices undefined, which would otherwise throw an opaque
+      // "cannot read property getUserMedia of undefined".
+      if (
+        typeof navigator === "undefined" ||
+        !navigator.mediaDevices ||
+        typeof navigator.mediaDevices.getUserMedia !== "function"
+      ) {
+        setError(
+          "Voice memos aren't supported on this device's browser. Please update the app or your system WebView.",
+        );
+        return;
+      }
+      if (typeof MediaRecorder === "undefined") {
+        setError("Audio recording isn't available on this device.");
+        return;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       // Prefer audio/webm; iOS Safari only exposes audio/mp4 — let the
       // browser pick its supported default by passing no mimeType.
@@ -87,8 +104,23 @@ export default function VoiceRecorder({ memos, onChange }: VoiceRecorderProps) {
       recorder.start();
       setRecording(true);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(`Couldn't access the mic: ${msg}`);
+      // Map the standard getUserMedia rejections onto instructions the
+      // customer can actually act on, rather than a raw DOMException.
+      const name = err instanceof Error ? err.name : "";
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        setError(
+          "Microphone access was blocked. Enable the Microphone permission for TM Measure in your device Settings, then try again.",
+        );
+      } else if (name === "NotFoundError") {
+        setError("No microphone was found on this device.");
+      } else if (name === "NotReadableError") {
+        setError(
+          "The microphone is in use by another app. Close it and try again.",
+        );
+      } else {
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(`Couldn't access the mic: ${msg}`);
+      }
     }
   };
 

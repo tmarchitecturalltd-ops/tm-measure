@@ -872,6 +872,53 @@ export default function MeasureIntakeForm() {
 
   const issueFor = (path: string) => issues.find((i) => i.path === path)?.message;
 
+  /**
+   * Auto-scroll to the first error.
+   *
+   * The form is long enough that a validation failure can easily land
+   * off-screen, leaving the user staring at an unchanged page wondering
+   * why nothing happened. Whenever the issue list or the submit banner
+   * changes, jump to whichever error container sits highest in the
+   * document and focus it for screen-reader users.
+   *
+   * The rAF + timeout pair gives React time to commit the error markup
+   * (and any step change) before we measure positions.
+   */
+  useEffect(() => {
+    const hasError = issues.length > 0 || submitStatus === "error";
+    if (!hasError) return;
+    if (typeof window === "undefined") return;
+
+    let cancelled = false;
+    const scroll = () => {
+      if (cancelled) return;
+      const candidates = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          '[data-error-anchor], [role="alert"]',
+        ),
+      ).filter((el) => el.offsetParent !== null); // skip hidden steps
+      if (!candidates.length) return;
+      // Highest in the document, not first in DOM order, so the topmost
+      // visible problem wins regardless of markup nesting.
+      const target = candidates.reduce((best, el) =>
+        el.getBoundingClientRect().top < best.getBoundingClientRect().top
+          ? el
+          : best,
+      );
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      // Make it programmatically focusable without adding it to the tab
+      // order permanently.
+      if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+      target.focus({ preventScroll: true });
+    };
+
+    const raf = requestAnimationFrame(() => window.setTimeout(scroll, 60));
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
+  }, [issues, submitStatus, submitError, step]);
+
   const payload = useMemo(() => {
     const serialRooms = rooms.map((r) => {
       const p = placements[r.id];
@@ -1226,12 +1273,17 @@ export default function MeasureIntakeForm() {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          // Explicit MIME list alongside the image/* wildcard: Android's
+          // document picker filters on concrete types, and a bare
+          // wildcard is what caused the camera roll to come back empty
+          // on some devices. iOS ignores the extras harmlessly.
+          accept="image/*,image/jpeg,image/png,image/heic,image/heif,image/webp"
           multiple
           // `capture="environment"` forced the rear camera and hid the
           // photo-library / file-picker options on iOS — testers were
-          // stuck if the camera dialog misbehaved. Without it, iOS
-          // shows its standard Take Photo / Photo Library action sheet.
+          // stuck if the camera dialog misbehaved. Without it, both
+          // platforms show their standard Take Photo / Photo Library
+          // chooser, which is what we want.
           className="hidden"
           onChange={(e) => {
             // Targets routed in priority order. Set by the button the
@@ -1440,7 +1492,7 @@ export default function MeasureIntakeForm() {
                   className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                 />
                 {issueFor("name") && (
-                  <p className="mt-1 text-xs text-error">{issueFor("name")}</p>
+                  <p data-error-anchor className="mt-1 text-xs text-error">{issueFor("name")}</p>
                 )}
               </div>
               <div>
@@ -1454,7 +1506,7 @@ export default function MeasureIntakeForm() {
                   className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                 />
                 {issueFor("email") && (
-                  <p className="mt-1 text-xs text-error">{issueFor("email")}</p>
+                  <p data-error-anchor className="mt-1 text-xs text-error">{issueFor("email")}</p>
                 )}
               </div>
               <div className="md:col-span-2">
@@ -1468,7 +1520,7 @@ export default function MeasureIntakeForm() {
                   className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                 />
                 {issueFor("project") && (
-                  <p className="mt-1 text-xs text-error">{issueFor("project")}</p>
+                  <p data-error-anchor className="mt-1 text-xs text-error">{issueFor("project")}</p>
                 )}
               </div>
               <div>
@@ -1704,7 +1756,7 @@ export default function MeasureIntakeForm() {
                     className="w-full max-w-md rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                   />
                   {issueFor(`room-${ri}-name`) && (
-                    <p className="mt-1 text-xs text-error">
+                    <p data-error-anchor className="mt-1 text-xs text-error">
                       {issueFor(`room-${ri}-name`)}
                     </p>
                   )}
@@ -1833,7 +1885,7 @@ export default function MeasureIntakeForm() {
                             className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                           />
                           {issueFor(`room-${ri}-wall-${wi}`) && (
-                            <p className="mt-1 text-xs text-error">
+                            <p data-error-anchor className="mt-1 text-xs text-error">
                               {issueFor(`room-${ri}-wall-${wi}`)}
                             </p>
                           )}
@@ -1903,7 +1955,7 @@ export default function MeasureIntakeForm() {
                     className="w-full max-w-xs rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                   />
                   {issueFor(`room-${ri}-ceiling`) && (
-                    <p className="mt-1 text-xs text-error">
+                    <p data-error-anchor className="mt-1 text-xs text-error">
                       {issueFor(`room-${ri}-ceiling`)}
                     </p>
                   )}
@@ -1952,7 +2004,7 @@ export default function MeasureIntakeForm() {
                               className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             />
                             {issueFor(`room-${ri}-door-${di}`) && (
-                              <p className="mt-1 text-xs text-error">
+                              <p data-error-anchor className="mt-1 text-xs text-error">
                                 {issueFor(`room-${ri}-door-${di}`)}
                               </p>
                             )}
@@ -2070,7 +2122,7 @@ export default function MeasureIntakeForm() {
                               className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             />
                             {issueFor(`room-${ri}-window-${wi}`) && (
-                              <p className="mt-1 text-xs text-error">
+                              <p data-error-anchor className="mt-1 text-xs text-error">
                                 {issueFor(`room-${ri}-window-${wi}`)}
                               </p>
                             )}
@@ -2194,7 +2246,7 @@ export default function MeasureIntakeForm() {
                     Take photo or upload
                   </button>
                   {issueFor(`room-${ri}-photos`) && (
-                    <p className="mb-3 text-xs text-error">
+                    <p data-error-anchor className="mb-3 text-xs text-error">
                       {issueFor(`room-${ri}-photos`)}
                     </p>
                   )}
@@ -2249,7 +2301,9 @@ export default function MeasureIntakeForm() {
             </button>
 
             {issues.some((i) => i.path === "rooms") && (
-              <p className="text-sm text-error">{issueFor("rooms")}</p>
+              <p data-error-anchor className="text-sm text-error">
+                {issueFor("rooms")}
+              </p>
             )}
 
             {/* ── Room connectivity graph ───────────────────────────── */}
