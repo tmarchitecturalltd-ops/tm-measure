@@ -14,21 +14,33 @@
  */
 
 import AppLogo from "@/components/app/AppLogo";
+import {
+  DraftingIcon,
+  MeasureIcon,
+  PhotoIcon,
+} from "@/components/app/OnboardingIcons";
 
 export const WELCOME_SEEN_KEY = "tm.welcome.seen.v1";
 
-const BEATS: { title: string; body: string }[] = [
+const BEATS: {
+  title: string;
+  body: string;
+  Icon: (p: { size?: number; className?: string }) => React.ReactElement;
+}[] = [
   {
     title: "Measure at your pace",
     body: "Walk each room and capture walls, ceilings, doors and windows in a guided flow.",
+    Icon: MeasureIcon,
   },
   {
     title: "Photos that do the talking",
     body: "Add reference shots and voice notes so nothing gets lost in translation.",
+    Icon: PhotoIcon,
   },
   {
     title: "Straight to our drawing board",
     body: "Send it over and our designers pick it up — no email back-and-forth.",
+    Icon: DraftingIcon,
   },
 ];
 
@@ -53,17 +65,16 @@ export default function WelcomeScreen({ onGetStarted }: { onGetStarted: () => vo
 
         {/* What happens next */}
         <ul className="mt-9 space-y-4">
-          {BEATS.map((beat, i) => (
+          {BEATS.map((beat) => (
             <li key={beat.title} className="flex gap-3">
               <span
-                aria-hidden
-                className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold"
+                className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
                 style={{
-                  backgroundColor: "rgba(184, 150, 80, 0.14)",
+                  backgroundColor: "rgba(184, 150, 80, 0.12)",
                   color: "#8a6f3a",
                 }}
               >
-                {i + 1}
+                <beat.Icon size={26} />
               </span>
               <div>
                 <p className="text-sm font-medium text-on-surface">{beat.title}</p>
