@@ -53,6 +53,5 @@
     "mobile",
     "ios",
     "android"
-  ],
-  "extends": "expo/tsconfig.base"
+  ]
 }

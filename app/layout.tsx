@@ -41,6 +41,39 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-surface text-on-surface font-body min-h-full flex flex-col">
+        {/* Dev-only on-screen error reporter.
+            iOS Safari has no console without a Mac, so script errors there
+            are invisible — the page just renders as dead server HTML. This
+            inline script runs independently of the app bundle, so it still
+            reports even when that bundle fails to parse or execute.
+            Stripped entirely from production builds. */}
+        {process.env.NODE_ENV !== "production" && (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+(function () {
+  function box() {
+    var el = document.getElementById('__err');
+    if (el) return el;
+    el = document.createElement('pre');
+    el.id = '__err';
+    el.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99999;max-height:45vh;overflow:auto;margin:0;padding:10px;background:#7f1d1d;color:#fff;font:12px/1.4 monospace;white-space:pre-wrap';
+    document.body.appendChild(el);
+    return el;
+  }
+  function log(label, detail) { box().textContent += label + ': ' + detail + '\\n\\n'; }
+  window.addEventListener('error', function (e) {
+    log('ERROR', (e.message || e.error) + ' @ ' + (e.filename || '?') + ':' + (e.lineno || '?'));
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e.reason;
+    log('PROMISE', (r && (r.stack || r.message)) || String(r));
+  });
+})();
+`,
+            }}
+          />
+        )}
         <IconFallback />
         <RegisterSW />
         {children}

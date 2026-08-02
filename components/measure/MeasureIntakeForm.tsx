@@ -981,6 +981,17 @@ export default function MeasureIntakeForm() {
    * on long forms.
    */
   const [activeRoomIndex, setActiveRoomIndex] = useState(0);
+  /** Top of the rooms pager — we scroll here whenever the room changes. */
+  const roomsTopRef = useRef<HTMLDivElement | null>(null);
+
+  // Only one room renders at a time, but the browser keeps your scroll
+  // position when you switch — so a new room appeared mid-page and read
+  // as "more of the same long form". Jump back to the top of the card so
+  // each room genuinely feels like its own page.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    roomsTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [activeRoomIndex]);
 
   // Keep the pointer in range when rooms are removed.
   useEffect(() => {
@@ -1846,7 +1857,10 @@ export default function MeasureIntakeForm() {
             )}
 
             {/* Pager header — position, progress and quick jump. */}
-            <div className="rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-4">
+            <div
+              ref={roomsTopRef}
+              className="scroll-mt-4 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-4"
+            >
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <p className="font-label text-[11px] font-bold uppercase tracking-widest text-primary">
                   Room {Math.min(activeRoomIndex + 1, rooms.length)} of {rooms.length}

@@ -83,11 +83,20 @@ export default function Hero() {
             >
               See How It Works →
             </a>
+            {/* Self-measurement is the product's differentiator and the
+                entry point to the app, so it gets a filled accent treatment
+                and a supporting line rather than sitting as a third
+                identical outline button nobody reads. */}
             <Link
               href="/measure"
-              className="inline-block rounded border border-outline px-8 py-4 text-center text-sm font-bold tracking-wide text-on-surface transition-colors hover:border-primary hover:bg-surface-container-low"
+              className="editorial-shadow group inline-flex flex-col rounded border-2 border-primary bg-primary/10 px-8 py-4 text-left transition-colors hover:bg-primary hover:text-on-primary"
             >
-              Self measurement
+              <span className="text-sm font-bold uppercase tracking-widest text-primary group-hover:text-on-primary">
+                Measure it yourself →
+              </span>
+              <span className="mt-1 text-xs font-normal normal-case tracking-normal text-on-surface-variant group-hover:text-on-primary">
+                Free app · plans start next day
+              </span>
             </Link>
           </div>
           <div className="mb-2 mt-6 flex items-center gap-3">

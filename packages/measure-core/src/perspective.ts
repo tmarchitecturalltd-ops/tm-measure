@@ -73,6 +73,15 @@ export type CameraPose = {
 export type FloorCornersInput = {
   corners: [TapPoint, TapPoint, TapPoint, TapPoint];
   pose: CameraPose;
+  /**
+   * Signed vertical distance from camera to the plane being tapped.
+   * Omit for the floor (defaults to -pose.heightM). For ceiling corners
+   * pass `ceilingHeightM - pose.heightM`, a positive value.
+   *
+   * Because walls are vertical the ceiling outline matches the floor
+   * outline, so the returned dimensions mean the same thing either way.
+   */
+  planeOffsetM?: number;
 };
 
 export type FloorPoint3D = {
@@ -129,6 +138,21 @@ const DEG2RAD = Math.PI / 180;
 export function projectTapToFloor(
   tap: TapPoint,
   pose: CameraPose,
+  /**
+   * Signed vertical distance from the camera to the target plane, in
+   * metres. Negative = below the camera (the floor, the default);
+   * positive = above it (the ceiling).
+   *
+   * Ceiling corners are the practical route in a furnished room: floor
+   * corners are usually hidden behind furniture, whereas wall/ceiling
+   * junctions are clear and crisply defined. Because walls are vertical,
+   * the ceiling outline equals the floor outline, so everything
+   * downstream is unchanged.
+   *
+   * Defaults to -heightM, preserving the original floor behaviour for
+   * every existing caller.
+   */
+  planeOffsetM?: number,
 ): FloorPoint3D | null {
   const cx = pose.imageWidthPx / 2;
   const cy = pose.imageHeightPx / 2;
@@ -151,12 +175,20 @@ export function projectTapToFloor(
   const dyW = cosT * dyC - sinT * dzC;
   const dzWraw = sinT * dyC + cosT * dzC;
 
-  // Ray origin is at (0, heightM, 0). Find k where y = 0.
-  // origin.y + dir.y * k = 0  →  k = -heightM / dyW
-  // We need dyW < 0 (ray going downward). Otherwise the tap is above the
-  // horizon and we reject it.
-  if (dyW >= 0) return null;
-  const k = -pose.heightM / dyW;
+  // The camera sits at the origin and the target plane is `offset` metres
+  // away vertically (negative = floor below, positive = ceiling above).
+  // Walking along the ray, the vertical distance covered after k units is
+  // dyW·k, so the plane is reached when dyW·k = offset → k = offset / dyW.
+  //
+  // k is only positive — i.e. the plane is actually in front of the
+  // camera — when dyW and offset share a sign: looking down (dyW < 0) to
+  // reach the floor (offset < 0), or up (dyW > 0) to reach the ceiling
+  // (offset > 0). Opposite signs mean the tap is on the far side of the
+  // horizon and there is no intersection.
+  const offset = planeOffsetM ?? -pose.heightM;
+  if (offset === 0 || dyW === 0) return null;
+  if (Math.sign(dyW) !== Math.sign(offset)) return null;
+  const k = offset / dyW;
   if (!Number.isFinite(k) || k <= 0) return null;
 
   // Flip Z sign so the returned "forward distance" is positive — matches
@@ -184,6 +216,9 @@ export function projectTapToFloor(
 export function projectFloorToPixel(
   floor: FloorPoint3D,
   pose: CameraPose,
+  /** Must match the offset used when projecting the taps — see
+   *  projectTapToFloor. Defaults to the floor. */
+  planeOffsetM?: number,
 ): TapPoint | null {
   // World → camera transform: invert the same R_x(tilt) rotation we
   // applied in projectTapToFloor, then offset by the camera height.
@@ -193,7 +228,7 @@ export function projectFloorToPixel(
   // World-space position of the floor point relative to the camera:
   //   p_world = (xM, 0, -zM)   (note the convention flip from project)
   const xW = floor.xM;
-  const yW = -pose.heightM;
+  const yW = planeOffsetM ?? -pose.heightM;
   const zW = -floor.zM;
   // Inverse rotation R_x(-tilt) maps world → camera.
   const xC = xW;
@@ -216,12 +251,16 @@ export function meanReprojectionErrorPx(
   taps: TapPoint[],
   floor: FloorPoint3D[],
   pose: CameraPose,
+  /** Must match the offset the taps were projected with, otherwise a
+   *  valid ceiling scan is graded against the floor plane and always
+   *  looks wrong. */
+  planeOffsetM?: number,
 ): number {
   if (taps.length !== floor.length || taps.length === 0) return Infinity;
   let sum = 0;
   let n = 0;
   for (let i = 0; i < taps.length; i++) {
-    const repro = projectFloorToPixel(floor[i], pose);
+    const repro = projectFloorToPixel(floor[i], pose, planeOffsetM);
     if (!repro) return Infinity;
     const dx = taps[i].xPx - repro.xPx;
     const dy = taps[i].yPx - repro.yPx;
@@ -326,10 +365,14 @@ export function calibrateFocalLengthPx(
     tapA.xPx - tapB.xPx,
     tapA.yPx - tapB.yPx,
   );
-  if (tapSeparationPx < pose.imageWidthPx * 0.04) {
+  const minSeparationPx = pose.imageWidthPx * 0.04;
+  if (tapSeparationPx < minSeparationPx) {
     return {
-      error:
-        "The two calibration taps are too close together — re-tap the ends of the reference further apart.",
+      // Numbers included deliberately: when this fires unexpectedly it's
+      // usually because the taps landed almost on top of each other (often
+      // the viewfinder was obscured), and the figures make that obvious
+      // instead of leaving the user guessing.
+      error: `The two calibration taps are too close together (${tapSeparationPx.toFixed(0)} px apart, need at least ${minSeparationPx.toFixed(0)} px). Tap the two ends so they're well separated on screen.`,
     };
   }
 
@@ -365,8 +408,12 @@ export function calibrateFocalLengthPx(
   // monotonicity, then bisect.
   if (Math.sign(lowProbe - knownDistanceM) === Math.sign(highProbe - knownDistanceM)) {
     return {
+      // By far the most common cause is a reference object that isn't on
+      // the floor — the solver projects taps onto the floor plane, so an
+      // object on a table or shelf has no valid solution at any focal
+      // length. Lead with that rather than blaming tap precision.
       error:
-        "Calibration could not converge. Re-tap both ends of the reference object more precisely.",
+        "Calibration could not converge. Check the reference object is flat ON THE FLOOR (not on furniture), then re-tap both ends.",
     };
   }
   // Decide direction of bisection.
@@ -403,18 +450,32 @@ export function estimateRoomFromFloorTaps(
   if (!Number.isFinite(input.pose.focalLengthPx) || input.pose.focalLengthPx <= 0) {
     return { error: "Focal length must be positive; call estimateFocalLengthPx if unknown." };
   }
-  if (input.pose.tiltDeg > -2) {
+  // Ceiling mode targets the plane above the camera; the tilt and
+  // above-horizon checks below therefore invert.
+  const planeOffsetM = input.planeOffsetM ?? -input.pose.heightM;
+  const ceilingMode = planeOffsetM > 0;
+
+  if (!ceilingMode && input.pose.tiltDeg > -2) {
     return {
       error:
         "Camera is too level — point the phone down at the floor corners and try again.",
     };
   }
-
-  const floor = input.corners.map((tap) => projectTapToFloor(tap, input.pose));
-  if (floor.some((p) => p === null)) {
+  if (ceilingMode && input.pose.tiltDeg < 2) {
     return {
       error:
-        "One or more taps are above the horizon. Point the phone further down or re-tap nearer the floor.",
+        "Camera is too level — point the phone up at the ceiling corners and try again.",
+    };
+  }
+
+  const floor = input.corners.map((tap) =>
+    projectTapToFloor(tap, input.pose, planeOffsetM),
+  );
+  if (floor.some((p) => p === null)) {
+    return {
+      error: ceilingMode
+        ? "One or more taps are below the horizon. Point the phone further up or re-tap nearer the ceiling."
+        : "One or more taps are above the horizon. Point the phone further down or re-tap nearer the floor.",
     };
   }
   const fp = floor as [FloorPoint3D, FloorPoint3D, FloorPoint3D, FloorPoint3D];

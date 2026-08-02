@@ -15,6 +15,7 @@ import {
   estimateRoomFromFloorTaps,
   calibrateFocalLengthPx,
   meanReprojectionErrorPx,
+  projectTapToFloor,
   sortFloorCornersClockwise,
   type CameraPose,
   type ScanConfidence,
@@ -202,6 +203,38 @@ export default function RoomScanOverlay({
    * after each corner is confirmed. Length 0–4.
    */
   const pixelTapsRef = useRef<TapPoint[]>([]);
+  /** Phone pitch recorded at each corner tap — see processCornerTapMeasurement. */
+  const tiltPerCornerRef = useRef<number[]>([]);
+  /**
+   * Which horizontal plane the corners are tapped on.
+   *
+   * Floor is the default, but in a furnished room the floor corners are
+   * usually hidden behind furniture while the ceiling corners are clear.
+   * Walls are vertical, so the ceiling outline equals the floor outline.
+   * Ceiling mode needs a known ceiling height, since that sets the scale.
+   */
+  const [tapPlane, setTapPlane] = useState<"floor" | "ceiling">("floor");
+  const [ceilingHeightM, setCeilingHeightM] = useState("2.4");
+  /**
+   * How much of the room is captured in one go.
+   *
+   * "room" — four corners in a single frame. Mathematically ideal but a
+   *   ~70° phone lens can't see all four corners of a normal room unless
+   *   you stand outside it.
+   * "wall" — two corners of one wall, repeated for the adjacent wall.
+   *   Each measurement is still a single fixed pose (so the maths holds)
+   *   but only ever needs two corners in frame at once, which is
+   *   achievable in a real, furnished room.
+   */
+  const [measureMode, setMeasureMode] = useState<"room" | "wall" | "span">("span");
+  /**
+   * Distance from the wall you're standing against to the phone, in
+   * metres. Backs onto the wall, arms forward — about 10 cm. Added to
+   * every span so the number is wall-to-wall, not phone-to-wall.
+   */
+  const BODY_OFFSET_M = 0.1;
+  /** Completed wall lengths in metres, in tap order. */
+  const [wallLengths, setWallLengths] = useState<number[]>([]);
   /**
    * Sub-tap buffer for the corner currently being entered. The user
    * taps the same corner 3 times in succession and the median is
@@ -221,6 +254,28 @@ export default function RoomScanOverlay({
    *  prompt + progress line so the camera view isn't obscured.
    *  Defaults to collapsed so first-time users see the room. */
   const [hudCollapsed, setHudCollapsed] = useState(true);
+  /** Lets the user dismiss the setup gate and scan uncalibrated anyway. */
+  const [setupDismissed, setSetupDismissed] = useState(false);
+  /**
+   * Method chosen on the second gate. Kept separate from the setup gate so
+   * every choice is made on a full screen, leaving the viewfinder
+   * completely clear once tapping starts.
+   */
+  const [methodChosen, setMethodChosen] = useState(false);
+  /**
+   * Back cameras offered by the device, and which one is in use.
+   *
+   * The main lens sees ~50° across in portrait — not enough to frame both
+   * ends of a wall from inside a normal room. Modern iPhones also expose
+   * an ultra-wide (0.5×) lens at ~100°+, which fits a whole wall easily.
+   * That's the practical answer to "the wall doesn't fit".
+   *
+   * Focal length is a property of the lens, so switching cameras
+   * invalidates any existing calibration — cleared deliberately rather
+   * than silently applying the wrong one.
+   */
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null);
 
   /** Median of an array of numbers — small helper so we can median
    *  x and y independently to robustly absorb a single mis-tap. */
@@ -248,8 +303,10 @@ export default function RoomScanOverlay({
     setResult(null);
     setProcessPct(0);
     pixelTapsRef.current = [];
+    tiltPerCornerRef.current = [];
     subTapsRef.current = [];
     setSubTapCount(0);
+    setWallLengths([]);
     // Clear in-flight calibration scratch state only — the resolved
     // focal length is persisted per device and rehydrated on mount,
     // so leave `calibratedFocalPx` alone here.
@@ -258,13 +315,28 @@ export default function RoomScanOverlay({
     setCalibError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 } },
+        video: activeDeviceId
+          ? { deviceId: { exact: activeDeviceId }, width: { ideal: 1920 } }
+          : { facingMode: { ideal: "environment" }, width: { ideal: 1920 } },
         audio: false,
       });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
+      }
+      // Labels are only populated once camera permission has been granted,
+      // which is why this runs after getUserMedia rather than before.
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const cams = devices.filter((d) => d.kind === "videoinput");
+        setVideoDevices(cams);
+        if (!activeDeviceId) {
+          const current = stream.getVideoTracks()[0]?.getSettings?.().deviceId;
+          if (typeof current === "string") setActiveDeviceId(current);
+        }
+      } catch {
+        /* enumeration unsupported — the lens picker just won't appear */
       }
       // Tier-2: ask the browser if it can tell us the camera's intrinsic
       // focal length. Only Chrome on a few Android devices populates this
@@ -318,9 +390,36 @@ export default function RoomScanOverlay({
 
   const onOrientation = useCallback((ev: DeviceOrientationEvent) => {
     if (typeof ev.beta !== "number" || Number.isNaN(ev.beta)) return;
-    const tilt = ev.beta - 90;
-    // Clamp to physically sensible rear-camera pitch range.
-    const clamped = Math.max(-90, Math.min(30, tilt));
+    /**
+     * Camera pitch relative to the horizon, valid in ANY device
+     * orientation.
+     *
+     * The old `beta - 90` shortcut only holds in portrait. That mattered
+     * because a phone sees roughly 50° across in portrait but ~70° in
+     * landscape — and landscape is the only way to fit both ends of a
+     * wall in frame. Rotating the phone used to silently corrupt the
+     * angle, so landscape wasn't usable.
+     *
+     * Deriving it from the full orientation instead: the rear camera
+     * looks along the device's −Z axis, and with the W3C rotation
+     * Rz(α)Rx(β)Ry(γ) that axis has a vertical component of
+     * −cos(β)·cos(γ). Its arcsine is the elevation angle. Screen
+     * rotation doesn't appear because the camera's physical direction
+     * doesn't depend on how the UI is rotated.
+     *
+     * Sanity: portrait upright (β=90, γ=0) → 0°, level. Tilted down 30°
+     * (β=60) → −30°, matching the old formula. Landscape (β=0, γ=60)
+     * → −30° as well, which the old formula got badly wrong.
+     */
+    const b = (ev.beta ?? 0) * (Math.PI / 180);
+    const g = (ev.gamma ?? 0) * (Math.PI / 180);
+    const vertical = -Math.cos(b) * Math.cos(g);
+    const tilt = (Math.asin(Math.max(-1, Math.min(1, vertical))) * 180) / Math.PI;
+    // Full pitch range. This used to cap at +30°, which was harmless when
+    // only floor scanning existed but silently broke ceiling mode: aiming
+    // up at a ceiling line needs positive pitch, and anything steeper than
+    // 30° was being reported as 30° — wrong angle, wrong distance.
+    const clamped = Math.max(-90, Math.min(90, tilt));
     tiltRef.current = clamped;
     setLiveTiltDeg(clamped);
 
@@ -395,6 +494,216 @@ export default function RoomScanOverlay({
    * the perspective-geometry module. Runs a short "processing" flash so
    * the UI feels consistent with the other scan modes, then sets result.
    */
+  /**
+   * Wall mode: two taps → one wall length.
+   *
+   * Uses the same back-projection as the four-corner solver, just with a
+   * pair of points instead of a quad. Because both taps come from one
+   * stationary pose the single-pose assumption holds exactly — which is
+   * why this is more reliable in practice than trying to fit a whole
+   * room into one frame.
+   */
+  const processWallMeasurement = useCallback(() => {
+    const video = videoRef.current;
+    const taps = pixelTapsRef.current;
+    if (!video || taps.length !== 2) {
+      setErrorMsg("Need two taps to measure a wall — try again.");
+      setPhase("error");
+      return;
+    }
+    const imageWidthPx = video.videoWidth || video.clientWidth || 1920;
+    const imageHeightPx = video.videoHeight || video.clientHeight || 1080;
+
+    const tilts = tiltPerCornerRef.current;
+    const meanTilt =
+      tilts.length > 0
+        ? tilts.reduce((a, b) => a + b, 0) / tilts.length
+        : (tiltRef.current ?? FALLBACK_TILT_DEG);
+
+    const pose: CameraPose = {
+      heightM: cameraHeightM,
+      tiltDeg: meanTilt,
+      focalLengthPx: calibratedFocalPx ?? estimateFocalLengthPx(imageWidthPx),
+      imageWidthPx,
+      imageHeightPx,
+    };
+
+    const ceilH = Number(ceilingHeightM);
+    const planeOffsetM =
+      tapPlane === "ceiling" && Number.isFinite(ceilH) && ceilH > cameraHeightM
+        ? ceilH - cameraHeightM
+        : undefined;
+
+    const a = projectTapToFloor(taps[0], pose, planeOffsetM);
+    const b = projectTapToFloor(taps[1], pose, planeOffsetM);
+    if (!a || !b) {
+      setErrorMsg(
+        tapPlane === "ceiling"
+          ? "Those taps are below the horizon — point further up and re-tap the two ceiling corners."
+          : "Those taps are above the horizon — point further down and re-tap the two floor corners.",
+      );
+      setPhase("error");
+      return;
+    }
+    const lengthM = Math.hypot(a.xM - b.xM, a.zM - b.zM);
+    if (!Number.isFinite(lengthM) || lengthM <= 0) {
+      setErrorMsg("Couldn't compute that wall — re-tap the two corners.");
+      setPhase("error");
+      return;
+    }
+
+    const next = [...wallLengths, Number(lengthM.toFixed(2))];
+    setWallLengths(next);
+    // Reset for the next wall.
+    pixelTapsRef.current = [];
+    tiltPerCornerRef.current = [];
+    subTapsRef.current = [];
+    setSubTapCount(0);
+    setCornerCount(0);
+    setMarkers([]);
+
+    // Two walls is enough for a rectangular room: width × length.
+    if (next.length >= 2) {
+      const [widthM, lengthM2] = next;
+      setResult({
+        widthM,
+        lengthM: lengthM2,
+        heightM: planeOffsetM !== undefined ? ceilH : DEFAULT_CEILING_HEIGHT_M,
+        method: "corners",
+        confidence: calibratedFocalPx !== null ? "medium" : "low",
+        notes: [
+          `Measured wall by wall: ${widthM.toFixed(2)} m × ${lengthM2.toFixed(2)} m.`,
+          "Assumes a rectangular room — opposite walls taken as equal.",
+          planeOffsetM !== undefined
+            ? `Ceiling corners, ${ceilH.toFixed(2)} m ceiling.`
+            : "Floor corners.",
+          calibratedFocalPx === null
+            ? "Not calibrated — run calibration for a tighter result."
+            : "Calibrated lens.",
+        ],
+        areaM2: Number((widthM * lengthM2).toFixed(2)),
+        rectangular: true,
+      });
+      setPhase("result");
+    }
+  }, [
+    cameraHeightM,
+    calibratedFocalPx,
+    ceilingHeightM,
+    tapPlane,
+    wallLengths,
+  ]);
+
+  /**
+   * Span mode: back against one wall, one tap at the base of the wall
+   * opposite → that's the room dimension.
+   *
+   * The other methods all failed on framing: a phone lens simply can't
+   * take in two corners of a wall, let alone four, from inside a normal
+   * room. This needs a single point in view, which is always achievable,
+   * and the phone is naturally still for a single tap.
+   *
+   * projectTapToFloor already returns the tapped point's position
+   * relative to the camera, so the distance is just its magnitude —
+   * no new geometry, only a different question asked of the same maths.
+   */
+  const processSpanMeasurement = useCallback(() => {
+    const video = videoRef.current;
+    const taps = pixelTapsRef.current;
+    if (!video || taps.length < 1) return;
+    const imageWidthPx = video.videoWidth || video.clientWidth || 1920;
+    const imageHeightPx = video.videoHeight || video.clientHeight || 1080;
+
+    const tilts = tiltPerCornerRef.current;
+    const meanTilt =
+      tilts.length > 0
+        ? tilts.reduce((a, b) => a + b, 0) / tilts.length
+        : (tiltRef.current ?? FALLBACK_TILT_DEG);
+
+    const pose: CameraPose = {
+      heightM: cameraHeightM,
+      tiltDeg: meanTilt,
+      focalLengthPx: calibratedFocalPx ?? estimateFocalLengthPx(imageWidthPx),
+      imageWidthPx,
+      imageHeightPx,
+    };
+
+    // Ceiling works exactly as well here: because walls are vertical, the
+    // horizontal distance to where the far wall meets the ceiling is the
+    // same span as where it meets the floor — and that junction is never
+    // hidden behind furniture.
+    const ceilH = Number(ceilingHeightM);
+    const planeOffsetM =
+      tapPlane === "ceiling" && Number.isFinite(ceilH) && ceilH > cameraHeightM
+        ? ceilH - cameraHeightM
+        : undefined;
+    if (tapPlane === "ceiling" && planeOffsetM === undefined) {
+      setErrorMsg(
+        "Ceiling height must be greater than your eye height. Check both values.",
+      );
+      setPhase("error");
+      return;
+    }
+
+    const p = projectTapToFloor(taps[0], pose, planeOffsetM);
+    if (!p) {
+      setErrorMsg(
+        planeOffsetM !== undefined
+          ? "That tap is below the horizon — aim higher, where the far wall meets the ceiling."
+          : "That tap is above the horizon — aim lower, where the far wall meets the floor.",
+      );
+      setPhase("error");
+      return;
+    }
+    // Horizontal distance from the camera to the tapped point, plus the
+    // gap between the wall at your back and the phone.
+    const spanM = Math.hypot(p.xM, p.zM) + BODY_OFFSET_M;
+    if (!Number.isFinite(spanM) || spanM <= 0) {
+      setErrorMsg("Couldn't read that tap — try again.");
+      setPhase("error");
+      return;
+    }
+
+    const next = [...wallLengths, Number(spanM.toFixed(2))];
+    setWallLengths(next);
+    pixelTapsRef.current = [];
+    tiltPerCornerRef.current = [];
+    subTapsRef.current = [];
+    setSubTapCount(0);
+    setCornerCount(0);
+    setMarkers([]);
+
+    if (next.length >= 2) {
+      const [widthM, lengthM] = next;
+      setResult({
+        widthM,
+        lengthM,
+        heightM: planeOffsetM !== undefined ? ceilH : DEFAULT_CEILING_HEIGHT_M,
+        method: "corners",
+        confidence: calibratedFocalPx !== null ? "medium" : "low",
+        notes: [
+          `Wall-to-wall spans: ${widthM.toFixed(2)} m × ${lengthM.toFixed(2)} m.`,
+          `Includes a ${(BODY_OFFSET_M * 100).toFixed(0)} cm allowance for the gap between the wall behind you and the phone.`,
+          planeOffsetM !== undefined
+            ? `Measured to the ceiling line using a ${ceilH.toFixed(2)} m ceiling — accuracy depends on that being right.`
+            : "Ceiling height defaulted to 2.40 m — please confirm in review.",
+          calibratedFocalPx === null
+            ? "Not calibrated — run calibration for a tighter result."
+            : "Calibrated lens.",
+        ],
+        areaM2: Number((widthM * lengthM).toFixed(2)),
+        rectangular: true,
+      });
+      setPhase("result");
+    }
+  }, [
+    cameraHeightM,
+    calibratedFocalPx,
+    wallLengths,
+    tapPlane,
+    ceilingHeightM,
+  ]);
+
   const processCornerTapMeasurement = useCallback(async () => {
     const video = videoRef.current;
     const taps = pixelTapsRef.current;
@@ -423,17 +732,44 @@ export default function RoomScanOverlay({
       }
     })();
 
+    // Average the per-corner pitches rather than using whichever angle the
+    // phone happened to hold on the final tap — one unlucky reading used to
+    // rescale the entire room.
+    const tilts = tiltPerCornerRef.current;
+    const meanTilt =
+      tilts.length > 0
+        ? tilts.reduce((a, b) => a + b, 0) / tilts.length
+        : (tiltRef.current ?? FALLBACK_TILT_DEG);
+    const tiltSpread =
+      tilts.length > 1 ? Math.max(...tilts) - Math.min(...tilts) : 0;
+
     const pose: CameraPose = {
       heightM: cameraHeightM,
-      tiltDeg: tiltRef.current ?? FALLBACK_TILT_DEG,
+      tiltDeg: meanTilt,
       // Use the calibrated focal length if the user ran the scale-bar
       // calibration step; otherwise fall back to the FOV heuristic.
       focalLengthPx: calibratedFocalPx ?? estimateFocalLengthPx(imageWidthPx),
       imageWidthPx,
       imageHeightPx,
     };
+    // Ceiling mode aims at the plane above the camera; the offset is the
+    // rise from eye level to the ceiling. Floor mode leaves it undefined
+    // so the solver uses -heightM as before.
+    const ceilH = Number(ceilingHeightM);
+    const planeOffsetM =
+      tapPlane === "ceiling" && Number.isFinite(ceilH) && ceilH > cameraHeightM
+        ? ceilH - cameraHeightM
+        : undefined;
+    if (tapPlane === "ceiling" && planeOffsetM === undefined) {
+      setErrorMsg(
+        "Ceiling height must be greater than your eye height. Check both values and try again.",
+      );
+      setPhase("error");
+      return;
+    }
+
     const ordered = sortFloorCornersClockwise(taps as [TapPoint, TapPoint, TapPoint, TapPoint]);
-    const out = estimateRoomFromFloorTaps({ corners: ordered, pose });
+    const out = estimateRoomFromFloorTaps({ corners: ordered, pose, planeOffsetM });
 
     await animate;
 
@@ -447,7 +783,12 @@ export default function RoomScanOverlay({
     // the camera and compare against the original taps. If the average
     // pixel error exceeds ~1.5 % of image width the geometry didn't
     // close and we knock confidence down a step.
-    const reproPx = meanReprojectionErrorPx(ordered, out.floorPoints, pose);
+    const reproPx = meanReprojectionErrorPx(
+      ordered,
+      out.floorPoints,
+      pose,
+      planeOffsetM,
+    );
     const reproThresh = pose.imageWidthPx * 0.015;
     const reproOk = Number.isFinite(reproPx) && reproPx < reproThresh;
 
@@ -456,8 +797,18 @@ export default function RoomScanOverlay({
     const lengthM = Number(((out.wallsM[1] + out.wallsM[3]) / 2).toFixed(2));
     const notes = [
       ...out.notes,
-      "Ceiling height defaulted to 2.40 m — please confirm in review.",
+      planeOffsetM !== undefined
+        ? `Measured from ceiling corners using a ${ceilH.toFixed(2)} m ceiling — accuracy depends on that height being right.`
+        : "Ceiling height defaulted to 2.40 m — please confirm in review.",
     ];
+    // The solver assumes one fixed camera pose. A wide pitch spread means
+    // the phone was tilted or turned between corners, which distorts scale
+    // badly — say so plainly rather than presenting a confident wrong number.
+    if (tiltSpread > 10) {
+      notes.unshift(
+        `Phone moved between corners (${Math.round(tiltSpread)}° of tilt change) — measurements are unreliable. Stand where all four corners are visible and rescan without moving.`,
+      );
+    }
     // If tilt came only from fallback, downgrade confidence a notch.
     const tiltFromDevice = liveTiltDeg !== null;
     let confidence: ScanConfidence = tiltFromDevice
@@ -468,6 +819,9 @@ export default function RoomScanOverlay({
     if (!tiltFromDevice) {
       notes.push("Phone tilt sensor unavailable — used 30° default. Accuracy ±15 cm.");
     }
+    // A moved phone invalidates the single-pose model outright, so this
+    // outranks the re-projection check below.
+    if (tiltSpread > 10) confidence = "low";
     if (!reproOk) {
       // Knock the confidence down one notch if the corners don't
       // re-project tightly. The math is still returned — just flagged.
@@ -482,7 +836,10 @@ export default function RoomScanOverlay({
     setResult({
       widthM,
       lengthM,
-      heightM: DEFAULT_CEILING_HEIGHT_M,
+      // In ceiling mode the user has told us the ceiling height, so use
+      // it rather than the 2.40 m placeholder.
+      heightM:
+        planeOffsetM !== undefined ? ceilH : DEFAULT_CEILING_HEIGHT_M,
       method: "corners",
       confidence,
       notes,
@@ -490,7 +847,13 @@ export default function RoomScanOverlay({
       rectangular: out.rectangular,
     });
     setPhase("result");
-  }, [cameraHeightM, liveTiltDeg, calibratedFocalPx]);
+  }, [
+    cameraHeightM,
+    liveTiltDeg,
+    calibratedFocalPx,
+    tapPlane,
+    ceilingHeightM,
+  ]);
 
   /**
    * Resolve the calibration once both calibration taps have been
@@ -643,18 +1006,43 @@ export default function RoomScanOverlay({
       const ys = subTapsRef.current.map((t) => t.yPx);
       const cornerTap: TapPoint = { xPx: median(xs), yPx: median(ys) };
       pixelTapsRef.current = [...pixelTapsRef.current, cornerTap];
+      // Remember the phone's pitch for this corner. The solver takes a
+      // single pose, so we average these and warn when they diverge —
+      // divergence means the phone moved between taps, which silently
+      // wrecks the scale.
+      tiltPerCornerRef.current = [
+        ...tiltPerCornerRef.current,
+        tiltRef.current ?? FALLBACK_TILT_DEG,
+      ];
       subTapsRef.current = [];
       setSubTapCount(0);
 
-      setCornerCount((c) => {
-        const next = c + 1;
-        if (next >= 4) {
-          void processCornerTapMeasurement();
-        }
-        return next;
-      });
+      // pixelTapsRef is the source of truth for how many corners are done,
+      // so derive the count from it rather than from state.
+      //
+      // The completion call must NOT live inside a setState updater:
+      // React re-invokes updaters in development, which ran the wall
+      // calculation twice. The first run consumed and cleared the taps,
+      // so the second found none and reported "Need two taps".
+      const next = pixelTapsRef.current.length;
+      setCornerCount(next);
+      const required =
+        measureMode === "span" ? 1 : measureMode === "wall" ? 2 : 4;
+      if (next >= required) {
+        if (measureMode === "span") processSpanMeasurement();
+        else if (measureMode === "wall") processWallMeasurement();
+        else void processCornerTapMeasurement();
+      }
     },
-    [scanMode, phase, processCornerTapMeasurement, isStable],
+    [
+      scanMode,
+      phase,
+      processCornerTapMeasurement,
+      processWallMeasurement,
+      processSpanMeasurement,
+      measureMode,
+      isStable,
+    ],
   );
 
   /**
@@ -677,7 +1065,22 @@ export default function RoomScanOverlay({
     let cancelled = false;
     (async () => {
       try {
-        const r = await RoomPlan.isSupported();
+        // Race against a 2 s timeout. Without this a hung promise — which
+        // is what the Capacitor web fallback does when there's no native
+        // implementation to answer — leaves the overlay pinned on
+        // "Checking RoomPlan availability…" with no way forward.
+        const timeout = new Promise<{ supported: boolean; reason?: string }>(
+          (resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  supported: false,
+                  reason: "Availability check timed out — using corner-tap mode.",
+                }),
+              2000,
+            ),
+        );
+        const r = await Promise.race([RoomPlan.isSupported(), timeout]);
         if (cancelled) return;
         if (r.supported) {
           setRoomPlanSupport("yes");
@@ -822,7 +1225,27 @@ export default function RoomScanOverlay({
         />
       ))}
 
-      {(phase === "camera" || phase === "calibrate") && <Reticle />}
+      {/* The reticle reads as "aim here and shoot", which is the opposite
+          of what corner-tap needs: you must hold the phone still and tap
+          each target where it appears on screen. Users were centring the
+          crosshair on each point and tapping the middle, so every tap
+          landed at the same screen position and the solver saw a
+          zero-size room. Shown only for LiDAR/video modes, where aiming
+          genuinely is the interaction. */}
+      {(phase === "camera" || phase === "calibrate") &&
+        scanMode !== "corners" && <Reticle />}
+
+      {/* Corner-tap: a small fixed hint instead of a reticle. */}
+      {(phase === "camera" || phase === "calibrate") &&
+        scanMode === "corners" && (
+          <div
+            className="pointer-events-none absolute left-1/2 top-6 z-10 -translate-x-1/2 rounded-full px-3 py-1.5 text-center text-[11px] font-semibold"
+            style={{ backgroundColor: `${HUD}dd`, color: GOLD }}
+            aria-hidden
+          >
+            Tap the target on screen — don&apos;t aim, don&apos;t move the phone
+          </div>
+        )}
 
       {/* Top bar */}
       <div
@@ -863,10 +1286,302 @@ export default function RoomScanOverlay({
           </div>
         )}
 
+        {/* ── Setup gate ──────────────────────────────────────────────
+            Motion sensor and calibration decide whether any measurement
+            is meaningful, so they get the screen to themselves before
+            anything else appears. Once both are done (or explicitly
+            skipped) this disappears for good and the viewfinder is
+            left as clear as possible. */}
+        {phase === "camera" &&
+          scanMode === "corners" &&
+          !setupDismissed &&
+          (tiltPermission !== "granted" || calibratedFocalPx === null) && (
+            <div className="pointer-events-auto absolute inset-0 z-[20] flex flex-col items-center justify-center bg-black/80 px-6">
+              <div
+                className="w-full max-w-sm rounded-2xl p-5"
+                style={{ backgroundColor: `${HUD}f5` }}
+              >
+                <p
+                  style={{ color: GOLD }}
+                  className="mb-1 text-sm font-bold uppercase tracking-widest"
+                >
+                  Set up first
+                </p>
+                <p className="mb-4 text-xs text-white/70">
+                  Two quick steps. Without them the measurements will be
+                  badly wrong.
+                </p>
+
+                {/* Step 1 — motion sensor */}
+                <div className="mb-3 rounded-lg bg-white/5 p-3">
+                  <p className="mb-2 text-xs font-semibold text-white">
+                    1. Motion sensor{" "}
+                    {tiltPermission === "granted" && (
+                      <span style={{ color: "#9ce29c" }}>✓</span>
+                    )}
+                  </p>
+                  <p className="mb-2 text-[11px] text-white/60">
+                    Lets the app read the angle your phone is pointing at.
+                  </p>
+                  {tiltPermission !== "granted" && (
+                    <button
+                      type="button"
+                      onClick={() => void requestTiltPermission()}
+                      className="w-full rounded-full px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-[#1c1c1a]"
+                      style={{ backgroundColor: GOLD }}
+                    >
+                      Enable motion sensor
+                    </button>
+                  )}
+                </div>
+
+                {/* Step 2 — calibration */}
+                <div className="mb-4 rounded-lg bg-white/5 p-3">
+                  <p className="mb-2 text-xs font-semibold text-white">
+                    2. Calibrate{" "}
+                    {calibratedFocalPx !== null && (
+                      <span style={{ color: "#9ce29c" }}>✓</span>
+                    )}
+                  </p>
+                  <p className="mb-2 text-[11px] text-white/60">
+                    Put a long object <strong className="text-white">on the
+                    floor</strong> — a 1 m tape, floor tile edge or A4 sheet —
+                    and tap each end. Teaches the app your camera lens.
+                  </p>
+                  {calibratedFocalPx === null && (
+                    <button
+                      type="button"
+                      disabled={tiltPermission !== "granted"}
+                      onClick={() => {
+                        calibTapsRef.current = [];
+                        setCalibTapCount(0);
+                        setCalibError(null);
+                        setMarkers([]);
+                        setCornerCount(0);
+                        pixelTapsRef.current = [];
+                        tiltPerCornerRef.current = [];
+                        setPhase("calibrate");
+                      }}
+                      className="w-full rounded-full px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-[#1c1c1a] disabled:opacity-40"
+                      style={{ backgroundColor: GOLD }}
+                    >
+                      Start calibration
+                    </button>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSetupDismissed(true)}
+                  className="w-full text-[11px] font-bold uppercase tracking-widest text-white/50 underline"
+                >
+                  Skip — measure anyway (less accurate)
+                </button>
+              </div>
+            </div>
+          )}
+
+        {/* ── Method gate ─────────────────────────────────────────────
+            Second full screen: what you're measuring and which plane.
+            Choosing here rather than on the live camera means the
+            viewfinder is unobstructed once tapping begins. */}
+        {phase === "camera" &&
+          scanMode === "corners" &&
+          (setupDismissed ||
+            (tiltPermission === "granted" && calibratedFocalPx !== null)) &&
+          !methodChosen && (
+            <div className="pointer-events-auto absolute inset-0 z-[20] flex flex-col items-center justify-center bg-black/80 px-6">
+              <div
+                className="w-full max-w-sm rounded-2xl p-5"
+                style={{ backgroundColor: `${HUD}f5` }}
+              >
+                <p
+                  style={{ color: GOLD }}
+                  className="mb-4 text-sm font-bold uppercase tracking-widest"
+                >
+                  How do you want to measure?
+                </p>
+
+                <p className="mb-2 text-[11px] uppercase tracking-widest text-white/45">
+                  Method
+                </p>
+                <div className="mb-4 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMeasureMode("span")}
+                    className="rounded-lg p-3 text-left"
+                    style={
+                      measureMode === "span"
+                        ? { backgroundColor: GOLD, color: "#1c1c1a" }
+                        : { border: "1px solid rgba(255,255,255,0.2)" }
+                    }
+                  >
+                    <span className="block text-xs font-bold uppercase tracking-widest">
+                      Wall to wall · easiest
+                    </span>
+                    <span
+                      className={`mt-0.5 block text-[11px] ${measureMode === "span" ? "text-[#1c1c1a]/70" : "text-white/60"}`}
+                    >
+                      Back against one wall, one tap at the base of the wall
+                      opposite. Nothing to fit in frame.
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMeasureMode("wall")}
+                    className="rounded-lg p-3 text-left"
+                    style={
+                      measureMode === "wall"
+                        ? { backgroundColor: GOLD, color: "#1c1c1a" }
+                        : { border: "1px solid rgba(255,255,255,0.2)" }
+                    }
+                  >
+                    <span className="block text-xs font-bold uppercase tracking-widest">
+                      One wall at a time
+                    </span>
+                    <span
+                      className={`mt-0.5 block text-[11px] ${measureMode === "wall" ? "text-[#1c1c1a]/70" : "text-white/60"}`}
+                    >
+                      Two corners per wall. Needs both ends in frame.
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMeasureMode("room")}
+                    className="rounded-lg p-3 text-left"
+                    style={
+                      measureMode === "room"
+                        ? { backgroundColor: GOLD, color: "#1c1c1a" }
+                        : { border: "1px solid rgba(255,255,255,0.2)" }
+                    }
+                  >
+                    <span className="block text-xs font-bold uppercase tracking-widest">
+                      Whole room
+                    </span>
+                    <span
+                      className={`mt-0.5 block text-[11px] ${measureMode === "room" ? "text-[#1c1c1a]/70" : "text-white/60"}`}
+                    >
+                      All four corners in one shot. Needs a lot of space.
+                    </span>
+                  </button>
+                </div>
+
+                <p className="mb-2 text-[11px] uppercase tracking-widest text-white/45">
+                  Tap which corners?
+                </p>
+                <div className="mb-4 flex gap-2">
+                  {(["floor", "ceiling"] as const).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setTapPlane(p)}
+                      className="flex-1 rounded-lg px-3 py-2 text-[11px] font-bold uppercase tracking-widest"
+                      style={
+                        tapPlane === p
+                          ? { backgroundColor: GOLD, color: "#1c1c1a" }
+                          : {
+                              border: "1px solid rgba(255,255,255,0.2)",
+                              color: "rgba(255,255,255,0.8)",
+                            }
+                      }
+                    >
+                      {p === "floor" ? "Floor" : "Ceiling"}
+                    </button>
+                  ))}
+                </div>
+                {tapPlane === "ceiling" && (
+                  <label className="mb-4 flex items-center gap-2 text-[11px] text-white/70">
+                    <span className="uppercase tracking-widest text-white/45">
+                      Ceiling height
+                    </span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={1.8}
+                      max={6}
+                      step={0.01}
+                      value={ceilingHeightM}
+                      onChange={(e) => setCeilingHeightM(e.target.value)}
+                      className="w-20 rounded bg-white/10 px-2 py-1 text-right font-mono text-white outline-none"
+                    />
+                    <span className="text-white/40">m</span>
+                  </label>
+                )}
+
+                {/* Lens picker. An ultra-wide lens is the difference between
+                    a wall fitting in frame and not. */}
+                {videoDevices.length > 1 && (
+                  <>
+                    <p className="mb-2 text-[11px] uppercase tracking-widest text-white/45">
+                      Camera lens
+                    </p>
+                    <p className="mb-2 text-[11px] text-white/60">
+                      Can&apos;t fit the wall in? Pick an ultra-wide lens — it
+                      sees roughly twice as much.
+                    </p>
+                    <div className="mb-4 flex flex-col gap-1.5">
+                      {videoDevices.map((d, i) => (
+                        <button
+                          key={d.deviceId || i}
+                          type="button"
+                          onClick={() => {
+                            if (d.deviceId === activeDeviceId) return;
+                            // Different lens = different focal length, so the
+                            // stored calibration no longer applies.
+                            setCalibratedFocalPx(null);
+                            try {
+                              window.localStorage.removeItem(calibStorageKey);
+                            } catch {
+                              /* noop */
+                            }
+                            setActiveDeviceId(d.deviceId);
+                            setSetupDismissed(false);
+                            void startCamera();
+                          }}
+                          className="rounded-lg px-3 py-2 text-left text-[11px] font-semibold"
+                          style={
+                            d.deviceId === activeDeviceId
+                              ? { backgroundColor: GOLD, color: "#1c1c1a" }
+                              : {
+                                  border: "1px solid rgba(255,255,255,0.2)",
+                                  color: "rgba(255,255,255,0.8)",
+                                }
+                          }
+                        >
+                          {d.label || `Camera ${i + 1}`}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMethodChosen(true);
+                    setHudCollapsed(true);
+                  }}
+                  className="w-full rounded-full px-4 py-3 text-[11px] font-bold uppercase tracking-widest text-[#1c1c1a]"
+                  style={{ backgroundColor: GOLD }}
+                >
+                  Start measuring
+                </button>
+              </div>
+            </div>
+          )}
+
         {(phase === "camera" || phase === "calibrate") && (
           <>
+            {/* Mode picker is irrelevant mid-calibration and was eating a
+                third of the viewfinder — hide it until calibration ends. */}
             <div
-              className="pointer-events-auto mx-4 mb-3 flex flex-wrap gap-2 rounded-xl p-3"
+              // Corner mark is already the chosen mode by this point, so the
+              // mode chips are pure clutter over the viewfinder.
+              className={`pointer-events-auto mx-4 mb-3 flex-wrap gap-2 rounded-xl p-3 ${
+                phase === "calibrate" || scanMode === "corners"
+                  ? "hidden"
+                  : "flex"
+              }`}
               style={{ backgroundColor: `${HUD}e8` }}
             >
               <ModeChip
@@ -876,6 +1591,7 @@ export default function RoomScanOverlay({
                   setCornerCount(0);
                   setMarkers([]);
                   pixelTapsRef.current = [];
+                  tiltPerCornerRef.current = [];
                 }}
                 label="LiDAR / AR"
               />
@@ -886,6 +1602,7 @@ export default function RoomScanOverlay({
                   setCornerCount(0);
                   setMarkers([]);
                   pixelTapsRef.current = [];
+                  tiltPerCornerRef.current = [];
                   if (tiltPermission === "unknown") {
                     void requestTiltPermission();
                   }
@@ -944,6 +1661,7 @@ export default function RoomScanOverlay({
                         setCornerCount(0);
                         setMarkers([]);
                         pixelTapsRef.current = [];
+                  tiltPerCornerRef.current = [];
                         if (tiltPermission === "unknown") {
                           void requestTiltPermission();
                         }
@@ -960,19 +1678,56 @@ export default function RoomScanOverlay({
               </div>
             )}
 
-            {scanMode === "corners" && (
+            {/* Hidden during calibration: both panels rendered together
+                covered the viewfinder, so you couldn't see the reference
+                object you were meant to be tapping the ends of. */}
+            {scanMode === "corners" && phase !== "calibrate" && (
               <div
                 className={`pointer-events-auto mx-4 mb-3 rounded-xl text-xs text-white/75 ${hudCollapsed ? "p-2" : "p-4"}`}
                 style={{ backgroundColor: `${HUD}ee` }}
               >
-                <div className="flex items-start justify-between gap-2">
+                <div
+                  className={`flex items-start justify-between gap-2 ${
+                    cornerCount === 0 &&
+                    (tiltPermission !== "granted" || calibratedFocalPx === null)
+                      ? "opacity-50"
+                      : ""
+                  }`}
+                >
                   <p style={{ color: GOLD }} className="mb-1 flex-1 font-semibold">
-                    {cornerCount === 0 &&
-                      `Stand in the middle of the room. Tap corner 1 (any floor corner), ${TAPS_PER_CORNER} times.`}
-                    {cornerCount === 1 && `Now corner 2 — clockwise from corner 1.`}
-                    {cornerCount === 2 && `Corner 3 — diagonally opposite corner 1.`}
-                    {cornerCount === 3 && `Last one — corner 4 closes the loop.`}
-                    {cornerCount >= 4 && "Measuring…"}
+                    {/* The solver applies one camera pose to all four taps,
+                        so every corner must be visible in a single view and
+                        the phone must not move between taps. Standing in the
+                        middle and turning breaks that assumption and
+                        collapses the room to a sliver. */}
+                    {/* Terse on-camera prompts only. The full explanation
+                        lives on the gate screens, so nothing here competes
+                        with the viewfinder. */}
+                    {measureMode === "span" ? (
+                      <>
+                        {cornerCount === 0 &&
+                          (wallLengths.length === 0
+                            ? tapPlane === "ceiling"
+                              ? "Back against a wall — tap where the far wall meets the CEILING ×3"
+                              : "Back against a wall — tap where the far wall meets the FLOOR ×3"
+                            : "Now turn 90°, back to the next wall — tap opposite ×3")}
+                        {cornerCount >= 1 && "Measuring…"}
+                      </>
+                    ) : measureMode === "wall" ? (
+                      <>
+                        {cornerCount === 0 && "Tap the LEFT end of the wall ×3"}
+                        {cornerCount === 1 && "Now the RIGHT end ×3"}
+                        {cornerCount >= 2 && "Measuring…"}
+                      </>
+                    ) : (
+                      <>
+                        {cornerCount === 0 && "Tap corner 1 ×3"}
+                        {cornerCount === 1 && "Corner 2 — clockwise ×3"}
+                        {cornerCount === 2 && "Corner 3 ×3"}
+                        {cornerCount === 3 && "Corner 4 ×3"}
+                        {cornerCount >= 4 && "Measuring…"}
+                      </>
+                    )}
                   </p>
                   <button
                     type="button"
@@ -986,12 +1741,80 @@ export default function RoomScanOverlay({
                 </div>
                 {!hudCollapsed && (
                   <p className="mb-1 text-white/55">
-                    Tap the same spot 3 times — the median absorbs tremor. Stay still between taps.
+                    Same spot 3 times — the median absorbs tremor. Stay still.
                   </p>
                 )}
+
+                {/* Method and plane are chosen on the gate before the
+                    camera appears, so nothing but progress and the live
+                    readouts belongs here. */}
+
+                {/* Which plane is live, always visible. Getting this wrong
+                    produces a confusing "aim at the floor" error while
+                    you're pointing at the ceiling, so it shouldn't be
+                    buried on a previous screen. */}
+                {cornerCount === 0 && (
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="text-[10px] uppercase tracking-widest text-white/45">
+                      Tapping
+                    </span>
+                    {(["floor", "ceiling"] as const).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => {
+                          setTapPlane(p);
+                          setMarkers([]);
+                          setCornerCount(0);
+                          pixelTapsRef.current = [];
+                          tiltPerCornerRef.current = [];
+                          subTapsRef.current = [];
+                          setSubTapCount(0);
+                        }}
+                        className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest"
+                        style={
+                          tapPlane === p
+                            ? { backgroundColor: GOLD, color: "#1c1c1a" }
+                            : {
+                                border: "1px solid rgba(255,255,255,0.25)",
+                                color: "rgba(255,255,255,0.7)",
+                              }
+                        }
+                      >
+                        {p}
+                      </button>
+                    ))}
+                    {tapPlane === "ceiling" && (
+                      <span className="text-[10px] text-white/50">
+                        ceiling {ceilingHeightM} m
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Progress through the two spans / walls. */}
+                {(measureMode === "wall" || measureMode === "span") &&
+                  wallLengths.length > 0 && (
+                    <p className="mb-2 rounded-md bg-white/10 px-2 py-1.5 text-[11px] text-white/85">
+                      First measurement ={" "}
+                      <strong className="text-white">
+                        {wallLengths[0]?.toFixed(2)} m
+                      </strong>
+                      .{" "}
+                      {measureMode === "span"
+                        ? "Now stand with your back to an adjacent wall and tap the one opposite."
+                        : "Now turn to an adjacent wall and tap its two corners."}
+                    </p>
+                  )}
+
                 <div className="mb-3 flex items-center gap-2">
                   <div className="flex gap-1">
-                    {[0, 1, 2, 3].map((i) => (
+                    {(measureMode === "span"
+                      ? [0]
+                      : measureMode === "wall"
+                        ? [0, 1]
+                        : [0, 1, 2, 3]
+                    ).map((i) => (
                       <span
                         key={i}
                         className="h-2 w-6 rounded-full"
@@ -1003,7 +1826,11 @@ export default function RoomScanOverlay({
                     ))}
                   </div>
                   <span className="text-white/50">
-                    Corner {Math.min(cornerCount + 1, 4)} / 4 · Tap {subTapCount} / {TAPS_PER_CORNER}
+                    {measureMode === "span"
+                      ? `Span ${wallLengths.length + 1} / 2 · Tap ${subTapCount} / ${TAPS_PER_CORNER}`
+                      : measureMode === "wall"
+                        ? `Wall ${wallLengths.length + 1} / 2 · End ${Math.min(cornerCount + 1, 2)} / 2 · Tap ${subTapCount} / ${TAPS_PER_CORNER}`
+                        : `Corner ${Math.min(cornerCount + 1, 4)} / 4 · Tap ${subTapCount} / ${TAPS_PER_CORNER}`}
                   </span>
                 </div>
 
@@ -1094,6 +1921,7 @@ export default function RoomScanOverlay({
                       with a focal length solved from a known reference
                       object on the floor. */}
                   {calibratedFocalPx === null ? (
+                    <>
                     <button
                       type="button"
                       onClick={() => {
@@ -1103,12 +1931,18 @@ export default function RoomScanOverlay({
                         setMarkers([]);
                         setCornerCount(0);
                         pixelTapsRef.current = [];
+                  tiltPerCornerRef.current = [];
                         setPhase("calibrate");
                       }}
-                      className="rounded-full border border-white/20 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white/80 hover:bg-white/10"
+                      // Filled gold rather than a faint outline chip: an
+                      // uncalibrated scan relies on a guessed field of view,
+                      // so this is the highest-value action on the screen —
+                      // it shouldn't look like a minor option.
+                      className="rounded-full border border-white/20 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white/80"
                     >
-                      Calibrate (recommended)
+                      Calibrate
                     </button>
+                    </>
                   ) : (
                     <button
                       type="button"
@@ -1125,6 +1959,7 @@ export default function RoomScanOverlay({
                         setMarkers([]);
                         setCornerCount(0);
                         pixelTapsRef.current = [];
+                  tiltPerCornerRef.current = [];
                         setPhase("calibrate");
                       }}
                       className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest hover:bg-white/15"
@@ -1144,41 +1979,45 @@ export default function RoomScanOverlay({
                 className="pointer-events-auto mx-4 mb-3 rounded-xl p-4 text-xs text-white/75"
                 style={{ backgroundColor: `${HUD}ee` }}
               >
-                <p style={{ color: GOLD }} className="mb-1 font-semibold">
-                  Scale-bar calibration
-                </p>
-                <p className="mb-3 text-white/65">
-                  Lay a known-length object flat on the floor (door frame, tape measure, A4 sheet). Tap each end. We&apos;ll back-solve the camera focal length for ±3 cm accuracy.
-                </p>
-                <div className="mb-3 flex items-center gap-2">
-                  <div className="flex gap-1">
-                    {[0, 1].map((i) => (
-                      <span
-                        key={i}
-                        className="h-2 w-8 rounded-full"
-                        style={{
-                          backgroundColor:
-                            i < calibTapCount ? GOLD : "rgba(255,255,255,0.15)",
-                        }}
+                {/* Verbose setup copy only before the first tap. From the
+                    first tap onward this collapses to a single line so the
+                    viewfinder — and the object being tapped — stays visible.
+                    Taps landing on top of each other was traced to the
+                    panels covering the camera. */}
+                {calibTapCount === 0 ? (
+                  <>
+                    <p style={{ color: GOLD }} className="mb-1 font-semibold">
+                      Scale-bar calibration
+                    </p>
+                    <p className="mb-3 text-white/65">
+                      Put a known-length object{" "}
+                      <strong className="text-white">flat on the floor</strong>{" "}
+                      — a tape measure, book or sheet of A4. It must be on the
+                      floor, not on a table or shelf, or the maths can&apos;t
+                      solve. Then tap each end.
+                    </p>
+                    <label className="mb-3 flex items-center gap-2 text-[11px] text-white/70">
+                      <span className="uppercase tracking-widest text-white/45">Reference length</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min={5}
+                        max={500}
+                        step={1}
+                        value={calibLengthCm}
+                        onChange={(e) => setCalibLengthCm(e.target.value)}
+                        className="w-20 rounded bg-white/10 px-2 py-1 text-right font-mono text-white outline-none focus:bg-white/15"
                       />
-                    ))}
-                  </div>
-                  <span className="text-white/50">{calibTapCount} / 2 taps</span>
-                </div>
-                <label className="mb-3 flex items-center gap-2 text-[11px] text-white/70">
-                  <span className="uppercase tracking-widest text-white/45">Reference length</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    min={5}
-                    max={500}
-                    step={1}
-                    value={calibLengthCm}
-                    onChange={(e) => setCalibLengthCm(e.target.value)}
-                    className="w-20 rounded bg-white/10 px-2 py-1 text-right font-mono text-white outline-none focus:bg-white/15"
-                  />
-                  <span className="text-white/40">cm</span>
-                </label>
+                      <span className="text-white/40">cm</span>
+                    </label>
+                  </>
+                ) : (
+                  <p style={{ color: GOLD }} className="mb-2 font-semibold">
+                    {calibTapCount === 1
+                      ? `Tap the far end · ${calibLengthCm} cm`
+                      : `Both ends marked · ${calibLengthCm} cm`}
+                  </p>
+                )}
                 {calibError && (
                   <p className="mb-2 text-[11px] text-red-200">{calibError}</p>
                 )}
@@ -1325,6 +2164,7 @@ export default function RoomScanOverlay({
                   setCornerCount(0);
                   setMarkers([]);
                   pixelTapsRef.current = [];
+                  tiltPerCornerRef.current = [];
                   void startCamera();
                 }}
                 className="rounded-lg border border-white/20 px-6 py-3 text-xs font-bold uppercase tracking-widest text-white/80 hover:bg-white/5"

@@ -223,9 +223,11 @@ export default function ReviewCarousel() {
   }, [maxPos]);
 
   useEffect(() => {
+    // 2.2s per slide. The previous 4s felt static on a phone, where only
+    // one card is visible at a time and there's nothing else moving.
     const id = window.setInterval(() => {
       setPos((p) => (p >= maxPos ? 0 : p + 1));
-    }, 4000);
+    }, 2200);
     return () => window.clearInterval(id);
   }, [maxPos]);
 
