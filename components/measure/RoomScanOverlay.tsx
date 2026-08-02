@@ -275,7 +275,10 @@ export default function RoomScanOverlay({
    * than silently applying the wrong one.
    */
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  /** Lens the user explicitly picked. Null = let the browser decide. */
   const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null);
+  /** Lens the browser actually opened — used only to show which is live. */
+  const [detectedDeviceId, setDetectedDeviceId] = useState<string | null>(null);
 
   /** Median of an array of numbers — small helper so we can median
    *  x and y independently to robustly absorb a single mis-tap. */
@@ -331,10 +334,12 @@ export default function RoomScanOverlay({
         const devices = await navigator.mediaDevices.enumerateDevices();
         const cams = devices.filter((d) => d.kind === "videoinput");
         setVideoDevices(cams);
-        if (!activeDeviceId) {
-          const current = stream.getVideoTracks()[0]?.getSettings?.().deviceId;
-          if (typeof current === "string") setActiveDeviceId(current);
-        }
+        // Record which camera the browser actually chose, for highlighting
+        // only. Deliberately NOT written to activeDeviceId: that feeds
+        // startCamera's dependencies, so setting it here would restart the
+        // stream immediately after opening it.
+        const current = stream.getVideoTracks()[0]?.getSettings?.().deviceId;
+        if (typeof current === "string") setDetectedDeviceId(current);
       } catch {
         /* enumeration unsupported — the lens picker just won't appear */
       }
@@ -359,7 +364,10 @@ export default function RoomScanOverlay({
       setErrorMsg("Camera access was denied or is unavailable.");
       setPhase("error");
     }
-  }, [calibratedFocalPx]);
+    // activeDeviceId is read above when building the constraints, so it
+    // must be a dependency — otherwise picking a different lens rebuilds
+    // nothing and silently reopens the same camera.
+  }, [calibratedFocalPx, activeDeviceId]);
 
   useEffect(() => {
     if (!open) {
@@ -371,6 +379,10 @@ export default function RoomScanOverlay({
     return () => {
       stopStream();
     };
+    // startCamera changes identity when activeDeviceId changes, so
+    // switching lens restarts the stream through this effect. The lens
+    // button therefore only sets state — calling startCamera() there too
+    // would open the camera twice.
   }, [open, startCamera, stopStream]);
 
   // ── Device-orientation (tilt) capture ──────────────────────────────
@@ -1525,7 +1537,8 @@ export default function RoomScanOverlay({
                           key={d.deviceId || i}
                           type="button"
                           onClick={() => {
-                            if (d.deviceId === activeDeviceId) return;
+                            if (d.deviceId === (activeDeviceId ?? detectedDeviceId))
+                              return;
                             // Different lens = different focal length, so the
                             // stored calibration no longer applies.
                             setCalibratedFocalPx(null);
@@ -1534,13 +1547,15 @@ export default function RoomScanOverlay({
                             } catch {
                               /* noop */
                             }
+                            // The camera restarts via the open/startCamera
+                            // effect once this lands — calling startCamera
+                            // here as well would open the stream twice.
                             setActiveDeviceId(d.deviceId);
                             setSetupDismissed(false);
-                            void startCamera();
                           }}
                           className="rounded-lg px-3 py-2 text-left text-[11px] font-semibold"
                           style={
-                            d.deviceId === activeDeviceId
+                            d.deviceId === (activeDeviceId ?? detectedDeviceId)
                               ? { backgroundColor: GOLD, color: "#1c1c1a" }
                               : {
                                   border: "1px solid rgba(255,255,255,0.2)",
@@ -1934,10 +1949,10 @@ export default function RoomScanOverlay({
                   tiltPerCornerRef.current = [];
                         setPhase("calibrate");
                       }}
-                      // Filled gold rather than a faint outline chip: an
-                      // uncalibrated scan relies on a guessed field of view,
-                      // so this is the highest-value action on the screen —
-                      // it shouldn't look like a minor option.
+                      // Quiet chip on purpose: calibration is now prompted
+                      // prominently on the setup gate before the camera
+                      // opens, so this is just the escape hatch for redoing
+                      // it mid-scan and shouldn't compete with the viewfinder.
                       className="rounded-full border border-white/20 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white/80"
                     >
                       Calibrate
