@@ -32,6 +32,10 @@ workflows:
     environment:
       groups:
         - app_store_connect
+        # Supplies NEXT_PUBLIC_MEASURE_SUBMIT_URL. Without it the built app
+        # tells customers "Submission endpoint is not configured" and the
+        # survey can't be sent — which is the whole point of the app.
+        - app_runtime
       xcode: latest
       cocoapods: default
       node: 22
@@ -83,6 +87,9 @@ workflows:
     # instance_type left at Codemagic default for the free tier.
     max_build_duration: 45
     environment:
+      groups:
+        # Supplies NEXT_PUBLIC_MEASURE_SUBMIT_URL — see the iOS workflow.
+        - app_runtime
       android_signing:
         - tmmeasure
       java: 21

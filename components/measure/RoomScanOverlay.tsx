@@ -957,6 +957,11 @@ export default function RoomScanOverlay({
       // Tier-2: drop the tap if the phone is moving — far better to
       // make the user re-try than to lock in a smeared corner.
       if (!isStable) return;
+      // Calibration only ever uses two taps. Bail out before drawing a
+      // marker once we have them, otherwise extra taps leave dots on
+      // screen that count for nothing — which reads as "re-tapping isn't
+      // working" when in fact the taps are simply being ignored.
+      if (phase === "calibrate" && calibTapsRef.current.length >= 2) return;
       const rect = e.currentTarget.getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
@@ -1502,22 +1507,39 @@ export default function RoomScanOverlay({
                   ))}
                 </div>
                 {tapPlane === "ceiling" && (
-                  <label className="mb-4 flex items-center gap-2 text-[11px] text-white/70">
-                    <span className="uppercase tracking-widest text-white/45">
-                      Ceiling height
-                    </span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      min={1.8}
-                      max={6}
-                      step={0.01}
-                      value={ceilingHeightM}
-                      onChange={(e) => setCeilingHeightM(e.target.value)}
-                      className="w-20 rounded bg-white/10 px-2 py-1 text-right font-mono text-white outline-none"
-                    />
-                    <span className="text-white/40">m</span>
-                  </label>
+                  <div className="mb-4">
+                    <label className="flex items-center gap-2 text-[11px] text-white/70">
+                      <span className="uppercase tracking-widest text-white/45">
+                        Ceiling height
+                      </span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min={1.8}
+                        max={6}
+                        step={0.01}
+                        value={ceilingHeightM}
+                        onChange={(e) => setCeilingHeightM(e.target.value)}
+                        className="w-20 rounded bg-white/10 px-2 py-1 text-right font-mono text-white outline-none"
+                      />
+                      <span className="text-white/40">m</span>
+                    </label>
+                    {/* In ceiling mode this number IS the scale — leaving it
+                        at the default silently multiplies every measurement
+                        by the wrong factor. A 2.4 default in a 3.5 m room
+                        makes results roughly half what they should be. */}
+                    <p
+                      className="mt-1.5 rounded-md px-2 py-1.5 text-[11px]"
+                      style={{
+                        backgroundColor: "rgba(184,150,80,0.16)",
+                        color: GOLD,
+                      }}
+                    >
+                      Measure this properly — don&apos;t guess. In ceiling
+                      mode it sets the scale, so if it&apos;s wrong every
+                      measurement is wrong by the same proportion.
+                    </p>
+                  </div>
                 )}
 
                 {/* Lens picker. An ultra-wide lens is the difference between
@@ -2005,11 +2027,18 @@ export default function RoomScanOverlay({
                       Scale-bar calibration
                     </p>
                     <p className="mb-3 text-white/65">
-                      Put a known-length object{" "}
-                      <strong className="text-white">flat on the floor</strong>{" "}
-                      — a tape measure, book or sheet of A4. It must be on the
-                      floor, not on a table or shelf, or the maths can&apos;t
-                      solve. Then tap each end.
+                      Lay a{" "}
+                      <strong className="text-white">tape measure or ruler flat on the floor</strong>
+                      , turned{" "}
+                      <strong className="text-white">left-to-right across your view</strong>{" "}
+                      — not pointing away from you. Then tap each end, so the
+                      two dots sit side by side on screen.
+                    </p>
+                    <p className="mb-3 text-[11px] text-white/45">
+                      Both taps must touch the floor. The side of a bin or box
+                      won&apos;t work — those points sit above it. And an
+                      object pointing away from you gives the maths almost
+                      nothing to work with.
                     </p>
                     <label className="mb-3 flex items-center gap-2 text-[11px] text-white/70">
                       <span className="uppercase tracking-widest text-white/45">Reference length</span>

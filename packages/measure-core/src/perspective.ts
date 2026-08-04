@@ -408,12 +408,12 @@ export function calibrateFocalLengthPx(
   // monotonicity, then bisect.
   if (Math.sign(lowProbe - knownDistanceM) === Math.sign(highProbe - knownDistanceM)) {
     return {
-      // By far the most common cause is a reference object that isn't on
-      // the floor — the solver projects taps onto the floor plane, so an
-      // object on a table or shelf has no valid solution at any focal
-      // length. Lead with that rather than blaming tap precision.
+      // Nearly always caused by tapping points that aren't physically on
+      // the floor plane — the side of a bin, the top of a box, an object
+      // on furniture. Those have no solution at any focal length. Say so
+      // concretely; "on the floor" alone gets read as "in the room".
       error:
-        "Calibration could not converge. Check the reference object is flat ON THE FLOOR (not on furniture), then re-tap both ends.",
+        "Calibration could not converge. Both taps must be points TOUCHING the floor — the two ends of a tape measure or ruler lying flat. Tapping the sides of an object (a bin, a box) won't work, because those points sit above the floor.",
     };
   }
   // Decide direction of bisection.

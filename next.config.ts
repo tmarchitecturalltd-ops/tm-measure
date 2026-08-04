@@ -33,6 +33,11 @@ const nextConfig: NextConfig = {
               // Blocking it left the hero and carousel as empty boxes, which
               // also collapsed the surrounding layout.
               "img-src 'self' data: blob: https://images.pexels.com https://images.unsplash.com",
+              // Voice memos are held as blob: URLs from MediaRecorder. Without
+              // an explicit media-src these fall back to default-src 'self',
+              // so a memo records successfully and then refuses to play —
+              // the <audio> element just shows "Error".
+              "media-src 'self' blob: data:",
               // The dev server needs its HMR socket and blob workers. Safari
               // enforces CSP far more strictly than Chrome and will refuse
               // the whole dev runtime — leaving the page as dead server-side

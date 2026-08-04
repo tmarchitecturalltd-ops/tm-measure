@@ -661,6 +661,25 @@ export default function MeasureIntakeForm() {
     [],
   );
 
+  /**
+   * Is this picked file an image we should keep?
+   *
+   * iOS frequently hands over photos — HEIC ones especially — with an
+   * EMPTY `type`. The obvious `type.startsWith("image/")` test then
+   * rejects them silently: the picker opens, you choose a photo, and
+   * nothing appears, with no error to explain it.
+   *
+   * So: trust an explicit image/* type, otherwise fall back to the file
+   * extension, and if there's neither, accept it rather than silently
+   * dropping the customer's photo.
+   */
+  const isImageFile = (file: File): boolean => {
+    if (file.type) return file.type.startsWith("image/");
+    const name = (file.name || "").toLowerCase();
+    if (!name.includes(".")) return true;
+    return /\.(jpe?g|png|heic|heif|webp|gif|tiff?|bmp|avif)$/.test(name);
+  };
+
   const attachPhotos = useCallback(
     (roomId: string, files: FileList | null) => {
       if (!files?.length) return;
@@ -670,7 +689,7 @@ export default function MeasureIntakeForm() {
           const next: RoomPhoto[] = [...r.photos];
           for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            if (!file.type.startsWith("image/")) continue;
+            if (!isImageFile(file)) continue;
             next.push({
               id: newId(),
               uri: URL.createObjectURL(file),
@@ -716,7 +735,7 @@ export default function MeasureIntakeForm() {
               const next: RoomPhoto[] = [...(w.photos ?? [])];
               for (let i = 0; i < files.length; i++) {
                 const file = files[i];
-                if (!file.type.startsWith("image/")) continue;
+                if (!isImageFile(file)) continue;
                 next.push({
                   id: newId(),
                   uri: URL.createObjectURL(file),
@@ -771,7 +790,7 @@ export default function MeasureIntakeForm() {
         const next = [...prev[side]];
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
-          if (!file.type.startsWith("image/")) continue;
+          if (!isImageFile(file)) continue;
           next.push({
             id: newId(),
             uri: URL.createObjectURL(file),
@@ -805,7 +824,7 @@ export default function MeasureIntakeForm() {
       const next = [...prev];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        if (!file.type.startsWith("image/")) continue;
+        if (!isImageFile(file)) continue;
         next.push({
           id: newId(),
           uri: URL.createObjectURL(file),
@@ -935,6 +954,9 @@ export default function MeasureIntakeForm() {
    * is a handful of fields rather than a wall of them.
    */
   const [openDetailRooms, setOpenDetailRooms] = useState<Record<string, boolean>>({});
+  /** Temporary: reports what the file picker actually returned. Remove
+   *  once the iOS photo-attach problem is resolved. */
+  const [photoDebug, setPhotoDebug] = useState<string | null>(null);
 
   /** Detail-panel fields that can fail validation. If one of them does
    *  we must force the panel open, otherwise the customer is told to fix
@@ -1468,7 +1490,19 @@ export default function MeasureIntakeForm() {
           // stuck if the camera dialog misbehaved. Without it, both
           // platforms show their standard Take Photo / Photo Library
           // chooser, which is what we want.
-          className="hidden"
+          // Visually hidden, but NOT display:none. iOS Safari will happily
+          // open the picker for a display:none input and then never fire
+          // its change event — the customer takes a photo and nothing
+          // arrives, with no error. Keeping it in the layout, just moved
+          // off-screen and unclickable, makes the event fire reliably.
+          style={{
+            position: "absolute",
+            width: 1,
+            height: 1,
+            opacity: 0,
+            pointerEvents: "none",
+            left: -9999,
+          }}
           onChange={(e) => {
             // Targets routed in priority order. Set by the button the
             // user just tapped — wall, room, exterior side, proposal.
@@ -2260,17 +2294,51 @@ export default function MeasureIntakeForm() {
                   <p className="mb-3 text-xs text-on-surface-variant">
                     Required: at least one reference photo per room so the architect can audit the measurements against what's actually there (radiators, columns, molding, etc.).
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPhotoTargetRoomId(room.id);
-                      fileInputRef.current?.click();
-                    }}
-                    className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/60 px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
-                  >
+                  {/* A real <input type="file"> the customer taps directly,
+                      rather than a button calling input.click(). iOS Safari
+                      is unreliable about firing change for a programmatic
+                      click — the picker opens, a photo is chosen, and
+                      nothing ever arrives. Tapping the input itself always
+                      works. Room photos are required, so this path has to
+                      be dependable. */}
+                  <label className="mb-4 inline-flex cursor-pointer items-center gap-2 rounded-full border border-primary/60 px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary">
                     <span className="material-symbols-outlined" style={{ fontSize: "16px" }} aria-hidden>add_a_photo</span>
                     Take photo or upload
-                  </button>
+                    <input
+                      type="file"
+                      accept="image/*,image/jpeg,image/png,image/heic,image/heif,image/webp"
+                      multiple
+                      className="sr-only"
+                      onChange={(e) => {
+                        // Temporary diagnostic. Three attempts at fixing
+                        // this have been guesses; this reports exactly what
+                        // the browser handed over so the next change is
+                        // based on evidence.
+                        const fl = e.target.files;
+                        const info = fl
+                          ? Array.from(fl)
+                              .map(
+                                (f) =>
+                                  `${f.name || "(no name)"} · type="${f.type || "(empty)"}" · ${f.size}b`,
+                              )
+                              .join(" | ")
+                          : "files was null";
+                        setPhotoDebug(
+                          `onChange fired · ${fl?.length ?? 0} file(s) · ${info}`,
+                        );
+                        attachPhotos(room.id, e.target.files);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  {/* Always rendered while debugging: if this line is
+                      missing on the phone, the new code hasn't loaded at
+                      all, which is a different problem from the picker
+                      failing. */}
+                  <p className="mb-3 break-all rounded-md bg-surface-container-high p-2 font-mono text-[10px] text-on-surface-variant">
+                    DEBUG v2 · {photoDebug ?? "no photo picked yet"} · room has{" "}
+                    {room.photos.length} photo(s)
+                  </p>
                   {issueFor(`room-${ri}-photos`) && (
                     <p data-error-anchor className="mb-3 text-xs text-error">
                       {issueFor(`room-${ri}-photos`)}
