@@ -680,28 +680,40 @@ export default function MeasureIntakeForm() {
     return /\.(jpe?g|png|heic|heif|webp|gif|tiff?|bmp|avif)$/.test(name);
   };
 
+  /**
+   * Turn a live FileList into plain RoomPhoto records, immediately.
+   *
+   * This must happen synchronously, before the caller resets the input's
+   * value. A FileList is bound to its <input>, so `input.value = ""`
+   * empties it — and because setState updaters run later, a deferred read
+   * of `files` saw zero entries. The picker worked, a valid photo was
+   * chosen, every check passed, and nothing was ever attached.
+   */
+  const filesToPhotos = (files: FileList | null): RoomPhoto[] => {
+    if (!files?.length) return [];
+    return Array.from(files)
+      .filter(isImageFile)
+      .map((file) => ({
+        id: newId(),
+        uri: URL.createObjectURL(file),
+        name: file.name,
+        mimeType: file.type,
+        sizeBytes: file.size,
+      }));
+  };
+
   const attachPhotos = useCallback(
     (roomId: string, files: FileList | null) => {
-      if (!files?.length) return;
+      const added = filesToPhotos(files);
+      if (!added.length) return;
       setRooms((prev) =>
-        prev.map((r) => {
-          if (r.id !== roomId) return r;
-          const next: RoomPhoto[] = [...r.photos];
-          for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            if (!isImageFile(file)) continue;
-            next.push({
-              id: newId(),
-              uri: URL.createObjectURL(file),
-              name: file.name,
-              mimeType: file.type,
-              sizeBytes: file.size,
-            });
-          }
-          return { ...r, photos: next };
-        }),
+        prev.map((r) =>
+          r.id === roomId ? { ...r, photos: [...r.photos, ...added] } : r,
+        ),
       );
     },
+    // filesToPhotos is redefined each render but is pure, so an empty
+    // dependency list is safe here.
     [],
   );
 
@@ -724,28 +736,19 @@ export default function MeasureIntakeForm() {
    */
   const attachPhotosToWall = useCallback(
     (roomId: string, wallId: string, files: FileList | null) => {
-      if (!files?.length) return;
+      // Read the FileList now, not inside the updater — see filesToPhotos.
+      const added = filesToPhotos(files);
+      if (!added.length) return;
       setRooms((prev) =>
         prev.map((r) => {
           if (r.id !== roomId) return r;
           return {
             ...r,
-            walls: r.walls.map((w) => {
-              if (w.id !== wallId) return w;
-              const next: RoomPhoto[] = [...(w.photos ?? [])];
-              for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                if (!isImageFile(file)) continue;
-                next.push({
-                  id: newId(),
-                  uri: URL.createObjectURL(file),
-                  name: file.name,
-                  mimeType: file.type,
-                  sizeBytes: file.size,
-                });
-              }
-              return { ...w, photos: next };
-            }),
+            walls: r.walls.map((w) =>
+              w.id === wallId
+                ? { ...w, photos: [...(w.photos ?? []), ...added] }
+                : w,
+            ),
           };
         }),
       );
@@ -785,22 +788,13 @@ export default function MeasureIntakeForm() {
 
   const attachExteriorPhotos = useCallback(
     (side: ExteriorSide, files: FileList | null) => {
-      if (!files?.length) return;
-      setExteriorPhotos((prev) => {
-        const next = [...prev[side]];
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
-          if (!isImageFile(file)) continue;
-          next.push({
-            id: newId(),
-            uri: URL.createObjectURL(file),
-            name: file.name,
-            mimeType: file.type,
-            sizeBytes: file.size,
-          });
-        }
-        return { ...prev, [side]: next };
-      });
+      // Read the FileList now, not inside the updater — see filesToPhotos.
+      const added = filesToPhotos(files);
+      if (!added.length) return;
+      setExteriorPhotos((prev) => ({
+        ...prev,
+        [side]: [...prev[side], ...added],
+      }));
     },
     [],
   );
@@ -819,22 +813,10 @@ export default function MeasureIntakeForm() {
   const [proposalSketchTarget, setProposalSketchTarget] = useState(false);
 
   const attachProposalSketches = useCallback((files: FileList | null) => {
-    if (!files?.length) return;
-    setProposalSketches((prev) => {
-      const next = [...prev];
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (!isImageFile(file)) continue;
-        next.push({
-          id: newId(),
-          uri: URL.createObjectURL(file),
-          name: file.name,
-          mimeType: file.type,
-          sizeBytes: file.size,
-        });
-      }
-      return next;
-    });
+    // Read the FileList now, not inside the updater — see filesToPhotos.
+    const added = filesToPhotos(files);
+    if (!added.length) return;
+    setProposalSketches((prev) => [...prev, ...added]);
   }, []);
 
   const removeProposalSketch = useCallback((photoId: string) => {
@@ -956,7 +938,6 @@ export default function MeasureIntakeForm() {
   const [openDetailRooms, setOpenDetailRooms] = useState<Record<string, boolean>>({});
   /** Temporary: reports what the file picker actually returned. Remove
    *  once the iOS photo-attach problem is resolved. */
-  const [photoDebug, setPhotoDebug] = useState<string | null>(null);
 
   /** Detail-panel fields that can fail validation. If one of them does
    *  we must force the panel open, otherwise the customer is told to fix
@@ -1418,7 +1399,11 @@ export default function MeasureIntakeForm() {
       } else if (/Server responded 4\d\d/i.test(raw)) {
         friendly = "The server refused this submission. Please email inquiries@tmdesignsltd.com if it keeps happening.";
       }
-      setSubmitError(friendly);
+      // Keep the technical detail visible as a short reference. The
+      // friendly text alone hid the HTTP status, which made a failed
+      // submission impossible to diagnose without a rebuild — and it
+      // gives the customer something concrete to quote in an email.
+      setSubmitError(friendly === raw ? friendly : `${friendly} (ref: ${raw})`);
     }
   };
 
@@ -2310,35 +2295,14 @@ export default function MeasureIntakeForm() {
                       multiple
                       className="sr-only"
                       onChange={(e) => {
-                        // Temporary diagnostic. Three attempts at fixing
-                        // this have been guesses; this reports exactly what
-                        // the browser handed over so the next change is
-                        // based on evidence.
-                        const fl = e.target.files;
-                        const info = fl
-                          ? Array.from(fl)
-                              .map(
-                                (f) =>
-                                  `${f.name || "(no name)"} · type="${f.type || "(empty)"}" · ${f.size}b`,
-                              )
-                              .join(" | ")
-                          : "files was null";
-                        setPhotoDebug(
-                          `onChange fired · ${fl?.length ?? 0} file(s) · ${info}`,
-                        );
+                        // attachPhotos copies the files out synchronously,
+                        // so clearing the value here is safe. Clearing is
+                        // what lets the same photo be picked twice in a row.
                         attachPhotos(room.id, e.target.files);
                         e.target.value = "";
                       }}
                     />
                   </label>
-                  {/* Always rendered while debugging: if this line is
-                      missing on the phone, the new code hasn't loaded at
-                      all, which is a different problem from the picker
-                      failing. */}
-                  <p className="mb-3 break-all rounded-md bg-surface-container-high p-2 font-mono text-[10px] text-on-surface-variant">
-                    DEBUG v2 · {photoDebug ?? "no photo picked yet"} · room has{" "}
-                    {room.photos.length} photo(s)
-                  </p>
                   {issueFor(`room-${ri}-photos`) && (
                     <p data-error-anchor className="mb-3 text-xs text-error">
                       {issueFor(`room-${ri}-photos`)}

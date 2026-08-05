@@ -10,7 +10,17 @@ const nextConfig: NextConfig = {
   // that origin the dev server rejects its requests for internal assets and
   // the hot-reload socket, so the page arrives as server-rendered HTML that
   // never hydrates — every button dead, no error shown.
-  allowedDevOrigins: ["*.trycloudflare.com"],
+  // Also covers reaching the dev server directly over Wi-Fi by the
+  // laptop's LAN address (npm run dev:lan), which avoids needing a
+  // tunnel installed at all.
+  allowedDevOrigins: [
+    "*.trycloudflare.com",
+    "192.168.*.*",
+    "10.*.*.*",
+    // Private range is 172.16–172.31, so match the whole 172 block
+    // rather than listing sixteen separate patterns.
+    "172.*.*.*",
+  ],
   transpilePackages: [
     "@tm-designs/measure-core",
     "@tm-designs/capacitor-roomplan",
