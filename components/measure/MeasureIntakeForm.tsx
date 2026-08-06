@@ -502,10 +502,18 @@ export default function MeasureIntakeForm() {
   }, []);
 
   /**
-   * Clone a room. Re-IDs the room, its walls, doors, windows, photos
-   * and voice memos so references stay disjoint. Photos and audio
-   * blobs are shared via URL — the blob backs both entries until the
-   * page reloads, which is fine for the submit-then-clear lifecycle.
+   * Clone a room's shape — walls, doors, windows — but not its media.
+   *
+   * Media is deliberately not carried over, for two reasons. The blob
+   * URL is a shared handle: copying it gave both rooms the same string,
+   * so deleting a photo from the copy revoked the blob and silently
+   * broke the original, which then failed to upload with no error.
+   *
+   * And even with that fixed, duplicating photos is wrong on the
+   * merits — a photograph of the master bedroom is not evidence for
+   * bedroom 2, and sending the same image against two rooms misleads
+   * whoever reads the survey. Duplicate copies measurements; the
+   * customer photographs each room itself.
    */
   const duplicateRoom = useCallback((id: string) => {
     setRooms((prev) => {
@@ -519,12 +527,12 @@ export default function MeasureIntakeForm() {
         walls: src.walls.map((w) => ({
           ...w,
           id: newId(),
-          photos: (w.photos ?? []).map((p) => ({ ...p, id: newId() })),
+          photos: [],
         })),
         doors: src.doors.map((d) => ({ ...d, id: newId() })),
         windows: src.windows.map((w) => ({ ...w, id: newId() })),
-        photos: src.photos.map((p) => ({ ...p, id: newId() })),
-        voiceMemos: (src.voiceMemos ?? []).map((m) => ({ ...m, id: newId() })),
+        photos: [],
+        voiceMemos: [],
         // Reset placement so the duplicate appears in the unplaced
         // palette instead of stacking on top of the original.
         placement: undefined,
@@ -1165,6 +1173,21 @@ export default function MeasureIntakeForm() {
       widthM: c.widthM,
       notes: c.notes,
     }));
+    // Exterior and proposal were collected by the form but never
+    // reached this payload, so both steps were discarded on submit —
+    // including the customer's description of the work they want,
+    // which is the single most useful field in the survey.
+    const serialExterior = (
+      Object.keys(exteriorPhotos) as ExteriorSide[]
+    ).reduce<Record<string, Array<Record<string, unknown>>>>((acc, side) => {
+      acc[side] = exteriorPhotos[side].map((p) => ({
+        id: p.id,
+        name: p.name,
+        sizeBytes: p.sizeBytes,
+        type: p.mimeType,
+      }));
+      return acc;
+    }, {});
     return {
       version: 1,
       submittedAt: new Date().toISOString(),
@@ -1175,8 +1198,21 @@ export default function MeasureIntakeForm() {
       unitPreference: unit,
       rooms: serialRooms,
       connections: serialConnections,
+      exterior: serialExterior,
+      proposal: {
+        description: proposalDescription.trim() || undefined,
+        sketches: proposalSketches.map((p) => ({
+          id: p.id,
+          name: p.name,
+          sizeBytes: p.sizeBytes,
+          type: p.mimeType,
+        })),
+      },
     };
   }, [
+    exteriorPhotos,
+    proposalDescription,
+    proposalSketches,
     rooms,
     connections,
     placements,
@@ -1300,8 +1336,37 @@ export default function MeasureIntakeForm() {
           if (dataUri) voiceUriByRoom[r.id][m.id] = dataUri;
         }
       }
+      // Exterior + proposal images, same treatment as room photos.
+      const exteriorDataUris: Record<string, string> = {};
+      for (const side of Object.keys(exteriorPhotos) as ExteriorSide[]) {
+        for (const p of exteriorPhotos[side]) {
+          const dataUri = await compressPhotoForUpload(p.uri);
+          if (dataUri) exteriorDataUris[p.id] = dataUri;
+        }
+      }
+      const sketchDataUris: Record<string, string> = {};
+      for (const p of proposalSketches) {
+        const dataUri = await compressPhotoForUpload(p.uri);
+        if (dataUri) sketchDataUris[p.id] = dataUri;
+      }
       const enrichedPayload = {
         ...payload,
+        exterior: Object.fromEntries(
+          Object.entries(payload.exterior).map(([side, photos]) => [
+            side,
+            photos.map((photo) => {
+              const dataUri = exteriorDataUris[photo.id as string];
+              return dataUri ? { ...photo, dataUri } : photo;
+            }),
+          ]),
+        ),
+        proposal: {
+          ...payload.proposal,
+          sketches: payload.proposal.sketches.map((photo) => {
+            const dataUri = sketchDataUris[photo.id];
+            return dataUri ? { ...photo, dataUri } : photo;
+          }),
+        },
         rooms: payload.rooms.map((r, ri) => {
           const sourceRoom = rooms[ri];
           if (!sourceRoom) return r;
