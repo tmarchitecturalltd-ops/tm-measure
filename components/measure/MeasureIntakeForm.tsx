@@ -205,6 +205,21 @@ export default function MeasureIntakeForm() {
     "idle" | "submitting" | "success" | "error"
   >("idle");
   const [submitError, setSubmitError] = useState<string | null>(null);
+  /**
+   * Media prepared / media total, while a submission is in flight.
+   *
+   * Every photo is decoded, resized and re-encoded on the main thread,
+   * one after another, before anything is sent. A seven-room survey
+   * with eleven images took about fifty seconds on a laptop — longer on
+   * a phone — during which the button said only "Sending…". Someone who
+   * has just spent twenty minutes measuring their house will read a
+   * silent button as a crash and close the app. The loops already know
+   * the counts, so show them.
+   */
+  const [submitProgress, setSubmitProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   /** Submission ID returned by the backend on a successful submit.
    *  Surfaced in the success card so the customer can paste it into
    *  /status if they want to check the architect's progress later. */
@@ -1356,6 +1371,31 @@ export default function MeasureIntakeForm() {
     }
     setSubmitStatus("submitting");
     setSubmitError(null);
+    // Count everything that has to be encoded before the request goes
+    // out, so the customer sees movement rather than a frozen button.
+    const totalMedia =
+      rooms.reduce(
+        (n, r) =>
+          n +
+          r.photos.length +
+          r.walls.reduce((m, w) => m + (w.photos?.length ?? 0), 0) +
+          (r.voiceMemos?.length ?? 0),
+        0,
+      ) +
+      Object.values(exteriorPhotos).reduce((n, p) => n + p.length, 0) +
+      proposalSketches.length;
+    let doneMedia = 0;
+    const tickMedia = async () => {
+      doneMedia += 1;
+      setSubmitProgress({ done: doneMedia, total: totalMedia });
+      // Yield so the browser can actually paint the new count. Encoding
+      // saturates the main thread, so without this the state updates but
+      // the customer still sees a static number. setTimeout rather than
+      // requestAnimationFrame: rAF doesn't fire in a backgrounded tab,
+      // which would stall the submission indefinitely.
+      await new Promise((r) => setTimeout(r, 0));
+    };
+    setSubmitProgress({ done: 0, total: totalMedia });
     try {
       // Walk each room's photos, compress + base64 each one, and merge
       // the dataUri back into the payload's photos array. Failures per
@@ -1388,17 +1428,20 @@ export default function MeasureIntakeForm() {
         for (const p of r.photos) {
           const dataUri = await compressPhotoForUpload(p.uri);
           if (dataUri) photoUriByRoom[r.id][p.id] = dataUri;
+          await tickMedia();
         }
         for (const w of r.walls) {
           wallPhotoUriByRoom[r.id][w.id] = {};
           for (const p of w.photos ?? []) {
             const dataUri = await compressPhotoForUpload(p.uri);
             if (dataUri) wallPhotoUriByRoom[r.id][w.id][p.id] = dataUri;
+            await tickMedia();
           }
         }
         for (const m of r.voiceMemos ?? []) {
           const dataUri = await audioToDataUri(m.uri);
           if (dataUri) voiceUriByRoom[r.id][m.id] = dataUri;
+          await tickMedia();
         }
       }
       // Exterior + proposal images, same treatment as room photos.
@@ -1407,12 +1450,14 @@ export default function MeasureIntakeForm() {
         for (const p of exteriorPhotos[side]) {
           const dataUri = await compressPhotoForUpload(p.uri);
           if (dataUri) exteriorDataUris[p.id] = dataUri;
+          await tickMedia();
         }
       }
       const sketchDataUris: Record<string, string> = {};
       for (const p of proposalSketches) {
         const dataUri = await compressPhotoForUpload(p.uri);
         if (dataUri) sketchDataUris[p.id] = dataUri;
+        await tickMedia();
       }
       const enrichedPayload = {
         ...payload,
@@ -1506,8 +1551,10 @@ export default function MeasureIntakeForm() {
       // architect's hands — next time the form opens it'll start fresh.
       clearDraft();
       setLastSubmissionId(data.submissionId ?? null);
+      setSubmitProgress(null);
       setSubmitStatus("success");
     } catch (err) {
+      setSubmitProgress(null);
       setSubmitStatus("error");
       // User-friendly mapping of common failure modes. Anything we
       // don't recognise falls through to the underlying message.
@@ -3531,7 +3578,11 @@ export default function MeasureIntakeForm() {
                     className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 transition-all hover:bg-surface-tint active:scale-[0.97] disabled:opacity-60"
                   >
                     {submitStatus === "submitting"
-                      ? "Sending…"
+                      ? submitProgress && submitProgress.total > 0
+                        ? submitProgress.done < submitProgress.total
+                          ? `Preparing photo ${submitProgress.done + 1} of ${submitProgress.total}…`
+                          : "Sending…"
+                        : "Sending…"
                       : (
                         <>
                           <span className="material-symbols-outlined" style={{ fontSize: "18px" }} aria-hidden>send</span>
