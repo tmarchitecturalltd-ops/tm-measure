@@ -46,8 +46,15 @@ export default function CustomShapeEditor({ room, onPatch }: CustomShapeEditorPr
 
   const handleClick = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const xPx = e.clientX - rect.left;
-    const zPx = e.clientY - rect.top;
+    if (!rect.width || !rect.height) return;
+    // The SVG is styled maxWidth:100%/height:auto, so on a phone it
+    // renders narrower than CANVAS_PX. `scale` is derived from
+    // CANVAS_PX, so converting raw client pixels directly overstated
+    // every coordinate by the ratio between nominal and rendered
+    // width — custom shapes drawn on a phone came out too big.
+    // Map into viewBox units first.
+    const xPx = ((e.clientX - rect.left) * CANVAS_PX) / rect.width;
+    const zPx = ((e.clientY - rect.top) * CANVAS_PX) / rect.height;
     // Snap to nearest 0.1 m so the architect doesn't end up with
     // wall lengths like 3.71234 m.
     const x = Math.round((xPx / scale) * 10) / 10;
