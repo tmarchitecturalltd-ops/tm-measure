@@ -8,9 +8,9 @@
  *
  * Design notes
  * ──────────────────────────────────────────────────────────────────
- * • Photos can't be JSON-serialised — they're Blob URLs that die when
- *   the document unloads. The draft persists everything *except*
- *   the photos array, so the user knows to re-take photos on resume.
+ * • Media can't be JSON-serialised — photos and voice memos are Blob
+ *   URLs that die when the document unloads. The draft persists
+ *   everything *except* those, so the user re-takes them on resume.
  * • Saves are debounced (300 ms) to keep typing snappy.
  * • Schema is versioned so future changes don't crash old drafts —
  *   anything with a mismatched version is silently dropped on load.
@@ -39,18 +39,37 @@ export type ProjectDraftSnapshot = {
 };
 
 /**
- * Save the draft. Drops the photos array from each room before
- * stringifying — blob URLs would resolve to dead handles on resume.
+ * Strip every blob-backed field from a room.
+ *
+ * Blob URLs are handles into the current document. Persisting one and
+ * restoring it later yields a string that looks valid but resolves to
+ * nothing — so a resumed draft showed broken thumbnails, silent audio,
+ * and shipped dead references into the submission payload.
+ *
+ * Room photos were already dropped, but wall photos and voice memos
+ * were not, so both survived into localStorage in exactly that broken
+ * state. Anything holding a blob URL has to be cleared here.
+ */
+function stripMedia(room: Record<string, unknown>): Record<string, unknown> {
+  const walls = Array.isArray(room.walls)
+    ? (room.walls as Array<Record<string, unknown>>).map((w) => ({
+        ...w,
+        photos: [],
+      }))
+    : room.walls;
+  return { ...room, photos: [], voiceMemos: [], walls };
+}
+
+/**
+ * Save the draft. Measurements, names and notes persist; media does
+ * not, so the customer re-takes photos and memos on resume.
  */
 export function saveDraft(snapshot: Omit<ProjectDraftSnapshot, "version" | "savedAt">): void {
   if (typeof window === "undefined") return;
   try {
     const payload: ProjectDraftSnapshot = {
       ...snapshot,
-      rooms: snapshot.rooms.map((r) => {
-        const { photos: _photos, ...rest } = r as { photos?: unknown };
-        return { ...rest, photos: [] };
-      }),
+      rooms: snapshot.rooms.map(stripMedia),
       version: 1,
       savedAt: new Date().toISOString(),
     };
