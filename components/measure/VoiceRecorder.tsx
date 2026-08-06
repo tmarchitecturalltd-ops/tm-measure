@@ -34,9 +34,49 @@ export default function VoiceRecorder({ memos, onChange }: VoiceRecorderProps) {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const startedAtRef = useRef<number>(0);
+  /** Held so unmount can release the mic even mid-recording. */
+  const streamRef = useRef<MediaStream | null>(null);
+  /** Latest memos, for the recorder's onstop handler.
+   *
+   *  onstop closes over whatever `memos` was when start() ran. Anything
+   *  that changed the list while recording — deleting a memo, resuming
+   *  a draft — was overwritten when the clip landed. Reading through a
+   *  ref means onstop always appends to the current list. */
+  const memosRef = useRef(memos);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    memosRef.current = memos;
+    onChangeRef.current = onChange;
+  });
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+
+  /**
+   * Release the microphone on unmount.
+   *
+   * The form pages one room at a time, so moving to the next room
+   * unmounts this component. Without cleanup the recorder kept running
+   * and the stream was never stopped: the OS recording indicator
+   * stayed lit until the app was killed, and the clip was lost.
+   */
+  useEffect(() => {
+    return () => {
+      const r = recorderRef.current;
+      if (r && r.state === "recording") {
+        // Drop the handler first — appending to a room that is no
+        // longer mounted would be a stray state update.
+        r.onstop = null;
+        try {
+          r.stop();
+        } catch {
+          /* already stopping */
+        }
+      }
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    };
+  }, []);
 
   // Tick the elapsed counter while recording so the user has visual
   // feedback that the mic is live.
@@ -69,6 +109,7 @@ export default function VoiceRecorder({ memos, onChange }: VoiceRecorderProps) {
         return;
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       // Prefer audio/webm; iOS Safari only exposes audio/mp4 — let the
       // browser pick its supported default by passing no mimeType.
       const recorder = new MediaRecorder(stream);
@@ -95,9 +136,10 @@ export default function VoiceRecorder({ memos, onChange }: VoiceRecorderProps) {
           sizeBytes: blob.size,
           durationMs,
         };
-        onChange([...memos, audio]);
+        onChangeRef.current([...memosRef.current, audio]);
         // Release the mic.
         stream.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
       };
       startedAtRef.current = Date.now();
       setElapsedMs(0);
