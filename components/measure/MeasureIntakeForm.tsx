@@ -863,6 +863,7 @@ export default function MeasureIntakeForm() {
       unit,
       unitLocked,
       defaultCeilingHeightM,
+      proposalDescription,
       rooms: rooms as unknown as Array<Record<string, unknown>>,
       connections: connections as unknown as Array<Record<string, unknown>>,
       placements: placements as unknown as Record<string, unknown>,
@@ -870,6 +871,7 @@ export default function MeasureIntakeForm() {
     setLastSavedAt(Date.now());
   }, [
     defaultCeilingHeightM,
+    proposalDescription,
     draftHydrated,
     pendingDraft,
     step,
@@ -894,6 +896,7 @@ export default function MeasureIntakeForm() {
     setUnit(pendingDraft.unit);
     setUnitLocked(pendingDraft.unitLocked);
     setDefaultCeilingHeightM(pendingDraft.defaultCeilingHeightM ?? "");
+    setProposalDescription(pendingDraft.proposalDescription ?? "");
     setRooms(pendingDraft.rooms as unknown as RoomDraft[]);
     setConnections(pendingDraft.connections as unknown as RoomConnectionDraft[]);
     setPlacements(pendingDraft.placements as unknown as Record<string, RoomPlacement>);
@@ -937,8 +940,6 @@ export default function MeasureIntakeForm() {
    * is a handful of fields rather than a wall of them.
    */
   const [openDetailRooms, setOpenDetailRooms] = useState<Record<string, boolean>>({});
-  /** Temporary: reports what the file picker actually returned. Remove
-   *  once the iOS photo-attach problem is resolved. */
 
   /** Detail-panel fields that can fail validation. If one of them does
    *  we must force the panel open, otherwise the customer is told to fix

@@ -33,6 +33,12 @@ export type ProjectDraftSnapshot = {
   /** Property-wide ceiling default. Optional so drafts written before
    *  this field existed still load. */
   defaultCeilingHeightM?: string;
+  /** What the customer wants built. Free text, and often the most
+   *  considered thing they write, so losing it to a closed tab is
+   *  worse than losing a measurement they can re-take in seconds.
+   *  Exterior and sketch images are deliberately not persisted —
+   *  they're blob-backed, like room photos. */
+  proposalDescription?: string;
   rooms: Array<Record<string, unknown>>;
   connections: Array<Record<string, unknown>>;
   placements: Record<string, unknown>;
