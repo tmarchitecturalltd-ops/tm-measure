@@ -241,13 +241,30 @@ export default function FloorPlanEditor({
 
   const placeRoomOnCurrentFloor = useCallback(
     (roomId: string) => {
+      // Every room used to land on the origin, so placing a second one
+      // dropped it exactly on top of the first. Only the topmost is
+      // hittable, which made the rooms underneath look like they had
+      // vanished. Seed each new room clear of what is already down;
+      // the customer then drags it where it belongs.
+      const existing = roomsOnFloor.map((r) => {
+        const p = placementFor(r.id);
+        return {
+          anchor: p.positionM!,
+          size: roomFootprint(r),
+          rotationDeg: p.rotationDeg,
+        };
+      });
+      const ex = floorExtents(existing);
+      const seed = ex
+        ? { x: ex.maxX + GRID_STEP_M * 2, z: ex.minZ }
+        : { x: 0, z: 0 };
       onPlacementChange(roomId, {
         ...placementFor(roomId),
-        positionM: { x: 0, z: 0 },
+        positionM: sanitisePlacement(seed),
         floor: currentFloor,
       });
     },
-    [onPlacementChange, placementFor, currentFloor],
+    [onPlacementChange, placementFor, currentFloor, roomsOnFloor],
   );
 
   const moveRoomToFloor = useCallback(
