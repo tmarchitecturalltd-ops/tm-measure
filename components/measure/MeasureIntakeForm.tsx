@@ -935,18 +935,39 @@ export default function MeasureIntakeForm() {
     validateProject(rooms).filter((i) => !/-photos$/.test(i.path));
 
   /**
-   * Advance a step, or send the customer back to where the problem is.
+   * Which room the first issue belongs to, from paths like
+   * "room-2-wall-0". Null when the issue isn't room-scoped.
+   */
+  const firstIssueRoomIndex = (list: FieldIssue[]): number | null => {
+    for (const i of list) {
+      const m = /^room-(\d+)-/.exec(i.path);
+      if (m) {
+        const ri = Number(m[1]);
+        if (Number.isInteger(ri) && ri >= 0 && ri < rooms.length) return ri;
+      }
+    }
+    return null;
+  };
+
+  /**
+   * Advance a step, or send the customer to where the problem actually is.
    *
-   * Every error anchor lives in the project and rooms steps. Validating
-   * the rooms from the plan step therefore set issues that rendered
-   * nowhere: the button appeared dead, with no message and no movement,
-   * and there was no way to discover what was wrong. Submit already
-   * returns to the rooms step on failure; navigation now does the same.
+   * Two things conspired to make a failed check invisible. Every error
+   * anchor lives in the project and rooms steps, so validating from the
+   * plan step rendered the result on a screen the customer wasn't on.
+   * And the rooms step pages one room at a time, so even landing there
+   * showed the wrong room — the customer saw fields they had correctly
+   * filled while being told sizes were missing, because the offending
+   * room was a different page.
+   *
+   * So: go to the rooms step *and* page to the room at fault.
    */
   const advanceTo = (next: "plan" | "review") => {
     const v = nonBlockingIssues(rooms);
     setIssues(v);
     if (v.length) {
+      const ri = firstIssueRoomIndex(v);
+      if (ri !== null) setActiveRoomIndex(ri);
       setStep("rooms");
       return;
     }
@@ -1301,6 +1322,11 @@ export default function MeasureIntakeForm() {
     const anomalies = validateProject(rooms);
     if (anomalies.length) {
       setIssues(anomalies);
+      // Page to the offending room, not just the rooms step — see
+      // advanceTo. Landing on room 1 for a problem in room 3 reads as
+      // the form rejecting values that are plainly correct.
+      const ri = firstIssueRoomIndex(anomalies);
+      if (ri !== null) setActiveRoomIndex(ri);
       setStep("rooms");
       setSubmitStatus("error");
       setSubmitError(
