@@ -55,6 +55,37 @@ behaving correctly throughout.
 **Implication:** ceiling height should be measured, not estimated. It
 is the one number the entire ceiling-mode result rests on.
 
+## Input 3: calibration (sound, but sensitive to tap precision)
+
+`calibrateFocalLengthPx` recovers a known focal length to within 0.09%,
+and the monotonicity its bisection relies on holds across the whole
+search range. No correctness problem.
+
+Two field observations are worth separating, because they have
+different causes:
+
+**"Calibration could not converge"** is *not* about orientation. It
+fires when both search bounds fall on the same side of the target,
+which happens when a tapped point is not physically on the floor —
+the side of a bin, an object on a drawer. There is no focal length
+that makes an off-plane point fit, so the solver correctly refuses.
+The error text already says this.
+
+**"It only worked when the reference was horizontal"** is about
+precision, not correctness. With perfect taps every orientation
+calibrates identically. With a realistic +/-3 px finger error:
+
+| reference orientation | tap separation | 95% of results within |
+| --------------------- | -------------- | --------------------- |
+| across view           | 527 px         | +/-0.9% focal         |
+| diagonal 45 deg       | 429 px         | +/-1.5% focal         |
+| receding from you     | 306 px         | +/-1.8% focal         |
+
+A reference laid across the view spans roughly twice the pixels of one
+pointing away, so the same finger error costs half as much. Laying it
+horizontally is therefore worth advising — as guidance for a better
+result, not as a requirement.
+
 ## What this means for the product
 
 1. Encourage stillness between taps — it dominates everything else.
