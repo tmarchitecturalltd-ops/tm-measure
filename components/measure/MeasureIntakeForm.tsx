@@ -199,10 +199,6 @@ export default function MeasureIntakeForm() {
   /** Re-render tick so the "x min ago" label ages without a save. */
   const [savedTick, setSavedTick] = useState(0);
   const draftSaver = useRef(makeDebouncedSaver<ProjectDraftSnapshot>(400));
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [photoTargetRoomId, setPhotoTargetRoomId] = useState<string | null>(
-    null,
-  );
   const [scanRoomId, setScanRoomId] = useState<string | null>(null);
   const [scanPickerOpen, setScanPickerOpen] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<
@@ -778,13 +774,11 @@ export default function MeasureIntakeForm() {
 
   /** Composite "roomId/wallId" target for the shared file input. null
    *  means the next picked files go to the room (legacy path). */
-  const [photoTargetWall, setPhotoTargetWall] = useState<{ roomId: string; wallId: string } | null>(null);
 
   // ── Exterior (4-sides) photos ──────────────────────────────────────
   const [exteriorPhotos, setExteriorPhotos] = useState<
     Record<ExteriorSide, RoomPhoto[]>
   >({ front: [], back: [], left: [], right: [] });
-  const [exteriorTargetSide, setExteriorTargetSide] = useState<ExteriorSide | null>(null);
 
   const attachExteriorPhotos = useCallback(
     (side: ExteriorSide, files: FileList | null) => {
@@ -810,7 +804,6 @@ export default function MeasureIntakeForm() {
   // ── Proposal (description + sketches) ──────────────────────────────
   const [proposalDescription, setProposalDescription] = useState("");
   const [proposalSketches, setProposalSketches] = useState<RoomPhoto[]>([]);
-  const [proposalSketchTarget, setProposalSketchTarget] = useState(false);
 
   const attachProposalSketches = useCallback((files: FileList | null) => {
     // Read the FileList now, not inside the updater — see filesToPhotos.
@@ -1461,52 +1454,6 @@ export default function MeasureIntakeForm() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 md:px-6">
-        <input
-          ref={fileInputRef}
-          type="file"
-          // Explicit MIME list alongside the image/* wildcard: Android's
-          // document picker filters on concrete types, and a bare
-          // wildcard is what caused the camera roll to come back empty
-          // on some devices. iOS ignores the extras harmlessly.
-          accept="image/*,image/jpeg,image/png,image/heic,image/heif,image/webp"
-          multiple
-          // `capture="environment"` forced the rear camera and hid the
-          // photo-library / file-picker options on iOS — testers were
-          // stuck if the camera dialog misbehaved. Without it, both
-          // platforms show their standard Take Photo / Photo Library
-          // chooser, which is what we want.
-          // Visually hidden, but NOT display:none. iOS Safari will happily
-          // open the picker for a display:none input and then never fire
-          // its change event — the customer takes a photo and nothing
-          // arrives, with no error. Keeping it in the layout, just moved
-          // off-screen and unclickable, makes the event fire reliably.
-          style={{
-            position: "absolute",
-            width: 1,
-            height: 1,
-            opacity: 0,
-            pointerEvents: "none",
-            left: -9999,
-          }}
-          onChange={(e) => {
-            // Targets routed in priority order. Set by the button the
-            // user just tapped — wall, room, exterior side, proposal.
-            if (photoTargetWall) {
-              attachPhotosToWall(photoTargetWall.roomId, photoTargetWall.wallId, e.target.files);
-              setPhotoTargetWall(null);
-            } else if (exteriorTargetSide) {
-              attachExteriorPhotos(exteriorTargetSide, e.target.files);
-              setExteriorTargetSide(null);
-            } else if (proposalSketchTarget) {
-              attachProposalSketches(e.target.files);
-              setProposalSketchTarget(false);
-            } else if (photoTargetRoomId) {
-              attachPhotos(photoTargetRoomId, e.target.files);
-            }
-            setPhotoTargetRoomId(null);
-            e.target.value = "";
-          }}
-        />
         <p className="mb-8 max-w-3xl text-sm leading-relaxed text-on-surface-variant">
           We&apos;ll walk you through each room —{" "}
           <strong className="font-semibold text-on-surface">
@@ -2221,18 +2168,29 @@ export default function MeasureIntakeForm() {
                             </p>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPhotoTargetWall({ roomId: room.id, wallId: w.id });
-                            fileInputRef.current?.click();
-                          }}
-                          className="material-symbols-outlined shrink-0 rounded p-2 text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
+                        {/* Own input rather than the shared one. Routing a
+                            single input by remembered target state broke
+                            silently when the customer cancelled the
+                            picker: no change event fires, the target is
+                            never cleared, and the next photo they add
+                            anywhere lands on this wall. */}
+                        <label
+                          className="material-symbols-outlined shrink-0 cursor-pointer rounded p-2 text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
                           aria-label="Add photo of this wall"
                           title="Add photo of this wall"
                         >
                           add_a_photo
-                        </button>
+                          <input
+                            type="file"
+                            accept="image/*,image/jpeg,image/png,image/heic,image/heif,image/webp"
+                            multiple
+                            className="sr-only"
+                            onChange={(e) => {
+                              attachPhotosToWall(room.id, w.id, e.target.files);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
                         {room.walls.length > 3 && (
                           <button
                             type="button"
@@ -2981,16 +2939,19 @@ export default function MeasureIntakeForm() {
                       {exteriorPhotos[side].length === 1 ? "" : "s"}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setExteriorTargetSide(side);
-                      fileInputRef.current?.click();
-                    }}
-                    className="rounded-full border border-primary/60 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
-                  >
+                  <label className="cursor-pointer rounded-full border border-primary/60 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary">
                     + Add photo
-                  </button>
+                    <input
+                      type="file"
+                      accept="image/*,image/jpeg,image/png,image/heic,image/heif,image/webp"
+                      multiple
+                      className="sr-only"
+                      onChange={(e) => {
+                        attachExteriorPhotos(side, e.target.files);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
                 </div>
                 {exteriorPhotos[side].length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -3065,16 +3026,19 @@ export default function MeasureIntakeForm() {
                 <label className="font-label block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
                   Sketches / inspiration
                 </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setProposalSketchTarget(true);
-                    fileInputRef.current?.click();
-                  }}
-                  className="rounded-full border border-primary/60 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
-                >
+                <label className="cursor-pointer rounded-full border border-primary/60 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary">
                   + Add image
-                </button>
+                  <input
+                    type="file"
+                    accept="image/*,image/jpeg,image/png,image/heic,image/heif,image/webp"
+                    multiple
+                    className="sr-only"
+                    onChange={(e) => {
+                      attachProposalSketches(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
               </div>
               {proposalSketches.length > 0 && (
                 <div className="flex flex-wrap gap-2">
