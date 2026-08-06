@@ -469,6 +469,23 @@ export default function MeasureIntakeForm() {
 
   const removeRoom = useCallback((id: string) => {
     setRooms((prev) => {
+      // Release the room's media. Individual photo deletes already
+      // revoke; deleting a whole room did not, so a long Capacitor
+      // session that added and removed photographed rooms held on to
+      // every blob until the app was killed.
+      //
+      // Revoking inside the updater is safe here only because
+      // revokeObjectURL is idempotent — React invokes updaters twice in
+      // development, and a second revoke on a dead URL is a no-op. Do
+      // not add non-idempotent work to this block.
+      const doomed = prev.find((r) => r.id === id);
+      if (doomed) {
+        for (const p of doomed.photos) URL.revokeObjectURL(p.uri);
+        for (const w of doomed.walls) {
+          for (const p of w.photos ?? []) URL.revokeObjectURL(p.uri);
+        }
+        for (const m of doomed.voiceMemos ?? []) URL.revokeObjectURL(m.uri);
+      }
       const next = prev.filter((r) => r.id !== id);
       return next.length ? next : [emptyRoom()];
     });
@@ -3223,9 +3240,14 @@ export default function MeasureIntakeForm() {
                       {room.name}
                     </h3>
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {room.walls.map((w) => {
+                      {room.walls.map((w, wi) => {
                         const m = parseMeters(w.lengthM);
                         const dual = formatLengthDual(m, unit);
+                        // The badge used to read "OK" unconditionally, so a
+                        // wall the validator would flag still looked
+                        // approved on the screen where the customer decides
+                        // to submit. Derive it from the same check instead.
+                        const wallIssue = issueFor(`room-${ri}-wall-${wi}`);
                         return (
                           <div
                             key={w.id}
@@ -3242,8 +3264,15 @@ export default function MeasureIntakeForm() {
                                 {dual.secondary}
                               </p>
                             </div>
-                            <span className="text-[10px] font-bold text-emerald-700">
-                              OK
+                            <span
+                              className={
+                                wallIssue
+                                  ? "text-[10px] font-bold text-error"
+                                  : "text-[10px] font-bold text-emerald-700"
+                              }
+                              title={wallIssue ?? undefined}
+                            >
+                              {wallIssue ? "CHECK" : "OK"}
                             </span>
                           </div>
                         );
@@ -3311,6 +3340,71 @@ export default function MeasureIntakeForm() {
                   </div>
                 ))}
               </div>
+
+              {/* Exterior and proposal are submitted, so they belong in
+                  the summary. Without them the customer could not check
+                  the description of the work they want before sending
+                  it — the most consequential text in the survey. */}
+              {(Object.values(exteriorPhotos).some((p) => p.length > 0) ||
+                proposalDescription.trim() ||
+                proposalSketches.length > 0) && (
+                <div className="mt-8 space-y-6 border-t border-outline-variant/30 pt-8">
+                  {Object.values(exteriorPhotos).some((p) => p.length > 0) && (
+                    <div>
+                      <h3 className="font-headline mb-4 text-lg text-primary">
+                        Exterior
+                      </h3>
+                      <div className="space-y-3">
+                        {(Object.keys(exteriorPhotos) as ExteriorSide[]).map(
+                          (side) =>
+                            exteriorPhotos[side].length > 0 ? (
+                              <div key={side}>
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                                  {side}
+                                </p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {exteriorPhotos[side].map((p) => (
+                                    <img
+                                      key={p.id}
+                                      src={p.uri}
+                                      alt=""
+                                      className="h-20 w-20 rounded object-cover ring-1 ring-outline-variant/30"
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null,
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {(proposalDescription.trim() ||
+                    proposalSketches.length > 0) && (
+                    <div>
+                      <h3 className="font-headline mb-4 text-lg text-primary">
+                        Proposal
+                      </h3>
+                      {proposalDescription.trim() && (
+                        <p className="whitespace-pre-wrap text-sm text-on-surface">
+                          {proposalDescription}
+                        </p>
+                      )}
+                      {proposalSketches.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {proposalSketches.map((p) => (
+                            <img
+                              key={p.id}
+                              src={p.uri}
+                              alt=""
+                              className="h-20 w-20 rounded object-cover ring-1 ring-outline-variant/30"
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
 
             {submitStatus === "success" ? (
