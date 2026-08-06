@@ -94,7 +94,21 @@ export function makeRoomConnectionDraft(): RoomConnectionDraft {
  * Convert form drafts to normalised payload connections.
  * - Drops any drafts with missing roomAId
  * - Drops self-loops (roomA == roomB)
- * - Collapses duplicate unordered pairs (A↔B vs B↔A) keeping first
+ * - Collapses rows that are genuinely identical, including the
+ *   A↔B / B↔A restatement of the same link
+ *
+ * De-duplication deliberately keys on the whole row, not just the pair
+ * of rooms. Keying on the pair alone discarded real information:
+ *
+ *   - Two rooms can connect more than once — a door *and* a wide
+ *     opening, or a door *and* stairs. Only the first survived.
+ *   - External walls were keyed on the room alone, so a room could
+ *     record just one. A corner room has two, and the second was
+ *     dropped — exactly the detail an architect needs when judging
+ *     where an extension can go.
+ *
+ * Two rows that differ in any respect are two different facts about
+ * the building, so both are kept.
  */
 export function normalizeConnections(
   drafts: RoomConnectionDraft[],
@@ -106,9 +120,14 @@ export function normalizeConnections(
     if (d.kind !== "external" && !d.roomBId) continue;
     if (d.roomAId === d.roomBId) continue;
     const widthM = d.widthM.trim() ? Number(d.widthM) : undefined;
-    const key = d.kind === "external"
-      ? `ext:${d.roomAId}`
-      : canonicalPairKey(d.roomAId, d.roomBId);
+    const width = d.widthM.trim();
+    const notes = d.notes.trim();
+    const shape = d.kind === "stairs" ? (d.stairsShape ?? "") : "";
+    const where =
+      d.kind === "external"
+        ? `ext:${d.roomAId}`
+        : canonicalPairKey(d.roomAId, d.roomBId);
+    const key = [where, d.kind, shape, width, notes].join("|");
     if (seen.has(key)) continue;
     seen.add(key);
     out.push({
