@@ -2203,6 +2203,15 @@ export default function MeasureIntakeForm() {
                             placeholder="0.00"
                             className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                           />
+                          {/* Wall issues were only rendered inside the
+                              individual-walls list, which is collapsed for
+                              a rectangle. The customer was sent to the
+                              right room and shown no reason. */}
+                          {issueFor(`room-${ri}-wall-0`) && (
+                            <p data-error-anchor className="mt-1 text-xs text-error">
+                              {issueFor(`room-${ri}-wall-0`)}
+                            </p>
+                          )}
                         </div>
                         <div className="flex-1">
                           <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
@@ -2217,6 +2226,11 @@ export default function MeasureIntakeForm() {
                             placeholder="0.00"
                             className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                           />
+                          {issueFor(`room-${ri}-wall-1`) && (
+                            <p data-error-anchor className="mt-1 text-xs text-error">
+                              {issueFor(`room-${ri}-wall-1`)}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <button
