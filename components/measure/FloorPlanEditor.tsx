@@ -84,6 +84,24 @@ export default function FloorPlanEditor({
     startAnchor: { x: number; z: number };
   } | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  /**
+   * ViewBox held still for the duration of a drag.
+   *
+   * The viewBox auto-fits around the placed rooms, and a drag writes a
+   * new position on every pointermove — so the extents changed, the
+   * viewBox changed, and getScreenCTM then mapped the pointer through a
+   * different scale than the one the drag started in. The room drifted
+   * away from the finger, compounding the further it was dragged.
+   *
+   * Small layouts hid this because the view is pinned to MIN_VIEW_M
+   * until the plan grows past it; any house-sized layout showed it.
+   */
+  const [frozenViewBox, setFrozenViewBox] = useState<{
+    x: number;
+    z: number;
+    w: number;
+    h: number;
+  } | null>(null);
 
   // ── Derived data ─────────────────────────────────────────────────
   const usedFloors = useMemo(() => {
@@ -130,6 +148,9 @@ export default function FloorPlanEditor({
     return { x, z, w, h };
   }, [roomsOnFloor, placementFor]);
 
+  /** What the SVG actually renders — held still mid-drag. */
+  const activeViewBox = frozenViewBox ?? viewBox;
+
   // ── Pointer → SVG-coord helper (SVG units are metres) ────────────
   const svgCoordsFromEvent = useCallback(
     (e: ReactPointerEvent): { x: number; z: number } | null => {
@@ -159,9 +180,12 @@ export default function FloorPlanEditor({
         startSvg: svg,
         startAnchor: { x: p.positionM.x, z: p.positionM.z },
       };
+      // Pin the frame the drag is measured in, so moving the room can't
+      // rescale the canvas out from under the gesture.
+      setFrozenViewBox(viewBox);
       (e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
     },
-    [placementFor, svgCoordsFromEvent],
+    [placementFor, svgCoordsFromEvent, viewBox],
   );
 
   const onRoomPointerMove = useCallback(
@@ -189,6 +213,8 @@ export default function FloorPlanEditor({
     const st = dragRef.current;
     if (!st || st.pointerId !== e.pointerId) return;
     dragRef.current = null;
+    // Release the frame; the view re-fits to wherever things ended up.
+    setFrozenViewBox(null);
     try {
       (e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
     } catch {
@@ -313,7 +339,7 @@ export default function FloorPlanEditor({
       >
         <svg
           ref={svgRef}
-          viewBox={`${viewBox.x} ${viewBox.z} ${viewBox.w} ${viewBox.h}`}
+          viewBox={`${activeViewBox.x} ${activeViewBox.z} ${activeViewBox.w} ${activeViewBox.h}`}
           preserveAspectRatio="xMidYMid meet"
           className="block h-[420px] w-full"
           style={{ touchAction: "none", userSelect: "none" }}
