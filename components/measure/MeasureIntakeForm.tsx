@@ -934,19 +934,28 @@ export default function MeasureIntakeForm() {
   const nonBlockingIssues = (rooms: RoomDraft[]) =>
     validateProject(rooms).filter((i) => !/-photos$/.test(i.path));
 
-  const goPlan = () => {
+  /**
+   * Advance a step, or send the customer back to where the problem is.
+   *
+   * Every error anchor lives in the project and rooms steps. Validating
+   * the rooms from the plan step therefore set issues that rendered
+   * nowhere: the button appeared dead, with no message and no movement,
+   * and there was no way to discover what was wrong. Submit already
+   * returns to the rooms step on failure; navigation now does the same.
+   */
+  const advanceTo = (next: "plan" | "review") => {
     const v = nonBlockingIssues(rooms);
     setIssues(v);
-    if (v.length) return;
-    setStep("plan");
+    if (v.length) {
+      setStep("rooms");
+      return;
+    }
+    setStep(next);
   };
 
-  const goReview = () => {
-    const v = nonBlockingIssues(rooms);
-    setIssues(v);
-    if (v.length) return;
-    setStep("review");
-  };
+  const goPlan = () => advanceTo("plan");
+
+  const goReview = () => advanceTo("review");
 
   const issueFor = (path: string) => issues.find((i) => i.path === path)?.message;
 

@@ -18,7 +18,8 @@
  * FloorPlanEditor + the Apps Script email SVG.
  */
 
-import { useMemo, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { RoomDraft } from "@tm-designs/measure-core";
 
 const GOLD = "#b89650";
@@ -44,7 +45,69 @@ export default function CustomShapeEditor({ room, onPatch }: CustomShapeEditorPr
 
   const scale = useMemo(() => CANVAS_PX / Math.max(w, h), [w, h]);
 
+  /** Which corner is being dragged, if any. */
+  const dragRef = useRef<{ index: number; pointerId: number } | null>(null);
+  /** Set when a drag ends, so the click it produces doesn't add a corner. */
+  const draggedRef = useRef(false);
+
+  /**
+   * Client pixels → metres. Shared by tapping and dragging so both use
+   * the same mapping, including the render-size correction.
+   */
+  const toMetres = (
+    clientX: number,
+    clientY: number,
+    el: SVGGraphicsElement,
+  ): { x: number; z: number } | null => {
+    const svg = el.ownerSVGElement ?? (el as SVGSVGElement);
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    const xPx = ((clientX - rect.left) * CANVAS_PX) / rect.width;
+    const zPx = ((clientY - rect.top) * CANVAS_PX) / rect.height;
+    return {
+      x: Math.round((xPx / scale) * 10) / 10,
+      z: Math.round((zPx / scale) * 10) / 10,
+    };
+  };
+
+  const onHandleDown = (index: number, e: ReactPointerEvent<SVGCircleElement>) => {
+    // Keep the SVG's click handler from also treating this as a new
+    // corner placement.
+    e.stopPropagation();
+    dragRef.current = { index, pointerId: e.pointerId };
+    draggedRef.current = false;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const onHandleMove = (e: ReactPointerEvent<SVGCircleElement>) => {
+    const st = dragRef.current;
+    if (!st || st.pointerId !== e.pointerId) return;
+    const next = toMetres(e.clientX, e.clientY, e.currentTarget);
+    if (!next) return;
+    draggedRef.current = true;
+    onPatch({
+      floorPolygonM: polygon.map((p, i) => (i === st.index ? next : p)),
+    });
+  };
+
+  const onHandleUp = (e: ReactPointerEvent<SVGCircleElement>) => {
+    const st = dragRef.current;
+    if (!st || st.pointerId !== e.pointerId) return;
+    dragRef.current = null;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+  };
+
   const handleClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    // A drag ends with a click on the SVG; swallow it so finishing a
+    // drag doesn't drop an extra corner where the finger lifted.
+    if (draggedRef.current) {
+      draggedRef.current = false;
+      return;
+    }
     const rect = e.currentTarget.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     // The SVG is styled maxWidth:100%/height:auto, so on a phone it
@@ -104,8 +167,9 @@ export default function CustomShapeEditor({ room, onPatch }: CustomShapeEditorPr
 
       <p className="text-[11px] text-on-surface-variant">
         Tap inside the box to place each corner of the room in order
-        (clockwise or anti-clockwise, doesn&apos;t matter). Hit Close
-        shape when you&apos;re done. Snaps to 10 cm.
+        (clockwise or anti-clockwise, doesn&apos;t matter). Drag any
+        corner to adjust it. Hit Close shape when you&apos;re done.
+        Snaps to 10 cm.
       </p>
 
       <div
@@ -171,6 +235,22 @@ export default function CustomShapeEditor({ room, onPatch }: CustomShapeEditorPr
                 fill={GOLD}
                 stroke={DARK}
                 strokeWidth={1}
+                pointerEvents="none"
+              />
+              {/* Invisible, finger-sized grab target over the visible
+                  dot. A 4px circle is far too small to hit reliably on
+                  a phone. touchAction:none stops the page scrolling
+                  while a corner is being dragged. */}
+              <circle
+                cx={p.x * scale}
+                cy={p.z * scale}
+                r={16}
+                fill="transparent"
+                style={{ cursor: "grab", touchAction: "none" }}
+                onPointerDown={(e) => onHandleDown(i, e)}
+                onPointerMove={onHandleMove}
+                onPointerUp={onHandleUp}
+                onPointerCancel={onHandleUp}
               />
               <text
                 x={p.x * scale + 6}
