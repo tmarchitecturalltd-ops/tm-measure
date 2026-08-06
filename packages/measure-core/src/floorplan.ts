@@ -88,18 +88,28 @@ export function roomBoundingBox(
       dz = lengthM;
       break;
     case 90:
-      // Anchor stays at the same point but the rectangle swings right
-      // and down: +x becomes -z direction, +z becomes +x direction.
-      dx = lengthM;
-      dz = -widthM;
+      // The editor draws rooms with `rotate(deg 0 0)` after translating
+      // to the anchor. SVG rotates clockwise in this z-down system, so
+      // its matrix sends (x, z) to (-z, x): the far corner (w, l) lands
+      // at (-l, w) — down and to the LEFT of the anchor.
+      //
+      // This case and 270 were previously each other's values, which
+      // reflected the box through the anchor. The drawn room and its
+      // bounding box then disagreed for every quarter turn, so the
+      // auto-fit viewBox could scroll a rotated room out of sight and
+      // overlap checks compared the wrong region of the plan.
+      dx = -lengthM;
+      dz = widthM;
       break;
     case 180:
+      // (x, z) → (-x, -z). Symmetric, so this case was already right.
       dx = -widthM;
       dz = -lengthM;
       break;
     case 270:
-      dx = -lengthM;
-      dz = widthM;
+      // (x, z) → (z, -x): up and to the right.
+      dx = lengthM;
+      dz = -widthM;
       break;
   }
   const x1 = anchor.x;
