@@ -442,9 +442,16 @@ export default function MeasureIntakeForm() {
           !prev[0].name.trim() &&
           prev[0].walls.every((w) => !w.lengthM.trim()) &&
           !prev[0].ceilingHeightM.trim();
+        // Seed the property-wide ceiling height, exactly as addRoom
+        // does. Without it, choosing a layout meant being asked for the
+        // ceiling height once per generated room — the repetition the
+        // property-wide default exists to remove — and the customer was
+        // blocked from continuing with no visible explanation until the
+        // Add detail panel was opened on each room in turn.
         const generated: RoomDraft[] = t.rooms.map((r) => ({
           ...emptyRoom(),
           name: r.name,
+          ceilingHeightM: defaultCeilingHeightM,
         }));
         // Stamp the floor onto placements so the multi-storey selector
         // already reflects the template's assumption.
@@ -463,8 +470,13 @@ export default function MeasureIntakeForm() {
         return allBlank ? generated : [...prev, ...generated];
       });
     },
+    // defaultCeilingHeightM must be a dependency: with an empty list the
+    // callback captures its first-render value (""), which would seed
+    // every generated room with a blank ceiling no matter what the
+    // customer typed on the project step. TEMPLATES is a module-level
+    // constant, hence the remaining suppression.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [defaultCeilingHeightM],
   );
 
   const removeRoom = useCallback((id: string) => {
