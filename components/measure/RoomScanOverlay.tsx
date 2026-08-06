@@ -399,9 +399,29 @@ export default function RoomScanOverlay({
    */
   const tiltHistoryRef = useRef<{ t: number; tilt: number }[]>([]);
   const [tiltSpreadDeg, setTiltSpreadDeg] = useState(0);
+  /**
+   * True once a real device-orientation reading has arrived.
+   *
+   * tiltRef starts at FALLBACK_TILT_DEG, so a phone that never reports
+   * orientation — permission denied, sensor unavailable, or the setup
+   * gate dismissed — is indistinguishable from one genuinely held at
+   * that angle. Every corner then records the assumed tilt and the
+   * solver returns a normal-looking room measured from a guess.
+   *
+   * That is worse than refusing: 3° of tilt error is already 23% in
+   * depth, and an assumption that is 15° out yields a number nobody
+   * could tell was wrong. So measurement is blocked outright until the
+   * sensor has spoken.
+   */
+  const hasTiltReadingRef = useRef(false);
 
   const onOrientation = useCallback((ev: DeviceOrientationEvent) => {
     if (typeof ev.beta !== "number" || Number.isNaN(ev.beta)) return;
+    // Record that the sensor is genuinely reporting. Without this we
+    // cannot tell a real -30° reading from the -30° fallback, and the
+    // fallback must never be measured from — see the guard in
+    // requireTiltReading.
+    hasTiltReadingRef.current = true;
     /**
      * Camera pitch relative to the horizon, valid in ANY device
      * orientation.
@@ -456,6 +476,19 @@ export default function RoomScanOverlay({
   /** True when the phone is moving — used to reject taps mid-shake. */
   const STABILITY_THRESHOLD_DEG = 2.0;
   const isStable = liveTiltDeg === null || tiltSpreadDeg < STABILITY_THRESHOLD_DEG;
+
+  /**
+   * Guard every measurement path: refuse to compute from the fallback
+   * tilt. Returns true when it is safe to proceed.
+   */
+  const requireTiltReading = useCallback((): boolean => {
+    if (hasTiltReadingRef.current) return true;
+    setErrorMsg(
+      "No reading from the phone's motion sensor, so the angle it's held at is unknown — and every measurement depends on it. Enable Motion & Orientation access, then scan again.",
+    );
+    setPhase("error");
+    return false;
+  }, []);
 
   const requestTiltPermission = useCallback(async () => {
     if (typeof window === "undefined") return;
@@ -523,6 +556,7 @@ export default function RoomScanOverlay({
       setPhase("error");
       return;
     }
+    if (!requireTiltReading()) return;
     const imageWidthPx = video.videoWidth || video.clientWidth || 1920;
     const imageHeightPx = video.videoHeight || video.clientHeight || 1080;
 
@@ -623,6 +657,7 @@ export default function RoomScanOverlay({
     const video = videoRef.current;
     const taps = pixelTapsRef.current;
     if (!video || taps.length < 1) return;
+    if (!requireTiltReading()) return;
     const imageWidthPx = video.videoWidth || video.clientWidth || 1920;
     const imageHeightPx = video.videoHeight || video.clientHeight || 1080;
 
@@ -724,6 +759,7 @@ export default function RoomScanOverlay({
       setPhase("error");
       return;
     }
+    if (!requireTiltReading()) return;
     const imageWidthPx = video.videoWidth || video.clientWidth || 1920;
     const imageHeightPx = video.videoHeight || video.clientHeight || 1080;
 
