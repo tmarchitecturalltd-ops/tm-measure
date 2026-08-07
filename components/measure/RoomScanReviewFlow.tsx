@@ -13,10 +13,11 @@
  *   reviewing →  ScanReviewScreen   (new)
  *   done      →  onApply fires with the accepted ScanResult
  *
- * Keeps RoomScanOverlay's existing "randomDimensions" mock for now.
- * When you swap in real ARKit / RoomPlan / ARCore output later, the
- * only thing that changes is the buildScanResult() function — the
- * review screen and MeasureIntakeForm wiring stay the same.
+ * The overlay no longer produces mock dimensions: the corner-tap and
+ * span modes return real measurements from the perspective solver.
+ * When native RoomPlan output is wired in, the only thing that changes
+ * is buildScanResult() — the review screen and MeasureIntakeForm
+ * wiring stay the same.
  */
 
 import { useCallback, useMemo, useState } from "react";

@@ -1981,10 +1981,16 @@ export default function MeasureIntakeForm() {
                   <h2 className="font-headline mt-1 text-xl text-[#f7f5ef] md:text-2xl">
                     Scan your room with the camera
                   </h2>
+                  {/* Customer-facing, and read by App Store review. The
+                      previous wording described the implementation —
+                      "LiDAR/RoomPlan placeholder", "mock AI processing" —
+                      which reads as an unfinished app to a reviewer and
+                      means nothing to a homeowner. */}
                   <p className="mt-2 max-w-xl text-sm text-white/65">
-                    Full-screen HUD with LiDAR/RoomPlan placeholder, corner marking, or
-                    360° video + mock AI processing. With several rooms, you&apos;ll
-                    pick which one to update; a single room opens the scan right away.
+                    Point your camera at the room and tap the corners — we&apos;ll
+                    work out the dimensions for you. With several rooms you&apos;ll
+                    choose which one to update; a single room opens the scan
+                    straight away.
                   </p>
                 </div>
                 <button
