@@ -150,11 +150,13 @@ function buildScanResult({
   roomId?: string;
 }): ScanResult {
   const now = new Date().toISOString();
-  // Corner-tap scans measure opposite walls and average them; the other
-  // paths (video / lidar mock) don't expose per-wall variance yet, so we
-  // fall back to the previous hard-coded "high" defaults for those.
+  // varianceM is no longer set. It was taken from a lookup keyed on the
+  // confidence bucket — 0.03 / 0.08 / 0.15 m — so the "+/-" shown next
+  // to a measurement was a restatement of the bucket, not a computed
+  // tolerance. Presenting it as a tolerance implied a precision that
+  // had never been measured. The field is optional; set it only when
+  // something genuinely derives it.
   const overall: ScanConfidence = dims.confidence ?? "high";
-  const wallVariance = overall === "high" ? 0.03 : overall === "medium" ? 0.08 : 0.15;
   const walls = [
     {
       id: `w-${now}-n`,
@@ -162,7 +164,6 @@ function buildScanResult({
       kind: "wall" as const,
       valueM: round2(dims.widthM),
       confidence: overall,
-      varianceM: wallVariance,
     },
     {
       id: `w-${now}-e`,
@@ -170,7 +171,6 @@ function buildScanResult({
       kind: "wall" as const,
       valueM: round2(dims.lengthM),
       confidence: overall,
-      varianceM: wallVariance,
     },
   ];
   const ceiling = {
@@ -210,8 +210,16 @@ function buildScanResult({
     measurements,
     context: {
       areaM2: round2(dims.areaM2 ?? dims.widthM * dims.lengthM),
-      pointCount: dims.method === "corners" ? 4 : 6,
-      lighting: "optimal",
+      // pointCount and lighting are deliberately absent.
+      //
+      // They used to be filled in with a constant 4-or-6 and a flat
+      // "optimal" — neither measured, nothing behind them. Both fields
+      // exist for a real scanner to report (ARKit gives a genuine
+      // lighting estimate and feature-point count); the corner-tap path
+      // has neither, and asserting them dressed a guess up as sensor
+      // data in a survey an architect is meant to rely on. Both are
+      // optional in ScanContext, so omitting is the honest answer:
+      // populate them when a real scanner is wired in.
       capturedAt: now,
       summary,
     },
