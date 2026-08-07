@@ -101,9 +101,18 @@ workflows:
         script: npm run build:cap
       - name: Sync Capacitor → Android
         script: npx cap sync android
+      # Play rejects any upload whose versionCode is not strictly higher
+      # than the highest already published. Deriving it from BUILD_NUMBER
+      # alone is not enough: the counter is shared with the iOS workflow
+      # and was behind the value already committed in build.gradle, so
+      # the next Android build would have produced a LOWER versionCode
+      # and been refused after a full build and upload.
+      #
+      # Take whichever is greater — the counter-derived value or one past
+      # what is already in the file — so the number can only ever climb.
       - name: Bump versionCode from build number
         script: |
-          node -e "const fs=require('fs');const f='android/app/build.gradle';const c=parseInt(process.env.BUILD_NUMBER||'0',10)+1000;fs.writeFileSync(f,fs.readFileSync(f,'utf8').replace(/versionCode\s+\d+/,'versionCode '+c));console.log('versionCode = '+c);"
+          node -e "const fs=require('fs');const f='android/app/build.gradle';const s=fs.readFileSync(f,'utf8');const cur=parseInt((s.match(/versionCode\s+(\d+)/)||[])[1]||'0',10);const fromCounter=parseInt(process.env.BUILD_NUMBER||'0',10)+1000;const c=Math.max(fromCounter,cur+1);fs.writeFileSync(f,s.replace(/versionCode\s+\d+/,'versionCode '+c));console.log('versionCode = '+c+' (file had '+cur+', counter suggested '+fromCounter+')');"
       - name: Build & sign release AAB
         script: |
           cd android
