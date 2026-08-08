@@ -1025,6 +1025,13 @@ export default function MeasureIntakeForm() {
       setStep("rooms");
       return;
     }
+    // Checks pass, so clear any earlier "not ready to send" banner
+    // rather than leaving a stale complaint on a step the customer has
+    // just satisfied.
+    if (submitStatus === "error") {
+      setSubmitStatus("idle");
+      setSubmitError(null);
+    }
     setStep(next);
   };
 
@@ -1383,9 +1390,21 @@ export default function MeasureIntakeForm() {
       if (ri !== null) setActiveRoomIndex(ri);
       setStep("rooms");
       setSubmitStatus("error");
-      setSubmitError(
-        `Found ${anomalies.length} issue${anomalies.length === 1 ? "" : "s"} that need fixing before submission. We've highlighted them on the rooms step.`,
-      );
+      // Name the actual problem and the room it belongs to.
+      //
+      // "We've highlighted them on the rooms step" told the customer
+      // nothing: with one room per screen and several collapsed panels,
+      // a highlight can sit somewhere they never scroll to, and the
+      // commonest cause — photos dropped when a draft is resumed — has
+      // no obvious connection to anything they just did.
+      const first = anomalies[0];
+      const where =
+        ri !== null ? ` in ${roomDisplayLabel(rooms[ri], ri)}` : "";
+      const more =
+        anomalies.length > 1
+          ? ` (${anomalies.length - 1} other${anomalies.length === 2 ? "" : "s"} to fix as well)`
+          : "";
+      setSubmitError(`${first.message}${where}.${more}`);
       return;
     }
     const endpoint = process.env.NEXT_PUBLIC_MEASURE_SUBMIT_URL;
@@ -1991,6 +2010,24 @@ export default function MeasureIntakeForm() {
 
         {step === "rooms" && (
           <div className="space-y-10">
+            {/* Why we sent you back here.
+                submitError was only rendered on the review step, but a
+                failed pre-submit check navigates to this one — so the
+                customer was moved without explanation and saw a room
+                that looked perfectly fine. */}
+            {submitStatus === "error" && submitError && (
+              <div
+                role="alert"
+                aria-live="assertive"
+                data-error-anchor
+                className="rounded-xl border border-error/40 bg-error/10 p-4"
+              >
+                <p className="text-sm font-semibold text-error">
+                  Not ready to send yet
+                </p>
+                <p className="mt-1 text-sm text-on-surface">{submitError}</p>
+              </div>
+            )}
             {/* Result of the last scan. Closing the overlay silently
                 meant a scan that reached the form and one that didn't
                 looked identical. */}
