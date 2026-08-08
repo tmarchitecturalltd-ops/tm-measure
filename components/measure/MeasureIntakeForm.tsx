@@ -1041,6 +1041,32 @@ export default function MeasureIntakeForm() {
 
   const issueFor = (path: string) => issues.find((i) => i.path === path)?.message;
 
+  /**
+   * Every outstanding issue, labelled with the room it belongs to and
+   * which page of the pager that is.
+   *
+   * Naming only the first problem still left the customer hunting: one
+   * room shows at a time, several fields sit behind a collapsed panel,
+   * and a highlight they cannot see is no better than no highlight. So
+   * list all of them, and say where each one lives.
+   */
+  const issueSummary = useMemo(
+    () =>
+      issues.map((i) => {
+        const m = /^room-(\d+)-/.exec(i.path);
+        if (!m) return { message: i.message, where: null as string | null };
+        const ri = Number(m[1]);
+        const room = rooms[ri];
+        return {
+          message: i.message,
+          where: room
+            ? `${roomDisplayLabel(room, ri)} — room ${ri + 1} of ${rooms.length}`
+            : null,
+        };
+      }),
+    [issues, rooms, roomDisplayLabel],
+  );
+
   /* ── Progressive disclosure ──────────────────────────────────────
    * Only the essentials (name, shape, wall lengths, photos) stay on
    * screen. Doors, windows, ceiling override and free-text notes live
@@ -2025,7 +2051,22 @@ export default function MeasureIntakeForm() {
                 <p className="text-sm font-semibold text-error">
                   Not ready to send yet
                 </p>
-                <p className="mt-1 text-sm text-on-surface">{submitError}</p>
+                {issueSummary.length > 0 ? (
+                  <ul className="mt-2 space-y-1.5">
+                    {issueSummary.map((s, n) => (
+                      <li key={n} className="text-sm text-on-surface">
+                        {s.message}
+                        {s.where && (
+                          <span className="block text-xs text-on-surface-variant">
+                            {s.where}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-sm text-on-surface">{submitError}</p>
+                )}
               </div>
             )}
             {/* Result of the last scan. Closing the overlay silently
