@@ -1631,8 +1631,21 @@ export default function MeasureIntakeForm() {
       // User-friendly mapping of common failure modes. Anything we
       // don't recognise falls through to the underlying message.
       const raw = err instanceof Error ? err.message : String(err);
+      const name = err instanceof Error ? err.name : "";
       let friendly = raw;
-      if (/Failed to fetch|NetworkError|TypeError/i.test(raw)) {
+      // Browsers word a failed request differently: Chrome says
+      // "Failed to fetch", Safari says "Load failed", Firefox
+      // "NetworkError". Only the Chrome phrasing was matched, so an
+      // iPhone customer — the majority here — was shown a bare
+      // "Load failed" instead of being told their draft was safe.
+      // Match on the error type as well, since every one of these is
+      // a TypeError however it is worded.
+      if (
+        name === "TypeError" ||
+        /Failed to fetch|Load failed|NetworkError|network request failed|TypeError/i.test(
+          raw,
+        )
+      ) {
         friendly = "Couldn't reach the server. Check your internet connection and try again — your draft is safe.";
       } else if (/Rate limit reached/i.test(raw)) {
         friendly = "We're rate-limited right now. Please try again in an hour — your draft is safe.";
