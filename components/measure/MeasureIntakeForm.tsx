@@ -200,6 +200,16 @@ export default function MeasureIntakeForm() {
   const [savedTick, setSavedTick] = useState(0);
   const draftSaver = useRef(makeDebouncedSaver<ProjectDraftSnapshot>(400));
   const [scanRoomId, setScanRoomId] = useState<string | null>(null);
+  /**
+   * Confirmation of the last scan written into a room.
+   *
+   * The overlay used to close with no feedback whatsoever, so an
+   * accurate scan that failed to reach the form was indistinguishable
+   * from one that landed — which is exactly what was reported. Saying
+   * what was written, and to which room, makes the two cases tell
+   * themselves apart.
+   */
+  const [scanApplied, setScanApplied] = useState<string | null>(null);
   const [scanPickerOpen, setScanPickerOpen] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<
     "idle" | "submitting" | "success" | "error"
@@ -1655,15 +1665,24 @@ export default function MeasureIntakeForm() {
             onClose={() => setScanRoomId(null)}
             onApply={(scan) => {
               applyScanResultToRoom(scanRoomId, scan);
-              // Show the room that was just measured.
-              //
-              // The scan can target a room other than the one on screen
-              // — the banner opens a picker when there are several — so
-              // the measurements landed correctly but out of sight, and
-              // the form looked like it had ignored them. Follow the
-              // scan to wherever it was applied.
+              // Show the room that was just measured. A scan can target
+              // a room other than the one on screen — the banner opens
+              // a picker when there are several — so measurements could
+              // land correctly but out of sight.
               const updated = rooms.findIndex((r) => r.id === scanRoomId);
               if (updated >= 0) setActiveRoomIndex(updated);
+              const walls = scan.measurements
+                .filter((m) => m.kind === "wall")
+                .map((m) => m.valueM.toFixed(2));
+              const target =
+                updated >= 0
+                  ? roomDisplayLabel(rooms[updated], updated)
+                  : "this room";
+              setScanApplied(
+                walls.length
+                  ? `Applied ${walls.join(" × ")} m to ${target}.`
+                  : `The scan returned no wall measurements, so ${target} was left unchanged.`,
+              );
               setScanRoomId(null);
             }}
           />
@@ -1955,6 +1974,25 @@ export default function MeasureIntakeForm() {
 
         {step === "rooms" && (
           <div className="space-y-10">
+            {/* Result of the last scan. Closing the overlay silently
+                meant a scan that reached the form and one that didn't
+                looked identical. */}
+            {scanApplied && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex items-start justify-between gap-3 rounded-xl border border-primary/40 bg-primary/10 px-4 py-3"
+              >
+                <p className="text-sm text-on-surface">{scanApplied}</p>
+                <button
+                  type="button"
+                  onClick={() => setScanApplied(null)}
+                  className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant hover:text-on-surface"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
             {/* Quick-start templates — pre-build the room list for the
                 most common UK property types. The customer still tweaks
                 wall lengths / ceilings, but skips the typing. */}
