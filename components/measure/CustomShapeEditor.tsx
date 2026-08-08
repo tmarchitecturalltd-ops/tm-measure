@@ -181,7 +181,18 @@ export default function CustomShapeEditor({ room, onPatch }: CustomShapeEditorPr
           height={CANVAS_PX}
           viewBox={`0 0 ${CANVAS_PX} ${CANVAS_PX}`}
           onClick={handleClick}
-          style={{ cursor: "crosshair", maxWidth: "100%", height: "auto" }}
+          // touchAction must sit on the canvas, not on the corner
+          // handles. iOS Safari ignores touch-action on SVG child
+          // elements, so dragging a corner up or down scrolled the page
+          // underneath at the same time — the shape moved and the form
+          // moved with it. Declaring it here stops the browser claiming
+          // the gesture before the handle sees it.
+          style={{
+            cursor: "crosshair",
+            maxWidth: "100%",
+            height: "auto",
+            touchAction: "none",
+          }}
           role="img"
           aria-label="Tap to place room corners"
         >
