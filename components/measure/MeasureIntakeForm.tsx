@@ -1655,6 +1655,15 @@ export default function MeasureIntakeForm() {
             onClose={() => setScanRoomId(null)}
             onApply={(scan) => {
               applyScanResultToRoom(scanRoomId, scan);
+              // Show the room that was just measured.
+              //
+              // The scan can target a room other than the one on screen
+              // — the banner opens a picker when there are several — so
+              // the measurements landed correctly but out of sight, and
+              // the form looked like it had ignored them. Follow the
+              // scan to wherever it was applied.
+              const updated = rooms.findIndex((r) => r.id === scanRoomId);
+              if (updated >= 0) setActiveRoomIndex(updated);
               setScanRoomId(null);
             }}
           />
@@ -3068,19 +3077,24 @@ export default function MeasureIntakeForm() {
             </section>
 
             <div className="flex flex-wrap items-center justify-between gap-4">
+              {/* Labelled deliberately. As a bare circular arrow sitting
+                  just below the room pager, this read as "previous room"
+                  — and tapping it threw the customer out of the rooms
+                  step back to name and email, losing their place. An
+                  icon-only control that leaves the step needs to say so. */}
               <button
                 type="button"
                 onClick={() => setStep("project")}
-                className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-outline bg-surface-container-low text-on-surface shadow-md transition-all hover:bg-surface-container active:scale-[0.94]"
-                aria-label="Back to project details"
+                className="inline-flex items-center gap-2 rounded-full border-2 border-outline bg-surface-container-low px-5 py-2.5 text-xs font-bold uppercase tracking-widest text-on-surface shadow-md transition-all hover:bg-surface-container active:scale-[0.94]"
               >
                 <span
                   className="material-symbols-outlined"
                   aria-hidden
-                  style={{ fontSize: "24px" }}
+                  style={{ fontSize: "18px" }}
                 >
                   arrow_back
                 </span>
+                Project details
               </button>
               <button
                 type="button"
