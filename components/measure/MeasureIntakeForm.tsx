@@ -308,14 +308,31 @@ export default function MeasureIntakeForm() {
           const ceiling = scan.measurements.find((m) => m.kind === "ceiling");
           const doors = scan.measurements.filter((m) => m.kind === "door");
 
-          // Fill wall slots in order; keep labels from the scan, fall back to
-          // existing label if the scan had fewer values than current walls.
+          // A scan of a rectangular room returns two measurements —
+          // width and length — but the room has four wall slots, where
+          // 0/2 are the width pair and 1/3 the length pair (the same
+          // contract setRectangleDim writes to).
+          //
+          // Filling slots in order left walls 2 and 3 empty. In
+          // rectangle mode only Width and Length are shown, so the room
+          // looked complete while failing validation on two walls the
+          // customer could not see — and switching to L-shape suddenly
+          // revealed "enter a length" against lengths already given.
+          const isRect = (r.shape ?? "rectangle") === "rectangle";
+          const mirrorPairs =
+            isRect && wallMeasurements.length === 2 && r.walls.length >= 4;
+
           const nextWalls: WallSegment[] = r.walls.map((existing, i) => {
-            const m = wallMeasurements[i];
+            const m = mirrorPairs
+              ? wallMeasurements[i % 2]
+              : wallMeasurements[i];
             return m
               ? {
                   id: existing.id,
-                  label: m.label || existing.label,
+                  // Keep the existing label on the mirrored pair; the
+                  // scan only names the first two walls, and relabelling
+                  // wall 3 as "Wall 1 (North)" would be wrong.
+                  label: (mirrorPairs && i > 1 ? existing.label : m.label) || existing.label,
                   lengthM: m.valueM.toFixed(2),
                 }
               : existing;
