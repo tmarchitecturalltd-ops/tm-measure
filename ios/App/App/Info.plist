@@ -8,6 +8,8 @@
         <string>TM Measure</string>
 	<key>NSCameraUsageDescription</key>
 	<string>TM Measure uses the camera to scan room dimensions during the auto-scan flow. Scan imagery is processed on your device and is not uploaded.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>TM Measure reads the angle your phone is held at while you tap room corners. Without it, distances cannot be calculated.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>TM Measure uses your microphone to record voice notes when measuring rooms.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
