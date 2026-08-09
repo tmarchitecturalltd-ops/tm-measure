@@ -21,6 +21,27 @@ import type { ReactNode } from "react";
 
 const HEADER_CLASS = "font-headline text-on-surface";
 
+/**
+ * Only allow link schemes that cannot execute script.
+ *
+ * `[text](url)` previously went straight into href, so a
+ * `javascript:` or `data:text/html` URL in the markdown would render
+ * as a working script link. The policy pages are static files in this
+ * repo, so it was not reachable by an outside attacker — but it makes
+ * this helper unsafe for any source that isn't fully trusted, and
+ * that's an easy assumption for someone to break later.
+ *
+ * Anything not on the allowlist renders as plain text rather than
+ * being silently dropped, so a mistake in a policy page is visible.
+ */
+function safeHref(raw: string): string | null {
+  const url = raw.trim();
+  // Relative and anchor links are fine and can't carry a scheme.
+  if (/^(\/|#|\.\/|\.\.\/)/.test(url)) return url;
+  if (/^(https?:|mailto:|tel:)/i.test(url)) return url;
+  return null;
+}
+
 function renderInline(text: string, keyPrefix: string): ReactNode[] {
   // Order matters: links first (so [text](url) tokens aren't mangled
   // by the bold/italic parsers), then bold, then italic, then code.
@@ -37,7 +58,16 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
     const italicMatch = /^\*([^*]+)\*/.exec(rest);
     const codeMatch = /^`([^`]+)`/.exec(rest);
     if (linkMatch) {
-      push(<a href={linkMatch[2]} className="text-primary underline" target="_blank" rel="noopener noreferrer">{linkMatch[1]}</a>);
+      const href = safeHref(linkMatch[2]);
+      push(
+        href ? (
+          <a href={href} className="text-primary underline" target="_blank" rel="noopener noreferrer">{linkMatch[1]}</a>
+        ) : (
+          // Disallowed scheme — show the text so the page still reads,
+          // but never make it clickable.
+          <>{linkMatch[1]}</>
+        ),
+      );
       rest = rest.slice(linkMatch[0].length);
     } else if (boldMatch) {
       push(<strong>{boldMatch[1]}</strong>);
