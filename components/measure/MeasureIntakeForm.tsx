@@ -1671,11 +1671,11 @@ export default function MeasureIntakeForm() {
     )}&body=${body}`;
   };
 
+  // Top padding clears the fixed header AND the status bar. In Safari
+  // the browser chrome kept them apart; in the native build the web
+  // view owns the full screen, so the header sat underneath the clock
+  // and battery icons and the title was unreadable.
   return (
-    {/* Top padding clears the fixed header AND the status bar. In
-        Safari the browser chrome kept them apart; in the native build
-        the web view owns the full screen, so the header sat underneath
-        the clock and battery icons and the title was unreadable. */}
     <div
       className="min-h-screen bg-surface pb-28"
       style={{ paddingTop: "calc(6rem + env(safe-area-inset-top))" }}
