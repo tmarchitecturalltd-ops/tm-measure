@@ -40,12 +40,26 @@ export default function StatusPage() {
       if (!endpoint) {
         throw new Error("Submission endpoint not configured.");
       }
-      const qs = new URLSearchParams({
-        action: "status",
-        id: id.trim(),
-        email: email.trim(),
+      // POST, not GET.
+      //
+      // The lookup used to put the customer's email in the query
+      // string, which writes it into Google's request logs, the
+      // browser's history and any referrer header the page emits. A
+      // request body is not logged that way.
+      //
+      // text/plain keeps this a "simple" CORS request — Apps Script
+      // web apps reject preflight — and the script parses the body as
+      // JSON. Same approach the submission uses.
+      const r = await fetch(endpoint, {
+        method: "POST",
+        mode: "cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "status",
+          id: id.trim(),
+          email: email.trim(),
+        }),
       });
-      const r = await fetch(`${endpoint}?${qs.toString()}`);
       const data: { ok?: boolean; error?: string; status?: StatusResp } = await r.json();
       if (data.ok === false) throw new Error(data.error || "Lookup failed.");
       if (!data.status) throw new Error("No status returned.");

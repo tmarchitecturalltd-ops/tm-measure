@@ -28,6 +28,79 @@
  */
 
 
+// ─── 0. REPLACE doPost ─────────────────────────────────────
+//
+// Two reasons.
+//
+// SECURITY: the status lookup used to be a GET with the customer's
+// email in the query string, which writes it into Google's request
+// logs, browser history and referrer headers. Moving it to a POST body
+// keeps it out of all three. The GET form still works, so nothing
+// breaks while the app updates — remove it once you're happy.
+//
+// BUG: the architect console POSTs {action:"list"}, but doPost only
+// recognised "approve". Anything else fell through to validatePayload_
+// and failed with "Missing email", so the console could never list
+// submissions. list and detail are now handled here too.
+
+function doPost(e) {
+  try {
+    if (!e || !e.postData || !e.postData.contents) {
+      throw new Error('Empty request body.');
+    }
+    const payload = JSON.parse(e.postData.contents);
+    const action = String(payload.action || '').toLowerCase();
+
+    // Customer-facing status lookup. Gated by knowing BOTH the
+    // submission ID and the email on it, so no admin secret is needed.
+    if (action === 'status') {
+      return jsonResponse_({
+        ok: true,
+        status: getStatusForCustomer_(
+          String(payload.id || ''),
+          String(payload.email || '')
+        ),
+      });
+    }
+
+    // Architect endpoints. The secret travels in the body, never a
+    // query string, so it stays out of logs and browser history.
+    if (action === 'list') {
+      requireAdminSecret_(payload.secret);
+      return jsonResponse_({ ok: true, submissions: listSubmissions_() });
+    }
+    if (action === 'detail') {
+      requireAdminSecret_(payload.secret);
+      return jsonResponse_({
+        ok: true,
+        submission: getSubmission_(String(payload.id || '')),
+      });
+    }
+    if (action === 'approve') {
+      requireAdminSecret_(payload.secret);
+      return jsonResponse_({
+        ok: true,
+        approvedAt: approveSubmission_(String(payload.id || '')),
+      });
+    }
+
+    // No action → this is a survey submission.
+    validatePayload_(payload);
+    checkSubmissionRate_();
+
+    const submissionId = Utilities.getUuid().slice(0, 8).toUpperCase();
+    uploadPhotos_(payload, submissionId);
+    appendRows_(payload, submissionId);
+    sendEmail_(payload, submissionId);
+
+    return jsonResponse_({ ok: true, submissionId: submissionId });
+  } catch (err) {
+    console.error(err);
+    return jsonResponse_({ ok: false, error: String(err.message || err) });
+  }
+}
+
+
 // ─── 1. REPLACE the HEADERS constant ───────────────────────
 // Three new columns before "Raw payload". migrateHeaders_ inserts them
 // into the existing sheet automatically on the next submission, so
