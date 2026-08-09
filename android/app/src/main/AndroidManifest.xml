@@ -47,9 +47,19 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
-    <!-- Photo picking from the camera roll. Android 13+ uses the granular
-         media permissions; older versions fall back to external storage. -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Photo picking.
+         READ_MEDIA_IMAGES is deliberately NOT declared.
+
+         Photos are chosen through <input type="file"> in the WebView,
+         which hands off to Android's system picker. That returns a
+         content URI for the single file the customer selected, so no
+         permission is needed. READ_MEDIA_IMAGES would ask for access to
+         every image on the device — far more than the app uses — and
+         Google Play flagged version 1041 for exactly that under its
+         photo and video permissions policy.
+
+         READ_EXTERNAL_STORAGE stays for Android 12 and below, which
+         predates the system picker. -->
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />

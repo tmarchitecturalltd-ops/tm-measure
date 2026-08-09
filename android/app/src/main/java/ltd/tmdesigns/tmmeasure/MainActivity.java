@@ -50,12 +50,18 @@ public class MainActivity extends BridgeActivity {
         addIfMissing(needed, Manifest.permission.CAMERA);
         addIfMissing(needed, Manifest.permission.RECORD_AUDIO);
 
-        // Android 13 (API 33) replaced READ_EXTERNAL_STORAGE with granular
-        // media permissions; asking for the wrong one on either side of
-        // that line results in an automatic denial.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            addIfMissing(needed, Manifest.permission.READ_MEDIA_IMAGES);
-        } else {
+        // No media-read permission on Android 13+.
+        //
+        // Photos are chosen through the WebView's <input type="file">,
+        // which opens the system picker. The picker grants access to
+        // just the selected file, so READ_MEDIA_IMAGES is unnecessary —
+        // and requesting it means asking for every image on the device,
+        // which Google Play flagged on version 1041 under its photo and
+        // video permissions policy.
+        //
+        // Android 12 and below predate the picker, so they still need
+        // the old storage read.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             addIfMissing(needed, Manifest.permission.READ_EXTERNAL_STORAGE);
         }
 
