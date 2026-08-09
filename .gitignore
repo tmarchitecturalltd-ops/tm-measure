@@ -47,3 +47,25 @@ next-env.d.ts
 /_stitch_extract/
 /_prd.zip
 /_prd_text.txt
+
+certificates
+
+# Signing material. The upload keystore is the only thing that can sign
+# an update to the Play listing: publishing it means losing control of
+# the app, and it cannot be rotated without Google's involvement. These
+# were previously untracked but not ignored — one `git add -A` from
+# being pushed to a public remote.
+*.keystore
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+google-services.json
+gcloud-service-account*.json
+
+# Build artifacts — large, rebuildable, and .aab/.apk bundles embed the
+# runtime config they were built with.
+*.aab
+*.apk
+*.apks
+*.ipa
