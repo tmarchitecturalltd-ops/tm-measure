@@ -19,7 +19,17 @@
 
 // ─── CONFIG ────────────────────────────────────────────────
 const CONFIG = {
-  recipientEmail: 'inquiries@tmdesignsltd.com',
+  // Goes to the Gmail account directly.
+  //
+  // This used to be inquiries@tmdesignsltd.com. MailApp accepted every
+  // message and the send quota decremented, but nothing was ever
+  // delivered — a search of that label found only three emails, all
+  // from April. So no submission notification had ever arrived, while
+  // the sheet and Drive were filling up correctly the whole time.
+  //
+  // Point this back at inquiries@ once that address is confirmed to
+  // deliver; test with emailDiagnostic() before trusting it.
+  recipientEmail: 'tmarchitecturalltd@gmail.com',
   sheetName: 'Submissions',
   companyName: 'TM Architectural Designs Ltd.',
   photoMaxBytes: 5 * 1024 * 1024,
