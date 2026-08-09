@@ -1672,9 +1672,19 @@ export default function MeasureIntakeForm() {
   };
 
   return (
-    <div className="min-h-screen bg-surface pb-28 pt-24">
+    {/* Top padding clears the fixed header AND the status bar. In
+        Safari the browser chrome kept them apart; in the native build
+        the web view owns the full screen, so the header sat underneath
+        the clock and battery icons and the title was unreadable. */}
+    <div
+      className="min-h-screen bg-surface pb-28"
+      style={{ paddingTop: "calc(6rem + env(safe-area-inset-top))" }}
+    >
       <TutorialOverlay />
-      <header className="fixed left-0 right-0 top-0 z-40 border-b border-outline-variant/20 bg-surface/90 backdrop-blur-xl">
+      <header
+        className="fixed left-0 right-0 top-0 z-40 border-b border-outline-variant/20 bg-surface/90 backdrop-blur-xl"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+      >
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-3">
             <Link

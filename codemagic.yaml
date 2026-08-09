@@ -17,7 +17,16 @@
 #          BUNDLE_ID.
 #        - `play_store`        — GCLOUD_SERVICE_ACCOUNT_CREDENTIALS,
 #          PACKAGE_NAME.
-#        - `app_runtime`       — NEXT_PUBLIC_MEASURE_SUBMIT_URL.
+#        - `app_runtime`       — NEXT_PUBLIC_MEASURE_SUBMIT_URL,
+#          NEXT_PUBLIC_ENABLE_SCAN, NEXT_PUBLIC_ENABLE_LIDAR.
+#
+#          NEXT_PUBLIC_ENABLE_SCAN=1 is required or the entire
+#          auto-scan feature is hidden. It lived only in .env.local,
+#          which CI never reads, so every store build shipped without
+#          the app's headline feature — confirmed on TestFlight 1024,
+#          where no Auto-Scan option appeared at all. Setting
+#          NEXT_PUBLIC_ENABLE_LIDAR alone does nothing, because the
+#          LiDAR path sits inside the section this flag gates.
 #   5. Set the default branch to `main`.
 #
 # Each workflow build takes ~12–18 min for iOS, ~6–10 min for Android.

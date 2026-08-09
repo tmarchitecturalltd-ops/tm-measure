@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import IconFallback from "@/components/IconFallback";
 import RegisterSW from "@/components/RegisterSW";
@@ -7,6 +7,27 @@ export const metadata: Metadata = {
   title: "TM Designs Ltd | Architectural Excellence",
   description:
     "Professional architectural drawings from £550. Guaranteed 2-week delivery, 100% online, UK-wide. 98% first-time planning approval.",
+};
+
+/**
+ * No viewport was declared at all, which caused two problems that only
+ * appear in the native build, never in Safari.
+ *
+ * `viewportFit: "cover"` lets the page use the full screen on a
+ * notched iPhone AND makes the env(safe-area-inset-*) values
+ * meaningful. Without it those insets are zero, so the header rendered
+ * underneath the status bar and the title collided with the clock and
+ * the battery icon.
+ *
+ * maximumScale is deliberately left alone. Pinch-zoom must keep
+ * working: a customer measuring a room needs to zoom into a tap target
+ * or a photo, and disabling it is also an accessibility failure.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#b89650",
 };
 
 export default function RootLayout({
