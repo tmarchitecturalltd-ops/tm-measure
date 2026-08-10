@@ -446,12 +446,21 @@ function defaultSummary({
   const areaPart = areaM2
     ? `The scan identifies an area of ${areaM2.toFixed(2)} m².`
     : "Area could not be derived automatically — please verify wall lengths.";
+  // These three lines used to claim things the app cannot know. "All
+  // primary wall structures were verified with high precision" — nothing
+  // verifies them; the bucket comes from geometry sanity checks, not a
+  // ground truth. "Some measurements may be occluded" — there is no
+  // occlusion detection anywhere in the pipeline. "Re-scan in better
+  // lighting" — lighting is never sampled. Telling a customer their
+  // measurements were verified when they were not is the worst thing
+  // this screen could do, so each line now describes the check that
+  // actually ran and asks them to confirm against a tape.
   const confidencePart =
     overall === "high"
-      ? "All primary wall structures were verified with high precision."
+      ? "The corners formed a consistent rectangle. Please still check one wall against a tape before confirming."
       : overall === "medium"
-      ? "Some measurements may be occluded — review the Medium-confidence rows before confirming."
-      : "Confidence is low — we recommend re-scanning in better lighting.";
+      ? "The geometry checks passed with some slack — check the Medium-confidence rows against a tape."
+      : "The geometry checks did not agree. Treat these as rough and measure by hand, or re-scan taking more care over the corner taps.";
   return `${areaPart} ${confidencePart}`;
 }
 

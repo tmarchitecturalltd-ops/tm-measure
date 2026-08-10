@@ -24,7 +24,7 @@ export type ScanMeasurementKind =
 /** A single detected dimension produced by a scan. */
 export type ScanMeasurement = {
   id: string;
-  /** Short label e.g. "Wall 1 (North)", "Ceiling Height", "Door Width". */
+  /** Short label e.g. "Wall 1", "Ceiling Height", "Door Width". */
   label: string;
   /** What this measurement refers to. Drives which RoomDraft field it maps to. */
   kind: ScanMeasurementKind;
@@ -34,7 +34,13 @@ export type ScanMeasurement = {
   confidence: ScanConfidence;
   /** +/- variance in metres, if the scanner can produce one. */
   varianceM?: number;
-  /** Short note shown under the chip e.g. "Potential occlusion", "Reference Standard". */
+  /**
+   * Short note shown under the chip, e.g. "Estimated — please confirm".
+   *
+   * Set this only for a condition the pipeline genuinely detected. It
+   * previously carried "Potential occlusion" and "Reference Standard",
+   * neither of which corresponded to any check that runs.
+   */
   note?: string;
 };
 
