@@ -44,16 +44,11 @@ const CONFIG = {
 
 /**
  * Architect secret. Set in Project Settings → Script Properties as
- * ADMIN_SECRET. If missing, the read endpoints are OPEN — see the
- * warning below.
+ * ADMIN_SECRET.
  */
 function adminSecret_() {
   const value = PropertiesService.getScriptProperties().getProperty('ADMIN_SECRET');
-  if (!value) {
-    console.warn('ADMIN_SECRET not set — architect endpoints are unauthenticated.');
-    return null;
-  }
-  return value;
+  return value || null;
 }
 
 /** Constant-time compare so timing can't probe the secret. */
@@ -68,9 +63,27 @@ function safeEqual_(a, b) {
   return diff === 0;
 }
 
+/**
+ * Gate on the architect secret. Fails CLOSED.
+ *
+ * This used to return early when ADMIN_SECRET was unset, which meant a
+ * missing or mistyped Script Property silently published every
+ * submission the business holds — customer names, email addresses,
+ * property details and photo links — to anyone who had the /exec URL.
+ * That URL is not a secret: it travels in the app bundle and is
+ * pasted into the console on any device the architect uses. The
+ * failure mode of a misconfiguration must be "nothing works", not
+ * "everything is readable".
+ */
 function requireAdminSecret_(provided) {
   const expected = adminSecret_();
-  if (expected === null) return;
+  if (expected === null) {
+    console.error('ADMIN_SECRET is not set — refusing architect request.');
+    throw new Error(
+      'Server not configured: ADMIN_SECRET is not set in Script Properties. ' +
+      'Set it, redeploy, then try again.'
+    );
+  }
   if (!safeEqual_(provided, expected)) {
     throw new Error('Unauthorised. Provide the correct admin secret.');
   }
@@ -167,7 +180,7 @@ function doGet(e) {
       return jsonResponse_({
         ok: true,
         service: 'TM Measure submission endpoint',
-        note: 'Use POST to submit. GET supports ?action=status|list|detail.',
+        note: 'Use POST to submit. GET supports ?action=status only; list and detail are POST-only.',
       });
     }
     if (action === 'status') {
@@ -176,9 +189,18 @@ function doGet(e) {
         status: getStatusForCustomer_(String(params.id || ''), String(params.email || '')),
       });
     }
-    requireAdminSecret_(params.secret);
-    if (action === 'list')   return jsonResponse_({ ok: true, submissions: listSubmissions_() });
-    if (action === 'detail') return jsonResponse_({ ok: true, submission: getSubmission_(String(params.id || '')) });
+    // list/detail are POST-only. They used to be reachable here with
+    // ?secret=… in the query string, which contradicts the rule stated
+    // in doPost that the secret never travels in a URL — and a URL is
+    // the worst place for it: Apps Script records the full request in
+    // the execution log, and it lands in browser history and in the
+    // Referer header of anything the page subsequently loads. Every
+    // caller in the app already POSTs, so nothing is lost by refusing.
+    if (action === 'list' || action === 'detail') {
+      throw new Error(
+        'Use POST for ' + action + '. Query-string secrets are not accepted.'
+      );
+    }
     throw new Error('Unknown action: ' + action);
   } catch (err) {
     console.error(err);

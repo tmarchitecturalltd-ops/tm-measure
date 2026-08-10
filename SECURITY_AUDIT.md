@@ -80,33 +80,38 @@ lives in the Apps Script, which is the correct place for it.
 
 **Mitigation:** ensure `ADMIN_SECRET` is set (see M2).
 
-### M2 — Endpoints are open if `ADMIN_SECRET` is unset
-**Severity:** Medium · **Status:** needs a one-off action from you
+### M2 — Endpoints were open if `ADMIN_SECRET` was unset
+**Severity:** Medium · **Status:** fixed in code — still needs the
+property set and the script redeployed
 
-```js
-function adminSecret_() {
-  const value = PropertiesService.getScriptProperties().getProperty('ADMIN_SECRET');
-  if (!value) {
-    console.warn('ADMIN_SECRET not set — architect endpoints are unauthenticated.');
-    return null;   // ← requireAdminSecret_ then permits everything
-  }
-  return value;
-}
-```
+`requireAdminSecret_` returned early when the property was missing, so
+`list` and `detail` would return **every submission held** — names,
+email addresses, the addresses implied by project names, and Drive
+links to photographs of customers' homes — to anyone with the endpoint
+URL. That URL ships inside a public app bundle, so it must be assumed
+known. A single mistyped property name was enough to trigger this, and
+nothing would have looked wrong from the outside.
 
-If the property is missing, `list` and `detail` return **every
-submission you hold** — names, emails, addresses implied by project
-names, and Drive links to photographs of customers' homes — to anyone
-who knows the endpoint URL. The URL is embedded in a public app bundle,
-so it should be assumed known.
+It now fails closed: with no `ADMIN_SECRET` configured, architect
+requests are refused with an explicit "server not configured" error.
+The failure mode of a misconfiguration is now "nothing works" rather
+than "everything is readable".
 
-The fallback exists for developer convenience and only logs a warning.
+`doGet` also accepted `?secret=…` in the query string for `list` and
+`detail`, contradicting the rule stated in `doPost` that the secret
+never travels in a URL. A URL is the worst available carrier: Apps
+Script writes the full request into its execution log, and it lands in
+browser history and in the `Referer` header of anything the page loads
+afterwards. Every caller in the app already POSTs, so both actions are
+now POST-only.
 
-**Action:** Apps Script → Project Settings → Script Properties → add
-`ADMIN_SECRET` with a long random value. Confirm afterwards that
-`?action=list` without a secret is refused.
+**Still required from you:**
 
-This is the single most valuable thing outstanding.
+1. Apps Script → Project Settings → Script Properties → set
+   `ADMIN_SECRET` to a long random value (40 chars, not a passphrase).
+2. Redeploy: Deploy → Manage deployments → Edit → New version.
+3. Confirm `?action=list` over GET is refused, and that the architect
+   console still loads with the secret entered.
 
 ### L1 — FileProvider exposes the external storage root
 **Severity:** Low · **Status:** deferred deliberately
