@@ -1300,16 +1300,24 @@ export default function RoomScanOverlay({
           </div>
         )}
 
-      {/* Top bar */}
+      {/* Top bar.
+          The overlay covers the whole screen, so this bar sits under
+          the status bar unless it clears the safe-area inset — the room
+          name collided with the clock and the battery icon. min-w-0 and
+          truncate stop a long room name pushing the Close button off
+          the edge. */}
       <div
-        className="relative z-20 flex items-center justify-between px-4 py-3"
-        style={{ backgroundColor: `${HUD}e6` }}
+        className="relative z-20 flex items-center justify-between gap-3 px-4 py-3"
+        style={{
+          backgroundColor: `${HUD}e6`,
+          paddingTop: "calc(0.75rem + env(safe-area-inset-top))",
+        }}
       >
-        <div>
+        <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: GOLD }}>
             Scan your room
           </p>
-          <p className="text-sm font-semibold text-white/90">{roomLabel || "Room"}</p>
+          <p className="truncate text-sm font-semibold text-white/90">{roomLabel || "Room"}</p>
         </div>
         <button
           type="button"

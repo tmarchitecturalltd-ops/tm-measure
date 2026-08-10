@@ -509,3 +509,30 @@ select:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * Stop iOS zooming in when a form field is focused.
+ *
+ * Safari and every iOS web view auto-zoom onto any input whose font is
+ * smaller than 16px, and they do not zoom back out afterwards. The page
+ * is left magnified, the layout overflows the screen, and text is
+ * clipped at the right edge — which reads as "the app is broken and I
+ * can't zoom out". Rotating the device while zoomed makes it worse,
+ * because the zoom is preserved across the orientation change.
+ *
+ * The form uses Tailwind's text-sm (14px) on inputs, which is under the
+ * threshold. Rather than change every field's visual size, pin the
+ * *computed* font-size to 16px only where the browser applies this
+ * behaviour — coarse pointers, i.e. touch devices. Desktop keeps the
+ * smaller type.
+ *
+ * 16px is the documented threshold; anything below it triggers the
+ * zoom, anything at or above it does not.
+ */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
