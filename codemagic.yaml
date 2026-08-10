@@ -96,15 +96,23 @@ workflows:
       # checkbox will not respond, so build 1027 could not be
       # distributed at all.
       #
-      # Codemagic can do it at upload time instead, which avoids that UI
-      # completely and removes a manual step from every future build.
-      # beta_groups must match the group name in App Store Connect
-      # exactly — "Internal" here.
+      # Distributing from here was tried and Apple refuses it:
+      #
+      #   Failed to add build to 'Internal' beta group.
+      #   Builds cannot be assigned to this internal group.
+      #   Cannot add internal group to a build.
+      #
+      # beta_groups only accepts EXTERNAL groups. An internal group is
+      # populated by App Store Connect itself, and its "Automatic for
+      # Xcode Builds" setting does not cover API uploads, which is how
+      # Codemagic uploads — hence the manual step.
+      #
+      # Left as upload-only so the build stops failing post-processing.
+      # To automate this properly the group would have to be external,
+      # which brings Beta App Review into the loop for each version.
       app_store_connect:
         auth: integration
-        submit_to_testflight: true
-        beta_groups:
-          - Internal
+        submit_to_testflight: false
 
   android_release:
     name: TM Measure — Android release
