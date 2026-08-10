@@ -298,6 +298,24 @@ export default function AppHome() {
               hero copy so it's findable for first-time users without
               competing with the main tile-grid CTA. */}
           <p className="mt-4 flex flex-wrap gap-2">
+            {/* The welcome screen tells the customer they can revisit it
+                "any time from the home screen", but nothing here did
+                that — the flag was set on dismissal and there was no way
+                back. This is that way back. */}
+            <button
+              type="button"
+              onClick={() => setShowWelcome(true)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
+            >
+              <span
+                className="material-symbols-outlined text-primary"
+                style={{ fontSize: "14px" }}
+                aria-hidden
+              >
+                help
+              </span>
+              How it works
+            </button>
             <Link
               href="/photo-tips"
               className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"

@@ -1516,13 +1516,20 @@ export default function RoomScanOverlay({
                         : { border: "1px solid rgba(255,255,255,0.2)" }
                     }
                   >
+                    {/* Worded bluntly on purpose. "Needs a lot of space"
+                        read as a mild caveat, so it was picked for an
+                        ordinary room and failed — all four floor corners
+                        genuinely have to be in one frame, which a phone
+                        cannot manage indoors unless the space is large
+                        or you can stand well back through a doorway. */}
                     <span className="block text-xs font-bold uppercase tracking-widest">
-                      Whole room
+                      Whole room · rarely fits
                     </span>
                     <span
                       className={`mt-0.5 block text-[11px] ${measureMode === "room" ? "text-[#1c1c1a]/70" : "text-white/60"}`}
                     >
-                      All four corners in one shot. Needs a lot of space.
+                      All four floor corners must be visible at once. Only
+                      works in large rooms — use Wall to wall otherwise.
                     </span>
                   </button>
                 </div>

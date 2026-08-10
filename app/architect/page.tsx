@@ -133,6 +133,23 @@ export default function ArchitectListPage() {
   return (
     <div className="min-h-screen bg-surface pb-24 pt-10">
       <header className="mx-auto mb-8 max-w-5xl px-4 md:px-6">
+        {/* This page had no way out. In a browser you'd reach for the
+            back button; in the installed app there isn't one, so the
+            only escape was force-quitting. Every other section has this
+            — the console was the one that didn't. */}
+        <Link
+          href="/"
+          className="mb-3 inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-primary transition-opacity hover:opacity-70"
+        >
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: "16px" }}
+            aria-hidden
+          >
+            arrow_back
+          </span>
+          Home
+        </Link>
         <p className="font-label text-[10px] font-bold uppercase tracking-[0.3em] text-primary">
           TM Measure
         </p>
