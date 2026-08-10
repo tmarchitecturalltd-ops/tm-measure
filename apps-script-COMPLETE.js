@@ -34,6 +34,12 @@ const CONFIG = {
   companyName: 'TM Architectural Designs Ltd.',
   photoMaxBytes: 5 * 1024 * 1024,
   photoAllowedMimes: ['image/jpeg', 'image/png', 'image/webp'],
+  // Voice memos are short and already compressed; 10 MB is a generous
+  // ceiling for a few minutes of speech. The MIME list covers what
+  // MediaRecorder actually emits: Chrome/Android give audio/webm,
+  // iOS Safari gives audio/mp4, Firefox may give audio/ogg.
+  audioMaxBytes: 10 * 1024 * 1024,
+  audioAllowedMimes: ['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav'],
 };
 
 /**
@@ -337,6 +343,7 @@ function uploadPhotos_(payload, submissionId) {
 
   let hasData = rooms.some(function (r) {
     if (anyWithData(r.photos)) return true;
+    if (anyWithData(r.voiceMemos)) return true;
     return (r.walls || []).some(function (w) { return anyWithData(w.photos); });
   });
   if (!hasData) {
@@ -366,37 +373,65 @@ function uploadPhotos_(payload, submissionId) {
     'image/webp': 'webp',
   };
 
-  const uploadPhoto = function (photo, fallbackName) {
-    if (!photo || !photo.dataUri) return;
+  const audioAllowedMimes = CONFIG.audioAllowedMimes;
+  const audioExtByMime = {
+    'audio/webm': 'webm',
+    'audio/mp4': 'm4a',
+    'audio/mpeg': 'mp3',
+    'audio/ogg': 'ogg',
+    'audio/wav': 'wav',
+  };
+
+  /**
+   * Generic media upload. `kind` only changes the allowlist, size cap,
+   * extension table and log wording — the important part is that
+   * dataUri is deleted on EVERY exit path, so an unhandled file can
+   * never leak its base64 into the sheet's Raw payload cell.
+   */
+  const uploadMedia = function (item, fallbackName, kind) {
+    if (!item || !item.dataUri) return;
+    const isAudio = kind === 'audio';
+    const allowed = isAudio ? audioAllowedMimes : allowedMimes;
+    const maxBytes = isAudio ? CONFIG.audioMaxBytes : CONFIG.photoMaxBytes;
+    const extTable = isAudio ? audioExtByMime : extByMime;
     try {
-      const match = String(photo.dataUri).match(/^data:([^;]+);base64,(.+)$/);
+      // Tolerate MIME parameters. MediaRecorder emits data URIs like
+      // "data:audio/webm;codecs=opus;base64,…" — a regex anchored on
+      // ";base64," straight after the MIME type does not match those,
+      // so every Chrome and Android voice memo was being discarded as
+      // malformed before it could be looked at.
+      const match = String(item.dataUri).match(/^data:([^;,]+)(;[^,]*)?;base64,(.+)$/);
       if (!match) {
-        console.warn('Skipping photo with malformed data URI:', fallbackName);
-        delete photo.dataUri;
+        console.warn('Skipping ' + kind + ' with malformed data URI:', fallbackName);
+        delete item.dataUri;
         return;
       }
       const mime = String(match[1]).toLowerCase();
-      if (allowedMimes.indexOf(mime) === -1) {
-        console.warn('Rejected photo with disallowed MIME:', mime, fallbackName);
-        delete photo.dataUri;
+      if (allowed.indexOf(mime) === -1) {
+        console.warn('Rejected ' + kind + ' with disallowed MIME:', mime, fallbackName);
+        delete item.dataUri;
         return;
       }
-      const bytes = Utilities.base64Decode(match[2]);
-      if (bytes.length > CONFIG.photoMaxBytes) {
-        console.warn('Rejected oversized photo:', bytes.length, 'bytes', fallbackName);
-        delete photo.dataUri;
+      const bytes = Utilities.base64Decode(match[3]);
+      if (bytes.length > maxBytes) {
+        console.warn('Rejected oversized ' + kind + ':', bytes.length, 'bytes', fallbackName);
+        delete item.dataUri;
         return;
       }
-      const ext = extByMime[mime] || 'bin';
-      const safeName = safeFilename(photo.name, fallbackName);
+      const ext = extTable[mime] || 'bin';
+      const safeName = safeFilename(item.name, fallbackName);
       const file = folder.createFile(Utilities.newBlob(bytes, mime, safeName + '.' + ext));
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      photo.driveUrl = file.getUrl();
-      delete photo.dataUri;
+      item.driveUrl = file.getUrl();
+      delete item.dataUri;
     } catch (err) {
-      console.error('Photo upload failed', err);
-      try { delete photo.dataUri; } catch (ignored) {}
+      console.error(kind + ' upload failed', err);
+      try { delete item.dataUri; } catch (ignored) {}
     }
+  };
+
+  const uploadPhoto = function (photo, fallbackName) {
+    uploadMedia(photo, fallbackName, 'photo');
   };
 
   rooms.forEach(function (room, ri) {
@@ -407,6 +442,15 @@ function uploadPhotos_(payload, submissionId) {
       (wall.photos || []).forEach(function (photo, pi) {
         uploadPhoto(photo, 'room-' + (ri + 1) + '-wall-' + (wi + 1) + '-photo-' + (pi + 1));
       });
+    });
+    // Voice memos were never uploaded. The app base64s them into the
+    // payload exactly like photos, but nothing here consumed them, so
+    // the audio survived into safeRaw_ — where a single 120 KB memo
+    // blows the 45k cap and truncates the whole Raw payload cell,
+    // taking every field after it with it. The memo itself was lost
+    // either way, and the customer had no idea.
+    (room.voiceMemos || []).forEach(function (memo, mi) {
+      uploadMedia(memo, 'room-' + (ri + 1) + '-voice-' + (mi + 1), 'audio');
     });
   });
 
@@ -449,6 +493,7 @@ const HEADERS = [
   'Position X (m)',
   'Position Z (m)',
   'Rotation (°)',
+  'Voice memos',
   'Exterior photos',
   'Proposal',
   'Proposal sketches',
@@ -578,6 +623,13 @@ function appendRows_(payload, submissionId) {
       return p.driveUrl ? (p.name || 'photo') + ' → ' + p.driveUrl : (p.name || '');
     }).filter(Boolean).join('\n');
 
+    const voice = (room.voiceMemos || []).map(function (m, i) {
+      const label = m.name || ('Voice memo ' + (i + 1));
+      const secs = (typeof m.durationMs === 'number' && isFinite(m.durationMs))
+        ? ' (' + Math.round(m.durationMs / 1000) + 's)' : '';
+      return m.driveUrl ? label + secs + ' → ' + m.driveUrl : label + secs;
+    }).filter(Boolean).join('\n');
+
     const placement = room.placement;
     const hasPlacement = placement && placement.positionM &&
       typeof placement.positionM.x === 'number' &&
@@ -607,6 +659,7 @@ function appendRows_(payload, submissionId) {
       posXCell,
       posZCell,
       rotationCell,
+      csvSafe_(voice),
       csvSafe_(exteriorStr),
       csvSafe_(proposalText),
       csvSafe_(sketchesStr),
@@ -750,6 +803,19 @@ function buildHtmlEmail_(payload, submissionId) {
         '</div>'
       : '';
 
+    const uploadedMemos = (room.voiceMemos || []).filter(function (m) { return m && m.driveUrl; });
+    const voiceBlock = uploadedMemos.length
+      ? '<div style="margin-top:12px;padding:0 12px;">' +
+          '<div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:' + mid + ';margin-bottom:4px;">Voice notes (' + uploadedMemos.length + ')</div>' +
+          uploadedMemos.map(function (m, i) {
+            const secs = (typeof m.durationMs === 'number' && isFinite(m.durationMs))
+              ? ' · ' + Math.round(m.durationMs / 1000) + 's' : '';
+            return '<div style="font-size:13px;line-height:1.5;">→ <a href="' + m.driveUrl + '" style="color:' + gold + ';text-decoration:none;">' +
+              escapeHtml_(m.name || ('Voice memo ' + (i + 1))) + '</a><span style="color:' + mid + ';">' + secs + '</span></div>';
+          }).join('') +
+        '</div>'
+      : '';
+
     // room.name, not room.label — the app sends name, so every room in
     // the email used to be headed simply "Room".
     return '<div style="margin-top:20px;border:1px solid ' + border + ';border-radius:8px;overflow:hidden;">' +
@@ -761,6 +827,7 @@ function buildHtmlEmail_(payload, submissionId) {
       '</table>' +
       (notesBlock ? '<div style="padding:0 12px 12px 12px;">' + notesBlock + '</div>' : '') +
       (photosBlock ? '<div style="padding:0 0 12px 0;">' + photosBlock + '</div>' : '') +
+      (voiceBlock ? '<div style="padding:0 0 12px 0;">' + voiceBlock + '</div>' : '') +
     '</div>';
   }).join('');
 
