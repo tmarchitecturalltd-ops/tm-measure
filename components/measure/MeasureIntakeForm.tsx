@@ -1671,15 +1671,11 @@ export default function MeasureIntakeForm() {
     )}&body=${body}`;
   };
 
-  // Top padding clears the fixed header AND the status bar. In Safari
-  // the browser chrome kept them apart; in the native build the web
-  // view owns the full screen, so the header sat underneath the clock
-  // and battery icons and the title was unreadable.
+  // Clears the fixed header only. The status-bar inset is handled once
+  // on the body in globals.css — adding it here as well would push the
+  // content down by twice the inset.
   return (
-    <div
-      className="min-h-screen bg-surface pb-28"
-      style={{ paddingTop: "calc(6rem + env(safe-area-inset-top))" }}
-    >
+    <div className="min-h-screen bg-surface pb-28 pt-24">
       <TutorialOverlay />
       <header
         className="fixed left-0 right-0 top-0 z-40 border-b border-outline-variant/20 bg-surface/90 backdrop-blur-xl"

@@ -536,3 +536,23 @@ select:focus-visible {
     font-size: 16px;
   }
 }
+
+/*
+ * Keep every page clear of the status bar.
+ *
+ * In a native web view the page owns the entire screen, including the
+ * area behind the clock, signal and battery icons. Each page was being
+ * patched individually as it turned up looking wrong — the intake
+ * form, then the scan HUD, then Photo tips — which was never going to
+ * end. One rule on the body covers everything in normal flow.
+ *
+ * Position-fixed headers are positioned against the viewport, not the
+ * body, so they are unaffected by this and still handle the inset
+ * themselves. There is exactly one of those, in MeasureIntakeForm.
+ *
+ * In a browser the inset is zero, so this changes nothing on desktop
+ * or on the marketing site.
+ */
+body {
+  padding-top: env(safe-area-inset-top);
+}
