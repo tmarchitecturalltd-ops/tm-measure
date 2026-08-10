@@ -479,6 +479,7 @@ const HEADERS = [
   'Customer Name',
   'Email',
   'Project Name',
+  'Project Type',
   'Unit',
   'Room',
   'Walls (m)',
@@ -579,22 +580,38 @@ function appendRows_(payload, submissionId) {
   const sketchesStr = sketchesSummary_(payload);
   const raw = safeRaw_(payload);
 
+  /**
+   * Build a row from a header→value map so it cannot drift out of
+   * alignment with HEADERS.
+   *
+   * The no-rooms branch below used to be a hand-counted array with runs
+   * of bare '' placeholders. Adding a column anywhere left of the end
+   * silently shifted every later value one cell to the left, so the
+   * Raw payload would land in Proposal sketches and so on — with no
+   * error, because the row was still an array of the wrong length.
+   */
+  const rowFrom = function (values) {
+    return HEADERS.map(function (h) {
+      return Object.prototype.hasOwnProperty.call(values, h) ? values[h] : '';
+    });
+  };
+
   if (rooms.length === 0) {
-    sheet.appendRow([
-      submittedAt,
-      submissionId,
-      csvSafe_(payload.customerName || ''),
-      csvSafe_(payload.email || ''),
-      csvSafe_(payload.projectName || ''),
-      csvSafe_(payload.unitPreference || ''),
-      '(no rooms submitted)',
-      '', '', '', '', '', '', '', csvSafe_(connectionsStr),
-      '', '', '', '',
-      csvSafe_(exteriorStr),
-      csvSafe_(proposalText),
-      csvSafe_(sketchesStr),
-      raw,
-    ]);
+    sheet.appendRow(rowFrom({
+      'Submitted At': submittedAt,
+      'Submission ID': submissionId,
+      'Customer Name': csvSafe_(payload.customerName || ''),
+      'Email': csvSafe_(payload.email || ''),
+      'Project Name': csvSafe_(payload.projectName || ''),
+      'Project Type': csvSafe_(payload.projectType || ''),
+      'Unit': csvSafe_(payload.unitPreference || ''),
+      'Room': '(no rooms submitted)',
+      'Connections': csvSafe_(connectionsStr),
+      'Exterior photos': csvSafe_(exteriorStr),
+      'Proposal': csvSafe_(proposalText),
+      'Proposal sketches': csvSafe_(sketchesStr),
+      'Raw payload': raw,
+    }));
     return;
   }
 
@@ -619,9 +636,24 @@ function appendRows_(payload, submissionId) {
       })
       .join('; ');
 
-    const photos = (room.photos || []).map(function (p) {
-      return p.driveUrl ? (p.name || 'photo') + ' → ' + p.driveUrl : (p.name || '');
-    }).filter(Boolean).join('\n');
+    const photoLine = function (p, label) {
+      const name = label || p.name || 'photo';
+      return p.driveUrl ? name + ' → ' + p.driveUrl : name;
+    };
+    // Per-wall photos were uploaded to Drive but their links appeared
+    // nowhere — not the sheet, not the email. The files sit in the
+    // submission folder under the customer's own camera filenames, so
+    // there was no way to tell which wall any of them showed. Prefix
+    // each with its wall label so the cell is actually usable.
+    const wallPhotos = (room.walls || []).reduce(function (acc, w, wi) {
+      (w.photos || []).forEach(function (p) {
+        acc.push(photoLine(p, (w.label || ('Wall ' + (wi + 1))) + ': ' + (p.name || 'photo')));
+      });
+      return acc;
+    }, []);
+    const photos = (room.photos || []).map(function (p) { return photoLine(p); })
+      .concat(wallPhotos)
+      .filter(Boolean).join('\n');
 
     const voice = (room.voiceMemos || []).map(function (m, i) {
       const label = m.name || ('Voice memo ' + (i + 1));
@@ -639,32 +671,33 @@ function appendRows_(payload, submissionId) {
     const posZCell = hasPlacement ? Number(placement.positionM.z).toFixed(2) : '';
     const rotationCell = hasPlacement ? (placement.rotationDeg || 0) + '°' : '';
 
-    sheet.appendRow([
-      submittedAt,
-      submissionId,
-      csvSafe_(payload.customerName || ''),
-      csvSafe_(payload.email || ''),
-      csvSafe_(payload.projectName || ''),
-      csvSafe_(payload.unitPreference || ''),
-      csvSafe_(room.name || room.label || ''),
-      csvSafe_(wallsStr),
-      csvSafe_(ceiling),
-      csvSafe_(doorsStr),
-      csvSafe_(windowsStr),
-      csvSafe_(room.irregularShapeNotes || ''),
-      csvSafe_(room.notes || ''),
-      csvSafe_(photos),
-      csvSafe_(connectionsStr),
-      floorCell,
-      posXCell,
-      posZCell,
-      rotationCell,
-      csvSafe_(voice),
-      csvSafe_(exteriorStr),
-      csvSafe_(proposalText),
-      csvSafe_(sketchesStr),
-      raw,
-    ]);
+    sheet.appendRow(rowFrom({
+      'Submitted At': submittedAt,
+      'Submission ID': submissionId,
+      'Customer Name': csvSafe_(payload.customerName || ''),
+      'Email': csvSafe_(payload.email || ''),
+      'Project Name': csvSafe_(payload.projectName || ''),
+      'Project Type': csvSafe_(payload.projectType || ''),
+      'Unit': csvSafe_(payload.unitPreference || ''),
+      'Room': csvSafe_(room.name || room.label || ''),
+      'Walls (m)': csvSafe_(wallsStr),
+      'Ceiling (m)': csvSafe_(ceiling),
+      'Doors': csvSafe_(doorsStr),
+      'Windows': csvSafe_(windowsStr),
+      'Irregular notes': csvSafe_(room.irregularShapeNotes || ''),
+      'Room notes': csvSafe_(room.notes || ''),
+      'Photo filenames': csvSafe_(photos),
+      'Connections': csvSafe_(connectionsStr),
+      'Floor': floorCell,
+      'Position X (m)': posXCell,
+      'Position Z (m)': posZCell,
+      'Rotation (°)': rotationCell,
+      'Voice memos': csvSafe_(voice),
+      'Exterior photos': csvSafe_(exteriorStr),
+      'Proposal': csvSafe_(proposalText),
+      'Proposal sketches': csvSafe_(sketchesStr),
+      'Raw payload': raw,
+    }));
   });
 }
 
@@ -742,12 +775,24 @@ function buildHtmlEmail_(payload, submissionId) {
   const roomsHtml = rooms.map(function (room) {
     const walls = (room.walls || [])
       .map(function (w, i) {
+        // Wall photos are uploaded but were never linked from anywhere.
+        // Hang them off the wall they belong to, which is the only place
+        // they mean anything.
+        const shots = (w.photos || []).filter(function (p) { return p && p.driveUrl; });
+        const shotsHtml = shots.length
+          ? '<div style="margin-top:4px;">' +
+              shots.map(function (p) {
+                return '<a href="' + p.driveUrl + '" style="color:' + gold + ';text-decoration:none;font-size:12px;">' +
+                  escapeHtml_(p.name || 'photo') + '</a>';
+              }).join('<span style="color:' + mid + ';font-size:12px;"> · </span>') +
+            '</div>'
+          : '';
         return '<tr>' +
           '<td style="padding:6px 12px;color:' + mid + ';font-size:13px;">' +
             (w.label || ('Wall ' + (i + 1))) +
           '</td>' +
           '<td style="padding:6px 12px;font-family:monospace;font-size:14px;color:' + dark + ';text-align:right;">' +
-            formatDual_(w.lengthM) +
+            formatDual_(w.lengthM) + shotsHtml +
           '</td>' +
         '</tr>';
       })
@@ -845,6 +890,12 @@ function buildHtmlEmail_(payload, submissionId) {
             row_('Customer', escapeHtml_(payload.customerName || '—'), mid) +
             row_('Email', '<a href="mailto:' + encodeURIComponent(payload.email || '') + '" style="color:' + gold + ';text-decoration:none;">' + escapeHtml_(payload.email || '—') + '</a>', mid) +
             row_('Project', escapeHtml_(payload.projectName || '—'), mid) +
+            // The customer picks loft / extension / garage on the home
+            // screen and it shapes how the job is quoted, but it was
+            // collected and then never shown anywhere.
+            (payload.projectType
+              ? row_('Project type', escapeHtml_(String(payload.projectType)), mid)
+              : '') +
             row_('Unit preference', (payload.unitPreference || 'metric'), mid) +
             row_('Submitted', when, mid) +
             row_('Submission ID', submissionId, mid) +
