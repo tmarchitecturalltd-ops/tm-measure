@@ -157,18 +157,25 @@ function buildScanResult({
   // tolerance. Presenting it as a tolerance implied a precision that
   // had never been measured. The field is optional; set it only when
   // something genuinely derives it.
-  const overall: ScanConfidence = dims.confidence ?? "high";
+  // Default to "low", not "high". If the overlay didn't report a
+  // confidence there is no evidence the scan was good — assuming the
+  // best case put a "High confidence" chip next to numbers nothing had
+  // validated, which is the one thing a measuring tool must not do.
+  const overall: ScanConfidence = dims.confidence ?? "low";
+  // No compass here. The scan measures two perpendicular walls; it has
+  // no heading, so "(North)" and "(East)" were invented and travelled
+  // all the way into the customer's submission.
   const walls = [
     {
-      id: `w-${now}-n`,
-      label: "Wall 1 (North)",
+      id: `w-${now}-a`,
+      label: "Wall 1",
       kind: "wall" as const,
       valueM: round2(dims.widthM),
       confidence: overall,
     },
     {
-      id: `w-${now}-e`,
-      label: "Wall 2 (East)",
+      id: `w-${now}-b`,
+      label: "Wall 2",
       kind: "wall" as const,
       valueM: round2(dims.lengthM),
       confidence: overall,
@@ -179,13 +186,14 @@ function buildScanResult({
     label: "Ceiling Height",
     kind: "ceiling" as const,
     valueM: round2(dims.heightM),
-    // Corner-tap scans can't derive ceiling — flag as low so user confirms.
-    confidence:
-      dims.method === "corners" ? ("low" as const) : ("medium" as const),
+    // Corner-tap scans can't derive ceiling height at all, so it stays
+    // low. Other methods are capped at the scan's own confidence rather
+    // than the flat "medium" that used to be asserted here — and the
+    // old "Potential occlusion" note described a condition nothing in
+    // the pipeline actually detects.
+    confidence: dims.method === "corners" ? ("low" as const) : overall,
     note:
-      dims.method === "corners"
-        ? "Estimated — please confirm"
-        : "Potential occlusion",
+      dims.method === "corners" ? "Estimated — please confirm" : undefined,
   };
   const door = dims.doorWidthM
     ? {
@@ -193,8 +201,11 @@ function buildScanResult({
         label: "Door Width",
         kind: "door" as const,
         valueM: round2(dims.doorWidthM),
-        confidence: "high" as const,
-        note: "Reference Standard",
+        // Door width comes out of the same perspective solve as the
+        // walls, so it cannot be more reliable than they are. It was
+        // hard-coded "high" and labelled "Reference Standard", implying
+        // it had been checked against a known door size. It hadn't.
+        confidence: overall,
       }
     : null;
 

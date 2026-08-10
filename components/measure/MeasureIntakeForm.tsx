@@ -63,12 +63,38 @@ function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/**
+ * Compass hints for the wall label field.
+ *
+ * These are placeholders, never values. They used to be baked into the
+ * default labels ("Wall 1 (e.g. North)"), which meant that unless the
+ * customer retyped every one, the literal string "(e.g. North)" was
+ * submitted, emailed, written to the spreadsheet and shown in the
+ * architect console. The hint belongs on the input, not in the data.
+ */
+const WALL_HINTS = ["North", "East", "South", "West"] as const;
+
+function wallHint(index: number): string {
+  return `e.g. ${WALL_HINTS[index % WALL_HINTS.length]}`;
+}
+
+/**
+ * Removes a trailing "(e.g. …)" hint from a wall label.
+ *
+ * Only needed for drafts autosaved before the hint moved to the input
+ * placeholder — without it, a resumed draft would still submit
+ * "Wall 1 (e.g. North)".
+ */
+function cleanWallLabel(label: string): string {
+  return label.replace(/\s*\(e\.g\.[^)]*\)\s*$/i, "").trim();
+}
+
 function wallDefaults(): WallSegment[] {
   return [
-    { id: newId(), label: "Wall 1 (e.g. North)", lengthM: "" },
-    { id: newId(), label: "Wall 2 (e.g. East)", lengthM: "" },
-    { id: newId(), label: "Wall 3 (e.g. South)", lengthM: "" },
-    { id: newId(), label: "Wall 4 (e.g. West)", lengthM: "" },
+    { id: newId(), label: "Wall 1", lengthM: "" },
+    { id: newId(), label: "Wall 2", lengthM: "" },
+    { id: newId(), label: "Wall 3", lengthM: "" },
+    { id: newId(), label: "Wall 4", lengthM: "" },
   ];
 }
 
@@ -1255,7 +1281,9 @@ export default function MeasureIntakeForm() {
         name: r.name,
         walls: r.walls.map((w) => ({
           id: w.id,
-          label: w.label,
+          // Strips "(e.g. North)" from labels restored out of an older
+          // autosaved draft, where the hint was part of the default value.
+          label: cleanWallLabel(w.label),
           lengthM: parseMeters(w.lengthM),
           photos: (w.photos ?? []).map((p) => ({
             id: p.id,
@@ -2491,6 +2519,7 @@ export default function MeasureIntakeForm() {
                           </label>
                           <input
                             value={w.label}
+                            placeholder={wallHint(wi)}
                             onChange={(e) => {
                               const walls = room.walls.map((x) =>
                                 x.id === w.id
