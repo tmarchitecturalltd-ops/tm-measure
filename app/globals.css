@@ -533,7 +533,14 @@ select:focus-visible {
   input,
   textarea,
   select {
-    font-size: 16px;
+    /* !important is deliberate. The fields carry Tailwind's `text-sm`
+     * (14px), a class selector, which outranks this element selector on
+     * specificity. It only loses because Tailwind v4 puts utilities in a
+     * cascade layer and unlayered rules outrank layered ones — true, but
+     * far too subtle to stake the fix on, and it would break silently if
+     * this file were ever moved inside a layer. This makes it
+     * unconditional. */
+    font-size: 16px !important;
   }
 }
 
