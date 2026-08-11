@@ -69,3 +69,7 @@ gcloud-service-account*.json
 *.apk
 *.apks
 *.ipa
+
+# Generated App Store screenshots (regenerate with store-assets/screenshots/capture.mjs)
+store-assets/screenshots/out/
+store-assets/screenshots/fonts/*.woff2
