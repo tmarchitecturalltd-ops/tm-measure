@@ -14,7 +14,7 @@ TM Architectural Designs Ltd. is the data controller for information collected t
 
 - **Registered office:** 24 Criffel Avenue, London, SW2 4AZ
 - **Company number:** 16719956
-- **ICO registration number:** *[To be added once your ICO registration is confirmed]*
+- **ICO registration:** registration with the Information Commissioner's Office is in progress; the number will be published here once issued.
 - **Contact:** tmarchitecturalltd@gmail.com
 
 If you have a question about this policy or about the data we hold on you, email the address above and we will respond within 30 days.
@@ -90,8 +90,6 @@ We only share your data with third parties who help us run the service. Each is 
 - **Our app platform providers** — Apple (for the iOS App Store distribution of TM Measure) and Google (for the Google Play Store distribution). Apple and Google may collect limited technical data as described in their own app-platform privacy notices; we do not pass your personal data to them.
 
 We do not sell your data. We do not share it with advertisers or data brokers.
-
-*If you add any other processor later (e.g. a CRM, a backend API host, a quote-generation tool), list them here by name and country.*
 
 ---
 
