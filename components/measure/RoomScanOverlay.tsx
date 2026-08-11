@@ -1376,7 +1376,16 @@ export default function RoomScanOverlay({
           scanMode === "corners" &&
           !setupDismissed &&
           (tiltPermission !== "granted" || calibratedFocalPx === null) && (
-            <div className="pointer-events-auto absolute inset-0 z-[20] flex flex-col items-center justify-center bg-black/80 px-6">
+            /* Scrollable backdrop. See the note on the method gate below:
+               centring content that is taller than the screen leaves the
+               buttons unreachable, with force-quit as the only way out. */
+            <div className="pointer-events-auto absolute inset-0 z-[20] overflow-y-auto bg-black/80">
+              <div
+                className="flex min-h-full items-center justify-center px-6 py-8"
+                style={{
+                  paddingBottom: "max(2rem, calc(env(safe-area-inset-bottom) + 1rem))",
+                }}
+              >
               <div
                 className="w-full max-w-sm rounded-2xl p-5"
                 style={{ backgroundColor: `${HUD}f5` }}
@@ -1458,6 +1467,7 @@ export default function RoomScanOverlay({
                   Skip — measure anyway (less accurate)
                 </button>
               </div>
+              </div>
             </div>
           )}
 
@@ -1470,7 +1480,24 @@ export default function RoomScanOverlay({
           (setupDismissed ||
             (tiltPermission === "granted" && calibratedFocalPx !== null)) &&
           !methodChosen && (
-            <div className="pointer-events-auto absolute inset-0 z-[20] flex flex-col items-center justify-center bg-black/80 px-6">
+            /* This sheet was `flex items-center justify-center` with no
+               overflow handling. Any phone reporting four camera lenses
+               — which is most recent iPhones — made the content taller
+               than the screen, and "Start measuring" was pushed off the
+               bottom with no way to scroll to it. The scan could not be
+               started and force-quitting was the only way out.
+
+               overflow-y-auto on the backdrop with min-h-full on the
+               inner wrapper keeps it centred when it fits and scrolls
+               when it doesn't. */
+            <div className="pointer-events-auto absolute inset-0 z-[20] overflow-y-auto bg-black/80">
+              <div
+                className="flex min-h-full items-center justify-center px-6 py-8"
+                style={{
+                  // Keep the primary button clear of the home indicator.
+                  paddingBottom: "max(2rem, calc(env(safe-area-inset-bottom) + 1rem))",
+                }}
+              >
               <div
                 className="w-full max-w-sm rounded-2xl p-5"
                 style={{ backgroundColor: `${HUD}f5` }}
@@ -1673,6 +1700,7 @@ export default function RoomScanOverlay({
                 >
                   Start measuring
                 </button>
+              </div>
               </div>
             </div>
           )}
