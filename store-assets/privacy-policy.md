@@ -13,7 +13,7 @@ If you just want the short version: we only collect what we need to prepare your
 TM Architectural Designs Ltd. is the data controller for information collected through TM Measure.
 
 - **Registered office:** 24 Criffel Avenue, London, SW2 4AZ
-- **Company number:** *[Companies House number — to be added]*
+- **Company number:** 16719956
 - **ICO registration number:** *[To be added once your ICO registration is confirmed]*
 - **Contact:** tmarchitecturalltd@gmail.com
 
