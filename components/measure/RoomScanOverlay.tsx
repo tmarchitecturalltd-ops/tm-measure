@@ -189,6 +189,8 @@ export default function RoomScanOverlay({
   }, []);
   /** Pixel-accurate taps captured during a calibration session. */
   const calibTapsRef = useRef<TapPoint[]>([]);
+  /** Time and position of the last accepted corner tap, for double-tap rejection. */
+  const lastTapRef = useRef<{ t: number; x: number; y: number } | null>(null);
   const [calibTapCount, setCalibTapCount] = useState(0);
   /** Reference length the user entered, in centimetres. Stored as a string so
    *  the input can be temporarily empty without blowing away the parse. */
@@ -990,6 +992,19 @@ export default function RoomScanOverlay({
     (e: MouseEvent<HTMLElement>) => {
       if (scanMode !== "corners") return;
       if (phase !== "camera" && phase !== "calibrate") return;
+      // Reject the second half of a double-tap. iOS delivers both taps
+      // as ordinary clicks, so double-tapping to zoom also dropped two
+      // corner markers a few pixels apart — the user sees stray dots
+      // appear and has no way to tell which one the solver used.
+      // 320 ms is above the double-tap threshold and well below any
+      // plausible deliberate re-tap of the same corner.
+      const now = Date.now();
+      const last = lastTapRef.current;
+      if (last && now - last.t < 320 &&
+          Math.abs(e.clientX - last.x) < 44 && Math.abs(e.clientY - last.y) < 44) {
+        return;
+      }
+      lastTapRef.current = { t: now, x: e.clientX, y: e.clientY };
       // Tier-2: drop the tap if the phone is moving — far better to
       // make the user re-try than to lock in a smeared corner.
       if (!isStable) return;
@@ -1160,6 +1175,36 @@ export default function RoomScanOverlay({
   }, [open]);
 
   /**
+   * Lock the viewport scale while the scan is open.
+   *
+   * The tap surface already carries `touch-action: manipulation`, which
+   * is supposed to remove the double-tap-to-zoom gesture. iOS Safari
+   * honours it inconsistently inside a fixed, full-screen overlay, so
+   * double-tapping a corner zoomed the whole page into the video
+   * instead — leaving the user pinching to get back out, with the
+   * markers now in the wrong place relative to what they can see.
+   *
+   * Scale locking is applied ONLY for the duration of the scan and the
+   * previous viewport is restored on close. Setting `user-scalable=no`
+   * globally would stop anyone pinch-zooming anywhere in the app, which
+   * is a real accessibility loss for a form full of numbers.
+   */
+  useEffect(() => {
+    if (!open) return;
+    if (typeof document === "undefined") return;
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+    if (!meta) return;
+    const previous = meta.getAttribute("content") ?? "";
+    meta.setAttribute(
+      "content",
+      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover",
+    );
+    return () => {
+      meta.setAttribute("content", previous);
+    };
+  }, [open]);
+
+  /**
    * Turn a native RoomPlan result into the ScanDimensions contract used
    * throughout the review flow. RoomPlan is architect-grade, so we tag
    * every scan high-confidence and surface a notes summary describing
@@ -1266,7 +1311,11 @@ export default function RoomScanOverlay({
           className="absolute inset-0 z-[5] cursor-crosshair select-none"
           aria-label={phase === "calibrate" ? "Tap reference object ends" : "Tap corners on video"}
           onClick={onCornerTap}
-          style={{ touchAction: "manipulation", WebkitUserSelect: "none" }}
+          onDoubleClick={(e) => e.preventDefault()}
+          // touchAction:none rather than "manipulation": the latter still
+          // leaves double-tap zoom on the table in iOS Safari, and there
+          // is no gesture on this surface that needs the browser's help.
+          style={{ touchAction: "none", WebkitUserSelect: "none" }}
         />
       )}
 
