@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FCF9F5</color>
+    <!-- Base tone of the icon's paper texture. Was #FCF9F5 (the app's
+         surface token) when the icon was flat cream; the icon is now
+         beige stock, and a mismatched adaptive background shows as a
+         visible ring around the mask on some launchers. -->
+    <color name="ic_launcher_background">#F1E8D7</color>
 </resources>

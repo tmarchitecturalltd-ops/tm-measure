@@ -1,5 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive launcher icon.
+
+  The foreground now points at the per-density PNGs in mipmap-*, not the
+  vector in drawable/. The mark is a raster export of the brand logo
+  (paper texture and all), which a vector drawable cannot carry, and
+  keeping two sources of truth is how the launcher icon and the App
+  Store icon drift apart -- which is one of the things Apple flagged
+  under 2.3.8.
+
+  Background stays a flat colour on purpose. Android animates and masks
+  the background layer, and the paper grain is invisible at launcher
+  size; the flat beige matches the base tone of the texture.
+-->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background"/>
-    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
 </adaptive-icon>
