@@ -6,7 +6,7 @@
   vector in drawable/. The mark is a raster export of the brand logo
   (paper texture and all), which a vector drawable cannot carry, and
   keeping two sources of truth is how the launcher icon and the App
-  Store icon drift apart -- which is one of the things Apple flagged
+  Store icon drift apart, which is one of the things Apple flagged
   under 2.3.8.
 
   Background stays a flat colour on purpose. Android animates and masks
