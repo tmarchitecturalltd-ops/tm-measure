@@ -259,6 +259,15 @@ export default function RoomScanOverlay({
   /** Lets the user dismiss the setup gate and scan uncalibrated anyway. */
   const [setupDismissed, setSetupDismissed] = useState(false);
   /**
+   * Camera-lens picker, collapsed by default.
+   *
+   * Recent iPhones report four lenses, and listing them all is what made
+   * the method sheet taller than the screen in the first place. Almost
+   * nobody needs to change lens, so it sits behind a disclosure and the
+   * sheet stays short enough to take in at a glance.
+   */
+  const [lensPickerOpen, setLensPickerOpen] = useState(false);
+  /**
    * Method chosen on the second gate. Kept separate from the setup gate so
    * every choice is made on a full screen, leaving the viewfinder
    * completely clear once tapping starts.
@@ -1376,26 +1385,22 @@ export default function RoomScanOverlay({
           scanMode === "corners" &&
           !setupDismissed &&
           (tiltPermission !== "granted" || calibratedFocalPx === null) && (
-            /* Scrollable backdrop. See the note on the method gate below:
-               centring content that is taller than the screen leaves the
-               buttons unreachable, with force-quit as the only way out. */
-            <div className="pointer-events-auto absolute inset-0 z-[20] overflow-y-auto bg-black/80">
+            /* Same structure as the method gate below: pinned title,
+               scrolling body, pinned action. Centring content that is
+               taller than the screen left the buttons unreachable, with
+               force-quit as the only way out. */
+            <div className="pointer-events-auto absolute inset-0 z-[20] flex items-center justify-center bg-black/80 px-6 py-6">
               <div
-                className="flex min-h-full items-center justify-center px-6 py-8"
-                style={{
-                  paddingBottom: "max(2rem, calc(env(safe-area-inset-bottom) + 1rem))",
-                }}
-              >
-              <div
-                className="w-full max-w-sm rounded-2xl p-5"
+                className="flex max-h-full w-full max-w-sm flex-col overflow-hidden rounded-2xl"
                 style={{ backgroundColor: `${HUD}f5` }}
               >
                 <p
                   style={{ color: GOLD }}
-                  className="mb-1 text-sm font-bold uppercase tracking-widest"
+                  className="shrink-0 px-5 pb-1 pt-5 text-sm font-bold uppercase tracking-widest"
                 >
                   Set up first
                 </p>
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2">
                 <p className="mb-4 text-xs text-white/70">
                   Two quick steps. Without them the measurements will be
                   badly wrong.
@@ -1459,14 +1464,22 @@ export default function RoomScanOverlay({
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setSetupDismissed(true)}
-                  className="w-full text-[11px] font-bold uppercase tracking-widest text-white/50 underline"
+                </div>
+
+                <div
+                  className="shrink-0 border-t border-white/10 px-5 pt-3"
+                  style={{
+                    paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
+                  }}
                 >
-                  Skip — measure anyway (less accurate)
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => setSetupDismissed(true)}
+                    className="w-full text-[11px] font-bold uppercase tracking-widest text-white/50 underline"
+                  >
+                    Skip — measure anyway (less accurate)
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1487,28 +1500,27 @@ export default function RoomScanOverlay({
                bottom with no way to scroll to it. The scan could not be
                started and force-quitting was the only way out.
 
-               overflow-y-auto on the backdrop with min-h-full on the
-               inner wrapper keeps it centred when it fits and scrolls
-               when it doesn't. */
-            <div className="pointer-events-auto absolute inset-0 z-[20] overflow-y-auto bg-black/80">
+               Scrolling the whole backdrop was the first fix and it
+               worked, but it meant hunting for the button at the bottom
+               of a long page. The panel now owns its own scrolling: the
+               title is pinned, the options scroll, and the action stays
+               on screen at all times. Nothing has to be found. */
+            <div className="pointer-events-auto absolute inset-0 z-[20] flex items-center justify-center bg-black/80 px-6 py-6">
               <div
-                className="flex min-h-full items-center justify-center px-6 py-8"
-                style={{
-                  // Keep the primary button clear of the home indicator.
-                  paddingBottom: "max(2rem, calc(env(safe-area-inset-bottom) + 1rem))",
-                }}
-              >
-              <div
-                className="w-full max-w-sm rounded-2xl p-5"
+                className="flex max-h-full w-full max-w-sm flex-col overflow-hidden rounded-2xl"
                 style={{ backgroundColor: `${HUD}f5` }}
               >
                 <p
                   style={{ color: GOLD }}
-                  className="mb-4 text-sm font-bold uppercase tracking-widest"
+                  className="shrink-0 px-5 pb-3 pt-5 text-sm font-bold uppercase tracking-widest"
                 >
                   How do you want to measure?
                 </p>
 
+                {/* min-h-0 is load-bearing: without it a flex child
+                    refuses to shrink below its content height and the
+                    overflow never engages. */}
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2">
                 <p className="mb-2 text-[11px] uppercase tracking-widest text-white/45">
                   Method
                 </p>
@@ -1643,9 +1655,19 @@ export default function RoomScanOverlay({
                     a wall fitting in frame and not. */}
                 {videoDevices.length > 1 && (
                   <>
-                    <p className="mb-2 text-[11px] uppercase tracking-widest text-white/45">
-                      Camera lens
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setLensPickerOpen((o) => !o)}
+                      className="mb-2 flex w-full items-center justify-between rounded-lg border border-white/15 px-3 py-2 text-left"
+                    >
+                      <span className="text-[11px] uppercase tracking-widest text-white/45">
+                        Camera lens
+                      </span>
+                      <span className="text-[11px] font-semibold" style={{ color: GOLD }}>
+                        {lensPickerOpen ? "Hide" : "Change"}
+                      </span>
+                    </button>
+                    <div className={lensPickerOpen ? "block" : "hidden"}>
                     <p className="mb-2 text-[11px] text-white/60">
                       Can&apos;t fit the wall in? Pick an ultra-wide lens — it
                       sees roughly twice as much.
@@ -1686,21 +1708,32 @@ export default function RoomScanOverlay({
                         </button>
                       ))}
                     </div>
+                    </div>
                   </>
                 )}
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMethodChosen(true);
-                    setHudCollapsed(true);
+                </div>
+
+                {/* Pinned footer. The action is never more than a glance
+                    away, however many camera lenses the phone reports. */}
+                <div
+                  className="shrink-0 border-t border-white/10 px-5 pt-3"
+                  style={{
+                    paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
                   }}
-                  className="w-full rounded-full px-4 py-3 text-[11px] font-bold uppercase tracking-widest text-[#1c1c1a]"
-                  style={{ backgroundColor: GOLD }}
                 >
-                  Start measuring
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMethodChosen(true);
+                      setHudCollapsed(true);
+                    }}
+                    className="w-full rounded-full px-4 py-3 text-[11px] font-bold uppercase tracking-widest text-[#1c1c1a]"
+                    style={{ backgroundColor: GOLD }}
+                  >
+                    Start measuring
+                  </button>
+                </div>
               </div>
             </div>
           )}
