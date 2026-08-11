@@ -39,9 +39,15 @@ const DEVICES = {
 
 // The project that appears in the screenshots. Deliberately a plausible
 // UK job rather than "Test 123" — the listing is marketing.
+//
+// The address must stay on example.com. RFC 2606 reserves example.com,
+// .net and .org permanently, so they can never be registered by anyone;
+// example.co.uk carries no such guarantee, and a screenshot on a public
+// listing showing what could be a real person's address is not a
+// problem worth having.
 const PROJECT = {
   name: 'Sarah Whitfield',
-  email: 'sarah.whitfield@example.co.uk',
+  email: 'sarah.whitfield@example.com',
   project: 'Rear extension — 14 Oakfield Road',
   ceiling: '2.40',
   room: 'Kitchen',
