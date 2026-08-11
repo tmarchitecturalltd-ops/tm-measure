@@ -19,13 +19,30 @@ export const metadata: Metadata = {
  * underneath the status bar and the title collided with the clock and
  * the battery icon.
  *
- * maximumScale is deliberately left alone. Pinch-zoom must keep
- * working: a customer measuring a room needs to zoom into a tap target
- * or a photo, and disabling it is also an accessibility failure.
+ * The scale is locked, which is a reversal.
+ *
+ * It was left unlocked on the reasoning that pinch-zoom is an
+ * accessibility requirement. That reasoning applies to a website. This
+ * is a native app in a WKWebView, where zooming the entire UI is not
+ * expected behaviour, and iOS Accessibility → Zoom keeps working
+ * system-wide regardless of what a viewport tag says — so the
+ * accessibility path is not the one being removed here.
+ *
+ * What was actually happening, reported on build 1030: zooming in left
+ * the user unable to get back out, and rotating to landscape got stuck
+ * mid-zoom. There is no horizontal overflow on any page (checked at
+ * 428 and 926 CSS px), so this is WKWebView's own scaling behaviour
+ * inside a full-screen native shell rather than a layout fault.
+ *
+ * The 16px minimum on inputs in globals.css stays. That solves a
+ * different problem — iOS auto-zooming on focus of a small field — and
+ * would still be needed if this were ever run as a website.
  */
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
   themeColor: "#b89650",
 };

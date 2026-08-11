@@ -1175,36 +1175,6 @@ export default function RoomScanOverlay({
   }, [open]);
 
   /**
-   * Lock the viewport scale while the scan is open.
-   *
-   * The tap surface already carries `touch-action: manipulation`, which
-   * is supposed to remove the double-tap-to-zoom gesture. iOS Safari
-   * honours it inconsistently inside a fixed, full-screen overlay, so
-   * double-tapping a corner zoomed the whole page into the video
-   * instead — leaving the user pinching to get back out, with the
-   * markers now in the wrong place relative to what they can see.
-   *
-   * Scale locking is applied ONLY for the duration of the scan and the
-   * previous viewport is restored on close. Setting `user-scalable=no`
-   * globally would stop anyone pinch-zooming anywhere in the app, which
-   * is a real accessibility loss for a form full of numbers.
-   */
-  useEffect(() => {
-    if (!open) return;
-    if (typeof document === "undefined") return;
-    const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
-    if (!meta) return;
-    const previous = meta.getAttribute("content") ?? "";
-    meta.setAttribute(
-      "content",
-      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover",
-    );
-    return () => {
-      meta.setAttribute("content", previous);
-    };
-  }, [open]);
-
-  /**
    * Turn a native RoomPlan result into the ScanDimensions contract used
    * throughout the review flow. RoomPlan is architect-grade, so we tag
    * every scan high-confidence and surface a notes summary describing
