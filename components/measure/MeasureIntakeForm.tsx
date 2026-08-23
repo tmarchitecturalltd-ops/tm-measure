@@ -49,7 +49,10 @@ import FloorPlanEditor from "@/components/measure/FloorPlanEditor";
 import TutorialOverlay from "@/components/measure/TutorialOverlay";
 import CustomShapeEditor from "@/components/measure/CustomShapeEditor";
 import VoiceRecorder from "@/components/measure/VoiceRecorder";
-import { RoomPlan } from "@tm-designs/capacitor-roomplan";
+import {
+  RoomPlan,
+  type RoomPlanScanResult,
+} from "@tm-designs/capacitor-roomplan";
 import {
   clearDraft,
   loadDraft,
@@ -441,6 +444,131 @@ export default function MeasureIntakeForm() {
     },
     [],
   );
+
+  /**
+   * Turn a merged whole-property scan into rooms already placed on the plan.
+   *
+   * The single-room path fills in one room's dimensions and leaves the
+   * customer to arrange rooms on a grid afterwards. A merged scan makes
+   * that step unnecessary: every room arrives with its position in a
+   * shared frame, so the floor plan is already correct and the DXF has
+   * real geometry rather than rectangles someone dragged into place.
+   */
+  const [houseScanning, setHouseScanning] = useState(false);
+  const [houseScanError, setHouseScanError] = useState<string | null>(null);
+
+  const applyHouseScan = useCallback((result: RoomPlanScanResult) => {
+    const scanned = result.rooms ?? [];
+    if (!scanned.length) return;
+
+    const stamp = `[Whole-property LiDAR scan ${new Date().toISOString()} — ${scanned.length} room${scanned.length === 1 ? "" : "s"}]`;
+    const nextPlacements: Record<string, RoomPlacement> = {};
+
+    const built: RoomDraft[] = scanned.map((sr, i) => {
+      const id = newId();
+
+      // Use the individually measured walls when there are more than
+      // two. Two walls means RoomPlan saw a plain rectangle, and the
+      // width/length pair reads better in the form than "Wall 1, Wall 2".
+      const wallLengths = (sr.walls ?? [])
+        .map((w) => w.lengthM)
+        .filter((n) => Number.isFinite(n) && n > 0);
+      const useDetailed = wallLengths.length > 2;
+
+      const walls: WallSegment[] = useDetailed
+        ? wallLengths.map((lengthM, wi) => ({
+            id: newId(),
+            label: `Wall ${wi + 1}`,
+            lengthM: lengthM.toFixed(2),
+          }))
+        : [
+            { id: newId(), label: "Wall 1", lengthM: sr.widthM.toFixed(2) },
+            { id: newId(), label: "Wall 2", lengthM: sr.lengthM.toFixed(2) },
+            { id: newId(), label: "Wall 3", lengthM: sr.widthM.toFixed(2) },
+            { id: newId(), label: "Wall 4", lengthM: sr.lengthM.toFixed(2) },
+          ];
+
+      // Rotation is snapped to a quarter turn because the plan editor
+      // only models four orientations. A room scanned at 8° off-square
+      // therefore sits square on screen. The measurements themselves are
+      // unaffected — this is the drawn position only — but it is the one
+      // place the merged scan loses information, and worth revisiting if
+      // the editor ever learns arbitrary angles.
+      const raw = sr.rotationDeg ?? 0;
+      const snapped = (Math.round(raw / 90) * 90) % 360;
+      const rotationDeg = ((snapped + 360) % 360) as 0 | 90 | 180 | 270;
+
+      nextPlacements[id] = {
+        positionM: sr.originM
+          ? { x: Number(sr.originM.x.toFixed(3)), z: Number(sr.originM.z.toFixed(3)) }
+          : null,
+        rotationDeg,
+        // RoomPlan reports no storey, so everything lands on the ground
+        // floor. Moving a room upstairs is one tap in the plan editor;
+        // guessing from ceiling heights would be worse than not guessing.
+        floor: 0,
+      };
+
+      return {
+        id,
+        name: sr.name?.trim() || `Room ${i + 1}`,
+        walls,
+        ceilingHeightM: sr.heightM ? sr.heightM.toFixed(2) : "",
+        doors: (sr.doors ?? []).map((d) => ({
+          id: newId(),
+          widthM: d.widthM.toFixed(2),
+          note: "Detected by scan",
+        })),
+        windows: (sr.windows ?? []).map((w) => ({
+          id: newId(),
+          widthM: w.widthM.toFixed(2),
+          note: "Detected by scan",
+        })),
+        irregularNotes: "",
+        notes: stamp,
+        photos: [],
+        shape: useDetailed ? "custom" : "rectangle",
+      } satisfies RoomDraft;
+    });
+
+    setRooms((prev) => {
+      // Drop rooms the customer never filled in — otherwise a scan of
+      // six rooms lands alongside the blank starter room and they have
+      // to work out which one is real.
+      const kept = prev.filter(
+        (r) => r.name.trim() || r.walls.some((w) => w.lengthM.trim()),
+      );
+      return [...kept, ...built];
+    });
+    setPlacements((prev) => ({ ...prev, ...nextPlacements }));
+    setActiveRoomIndex(0);
+  }, []);
+
+  /**
+   * Run a whole-property scan and fold the result into the form.
+   *
+   * Errors are shown inline rather than thrown away: the plugin rejects
+   * with a readable reason — iOS too old, no LiDAR, or the merge failing
+   * because two rooms could not be related to each other — and each of
+   * those is something the person holding the phone can act on.
+   */
+  const startHouseScan = useCallback(async () => {
+    setHouseScanError(null);
+    setHouseScanning(true);
+    try {
+      const result = await RoomPlan.startHouseScan({ unit: "m" });
+      applyHouseScan(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // Cancelling is a choice, not a fault. Saying "Scan cancelled" in
+      // red under the button reads like something went wrong.
+      if (!/cancel/i.test(message)) {
+        setHouseScanError(message);
+      }
+    } finally {
+      setHouseScanning(false);
+    }
+  }, [applyHouseScan]);
 
   const setRoom = useCallback(
     (id: string, patch: Partial<RoomDraft>) => {
@@ -2213,6 +2341,46 @@ export default function MeasureIntakeForm() {
                 </button>
               </div>
             )}
+            {/* Whole-property scan. Shown first, and only on hardware
+                that can do it, because when it is available it replaces
+                nearly all of the work below — every room measured, named
+                and positioned in one walk. Devices without LiDAR never
+                see it rather than being offered something they cannot
+                use. */}
+            {arSupport === "yes" && (
+              <section className="tm-lift rounded-2xl border border-primary/40 bg-surface-container-low p-5">
+                <h2 className="font-headline text-lg text-on-surface">
+                  Scan the whole property
+                </h2>
+                <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">
+                  Your phone has a LiDAR sensor. Walk through each room in turn
+                  and it measures the walls, doors and windows for you — then
+                  works out how the rooms fit together, so there&apos;s no floor
+                  plan to arrange afterwards.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void startHouseScan()}
+                  disabled={houseScanning}
+                  className="mt-3 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-xs font-bold uppercase tracking-widest text-on-primary disabled:opacity-60"
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: "18px" }}
+                    aria-hidden
+                  >
+                    view_in_ar
+                  </span>
+                  {houseScanning ? "Scanning…" : "Start property scan"}
+                </button>
+                {houseScanError && (
+                  <p className="mt-3 rounded-md bg-error/10 px-3 py-2 text-xs text-error">
+                    {houseScanError}
+                  </p>
+                )}
+              </section>
+            )}
+
             {/* Quick-start templates — pre-build the room list for the
                 most common UK property types. The customer still tweaks
                 wall lengths / ceilings, but skips the typing. */}
