@@ -72,4 +72,47 @@ public class RoomPlanPlugin: CAPPlugin {
             r.present(from: host)
         }
     }
+
+    /**
+     * Scan a whole property: several rooms merged into one plan.
+     *
+     * Separate from startScan rather than a flag on it, because the
+     * requirements genuinely differ — this needs iOS 17 for
+     * StructureBuilder, where a single-room scan runs on 16 — and a
+     * caller that cannot do one may still be able to do the other.
+     */
+    @objc public func startHouseScan(_ call: CAPPluginCall) {
+        guard #available(iOS 17.0, *) else {
+            call.reject(
+                "Scanning a whole property needs iOS 17 or newer. "
+                + "You can still scan rooms one at a time."
+            )
+            return
+        }
+        guard HouseCaptureRunner.isSupportedOnThisDevice() else {
+            call.reject("This device does not support RoomPlan (no LiDAR sensor).")
+            return
+        }
+
+        let unit = call.getString("unit") ?? "m"
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            guard let host = self.bridge?.viewController else {
+                call.reject("No view controller available to present RoomPlan.")
+                return
+            }
+            let r = HouseCaptureRunner(unit: unit) { [weak self] result in
+                self?.runner = nil
+                switch result {
+                case .success(let payload):
+                    call.resolve(payload)
+                case .failure(let err):
+                    call.reject(err.localizedDescription)
+                }
+            }
+            self.runner = r
+            r.present(from: host)
+        }
+    }
 }

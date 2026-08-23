@@ -28,4 +28,12 @@ export class RoomPlanWeb extends WebPlugin implements RoomPlanPlugin {
       "RoomPlan is only available on iOS 16+ devices with a LiDAR sensor.",
     );
   }
+
+  async startHouseScan(
+    _options?: RoomPlanScanOptions,
+  ): Promise<RoomPlanScanResult> {
+    throw this.unimplemented(
+      "Whole-property scanning is only available on iOS 17+ devices with a LiDAR sensor.",
+    );
+  }
 }

@@ -35,6 +35,20 @@ export interface RoomPlanPlugin {
    * Must be invoked from a user gesture — tapping a button is fine.
    */
   startScan(options?: RoomPlanScanOptions): Promise<RoomPlanScanResult>;
+
+  /**
+   * Scan several rooms in sequence and merge them into one plan.
+   *
+   * Apple's StructureBuilder puts every room, wall and opening into a
+   * single coordinate system, which is the difference between a list of
+   * room sizes and an actual floor plan. It is also the only practical
+   * source of door and window POSITIONS — asking a customer to measure
+   * where along a wall each window sits is a lot of tapping.
+   *
+   * Needs iOS 17 (StructureBuilder), where `startScan` needs only 16.
+   * Rejects with a readable reason on anything older.
+   */
+  startHouseScan(options?: RoomPlanScanOptions): Promise<RoomPlanScanResult>;
 }
 
 /** Optional knobs for `startScan`. */
@@ -64,10 +78,26 @@ export interface RoomPlanScanResult {
    * rather than resolving with `complete: false`).
    */
   complete: boolean;
+  /** True when this came from startHouseScan and rooms share one frame. */
+  merged?: boolean;
 }
 
 export interface RoomPlanRoom {
   id: string;
+  /** Present on merged house scans: "Room 1", "Room 2", ... */
+  name?: string;
+  /**
+   * Footprint corner in the SHARED coordinate system, present only on
+   * merged house scans. This is where the room sits on the plan; the
+   * width/length below are its size. Absent on single-room scans, where
+   * there is no shared frame for a position to mean anything in.
+   */
+  originM?: { x: number; z: number };
+  /**
+   * Bearing of the room's longest wall in degrees clockwise from +X.
+   * Merged scans only.
+   */
+  rotationDeg?: number;
   /** Longest axis-aligned dimension of the floor bounding box (metres). */
   widthM: number;
   /** Shorter axis-aligned dimension of the floor bounding box (metres). */

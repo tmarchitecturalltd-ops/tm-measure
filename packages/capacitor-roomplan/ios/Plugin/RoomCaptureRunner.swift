@@ -453,6 +453,95 @@ enum CaptureSerializer {
             return (width, length, area, true)
         }
     }
+
+    // MARK: - Whole-house structure
+
+    /**
+     * Serialise a merged CapturedStructure: several rooms, one frame.
+     *
+     * The single-room serialiser deliberately reports an ORIENTED
+     * bounding box, because a room scanned at 45° to the world axes
+     * would otherwise measure 25% too large. That is right for a room
+     * on its own and wrong for a house: rooms have to keep their real
+     * positions and angles relative to each other, or the plan is a pile
+     * of rectangles rather than a building.
+     *
+     * So each room additionally carries `originM` (its footprint corner
+     * in the shared frame) and `rotationDeg` (the bearing of its longest
+     * wall). Together those place the room on the plan, which is what
+     * makes a floor plan possible without asking the customer to drag
+     * rooms around a grid.
+     */
+    @available(iOS 17.0, *)
+    static func serializeStructure(
+        structure: CapturedStructure,
+        roomNames: [String],
+        durationS: TimeInterval
+    ) -> [String: Any] {
+        var roomDicts: [[String: Any]] = []
+
+        for (index, room) in structure.rooms.enumerated() {
+            let wallDicts = room.walls.map { wallToDict($0) }
+            let doorDicts = room.doors.map { openingToDict($0, walls: room.walls) }
+            let windowDicts = room.windows.map { openingToDict($0, walls: room.walls) }
+            let openingDicts = room.openings.map { openingToDict($0, walls: room.walls) }
+
+            let floorPoly: [(Double, Double)] = room.floors.flatMap { floor in
+                floor.polygonCorners.map { (Double($0.x), Double($0.z)) }
+            }
+            let fallbackPts: [(Double, Double)] = room.walls.flatMap { wallEndpoints(for: $0) }
+            let pts = floorPoly.count >= 3 ? floorPoly : fallbackPts
+
+            let principalAxis: (Double, Double)? = room.walls
+                .max(by: { Double($0.dimensions.x) < Double($1.dimensions.x) })
+                .map { localXAxisXZ($0.transform) }
+
+            let (widthM, lengthM, areaM2, rectangular) = boundingMetrics(
+                primary: floorPoly,
+                fallback: fallbackPts,
+                axis: principalAxis
+            )
+
+            // Axis-aligned corner in the SHARED frame. This is the room's
+            // position on the plan; the oriented box above is its size.
+            let minX = pts.map { $0.0 }.min() ?? 0
+            let minZ = pts.map { $0.1 }.min() ?? 0
+
+            // Bearing of the longest wall, measured clockwise from +X to
+            // match the app's screen-down z convention.
+            var rotationDeg = 0.0
+            if let axis = principalAxis {
+                rotationDeg = atan2(axis.1, axis.0) * 180.0 / Double.pi
+                if rotationDeg < 0 { rotationDeg += 360 }
+            }
+
+            let heightM = room.walls.map { Double($0.dimensions.y) }.max() ?? 2.4
+            let name = index < roomNames.count ? roomNames[index] : "Room \(index + 1)"
+
+            roomDicts.append([
+                "id": UUID().uuidString,
+                "name": name,
+                "widthM": widthM,
+                "lengthM": lengthM,
+                "heightM": heightM,
+                "floorAreaM2": areaM2,
+                "rectangular": rectangular,
+                "originM": ["x": minX, "z": minZ],
+                "rotationDeg": rotationDeg,
+                "walls": wallDicts,
+                "doors": doorDicts,
+                "windows": windowDicts,
+                "openings": openingDicts,
+            ])
+        }
+
+        return [
+            "rooms": roomDicts,
+            "durationS": durationS,
+            "complete": true,
+            "merged": true,
+        ]
+    }
 }
 
 #else
