@@ -290,8 +290,8 @@ export default function AppHome() {
           </h2>
           <p className="mt-3 max-w-prose text-sm leading-relaxed text-on-surface-variant md:text-base">
             Pick the type below to start. We&apos;ll guide you through walls,
-            doors, windows and a quick floor plan — usually 10–15 minutes per
-            room. One reference photo per room, then it&apos;s in our hands.
+            doors, windows and a quick floor plan — usually around 15 minutes
+            per room. One reference photo per room, then it&apos;s in our hands.
           </p>
 
           {/* Discreet link to the photo-tips page. Sits just below the

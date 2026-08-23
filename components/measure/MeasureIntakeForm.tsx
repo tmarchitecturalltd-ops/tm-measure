@@ -1761,7 +1761,7 @@ export default function MeasureIntakeForm() {
             >
               schedule
             </span>
-            10–15 min per room
+            ~15 min per room
           </span>
           {savedLabel && (
             <span
