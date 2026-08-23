@@ -36,6 +36,12 @@ type Props = {
   /** Fires with the new offset and how it was set. */
   onChange: (positionM: number, approx: boolean) => void;
   label?: string;
+  /**
+   * Opens the camera measuring tool. Absent on platforms where it is
+   * unavailable, in which case the button is simply not shown rather
+   * than offered and then failing.
+   */
+  onMeasureWithCamera?: () => void;
 };
 
 export default function WallPositionPicker({
@@ -45,6 +51,7 @@ export default function WallPositionPicker({
   approx,
   onChange,
   label = "Position along wall",
+  onMeasureWithCamera,
 }: Props) {
   const trackRef = useRef<HTMLDivElement | null>(null);
 
@@ -173,6 +180,23 @@ export default function WallPositionPicker({
           it if you&apos;ve measured.
         </span>
       </div>
+
+      {onMeasureWithCamera && (
+        <button
+          type="button"
+          onClick={onMeasureWithCamera}
+          className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-primary"
+        >
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: "15px" }}
+            aria-hidden
+          >
+            straighten
+          </span>
+          Measure with camera
+        </button>
+      )}
     </div>
   );
 }

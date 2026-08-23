@@ -89,6 +89,21 @@ type Props = {
   roomLabel: string;
   onClose: () => void;
   onApply: (d: ScanDimensions) => void;
+  /**
+   * Measure a single distance instead of a room.
+   *
+   * The two-tap wall measurement already computes the distance between
+   * two points on the floor; measuring a room is that repeated. So
+   * "how far along this wall is the window?" needs no new maths — tap
+   * the corner, tap the floor below the window, done. This mode skips
+   * the method sheet, forces the two-tap path, and returns the first
+   * distance it gets rather than accumulating walls.
+   */
+  distanceMode?: boolean;
+  /** Called with the measured distance in metres, then the caller closes. */
+  onDistance?: (metres: number) => void;
+  /** Shown in the HUD so the user knows what they are measuring. */
+  distancePrompt?: string;
 };
 
 type ScanMode = "lidar" | "corners" | "video";
@@ -142,6 +157,9 @@ export default function RoomScanOverlay({
   roomLabel,
   onClose,
   onApply,
+  distanceMode = false,
+  onDistance,
+  distancePrompt,
 }: Props) {
   const [mounted, setMounted] = useState(false);
   const [phase, setPhase] = useState<Phase>("boot");
@@ -287,6 +305,21 @@ export default function RoomScanOverlay({
    * completely clear once tapping starts.
    */
   const [methodChosen, setMethodChosen] = useState(false);
+
+  /**
+   * Distance mode has no method to choose.
+   *
+   * There is exactly one way to measure how far along a wall something
+   * sits — two taps on the floor — so presenting "wall to wall / two
+   * corners / whole room" would be three answers to a question nobody
+   * asked, in front of someone who came here to do one specific thing.
+   */
+  useEffect(() => {
+    if (!open || !distanceMode) return;
+    setScanMode("corners");
+    setMeasureMode("wall");
+    setMethodChosen(true);
+  }, [open, distanceMode]);
   /**
    * Back cameras offered by the device, and which one is in use.
    *
@@ -623,6 +656,15 @@ export default function RoomScanOverlay({
       return;
     }
 
+    // One distance is the whole job here. Returning before the
+    // wall-accumulation below keeps this path off the room-building
+    // logic entirely, rather than measuring a room and then throwing
+    // most of it away.
+    if (distanceMode) {
+      onDistance?.(Number(lengthM.toFixed(2)));
+      return;
+    }
+
     const next = [...wallLengths, Number(lengthM.toFixed(2))];
     setWallLengths(next);
     // Reset for the next wall.
@@ -663,6 +705,8 @@ export default function RoomScanOverlay({
     ceilingHeightM,
     tapPlane,
     wallLengths,
+    distanceMode,
+    onDistance,
   ]);
 
   /**
@@ -1370,9 +1414,14 @@ export default function RoomScanOverlay({
       >
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: GOLD }}>
-            Scan your room
+            {distanceMode ? "Measure a distance" : "Scan your room"}
           </p>
-          <p className="truncate text-sm font-semibold text-white/90">{roomLabel || "Room"}</p>
+          <p className="truncate text-sm font-semibold text-white/90">
+            {distanceMode
+              ? (distancePrompt ??
+                "Tap the corner, then the floor below the opening")
+              : roomLabel || "Room"}
+          </p>
         </div>
         <button
           type="button"

@@ -46,6 +46,7 @@ import {
 } from "@tm-designs/measure-core";
 import type { ScanDimensions } from "@/components/measure/RoomScanOverlay";
 import RoomScanReviewFlow from "@/components/measure/RoomScanReviewFlow";
+import RoomScanOverlay from "@/components/measure/RoomScanOverlay";
 import FloorPlanEditor from "@/components/measure/FloorPlanEditor";
 import TutorialOverlay from "@/components/measure/TutorialOverlay";
 import CustomShapeEditor from "@/components/measure/CustomShapeEditor";
@@ -458,6 +459,55 @@ export default function MeasureIntakeForm() {
    */
   const [houseScanning, setHouseScanning] = useState(false);
   const [houseScanError, setHouseScanError] = useState<string | null>(null);
+
+  /**
+   * Which opening, if any, is currently being measured with the camera.
+   *
+   * Held as a description of where to write the answer rather than as a
+   * callback, so it survives the re-renders the overlay causes while
+   * the camera is running.
+   */
+  const [measureTarget, setMeasureTarget] = useState<{
+    roomId: string;
+    kind: "doors" | "windows" | "stairs";
+    itemId: string;
+    prompt: string;
+  } | null>(null);
+
+  const applyMeasuredDistance = useCallback(
+    (metres: number) => {
+      const t = measureTarget;
+      if (!t) return;
+      // Measured with the camera, so not approximate — but the scan's
+      // own confidence caveat applies, which is why the notes ask for a
+      // tape check on anything critical.
+      setRooms((prev) =>
+        prev.map((r) => {
+          if (r.id !== t.roomId) return r;
+          if (t.kind === "stairs") {
+            return {
+              ...r,
+              stairs: (r.stairs ?? []).map((s) =>
+                s.id === t.itemId
+                  ? { ...s, positionM: String(metres), positionApprox: false }
+                  : s,
+              ),
+            };
+          }
+          return {
+            ...r,
+            [t.kind]: r[t.kind].map((o) =>
+              o.id === t.itemId
+                ? { ...o, positionM: String(metres), positionApprox: false }
+                : o,
+            ),
+          };
+        }),
+      );
+      setMeasureTarget(null);
+    },
+    [measureTarget],
+  );
 
   const applyHouseScan = useCallback((result: RoomPlanScanResult) => {
     const scanned = result.rooms ?? [];
@@ -2035,6 +2085,21 @@ export default function MeasureIntakeForm() {
           sent.
         </p>
 
+        {/* Camera distance tool. Rendered outside the scan review flow
+            because there is nothing to review: it returns one number,
+            straight into the field that asked for it. */}
+        {measureTarget && (
+          <RoomScanOverlay
+            open
+            roomLabel=""
+            distanceMode
+            distancePrompt={measureTarget.prompt}
+            onDistance={applyMeasuredDistance}
+            onClose={() => setMeasureTarget(null)}
+            onApply={() => setMeasureTarget(null)}
+          />
+        )}
+
         {activeScanContext && scanRoomId && (
           <RoomScanReviewFlow
             open
@@ -3225,6 +3290,18 @@ export default function MeasureIntakeForm() {
                                 d.positionM ? Number.parseFloat(d.positionM) : null
                               }
                               approx={d.positionApprox === true}
+                              onMeasureWithCamera={
+                                arSupport === "yes" || SCAN_ENABLED
+                                  ? () =>
+                                      setMeasureTarget({
+                                        roomId: room.id,
+                                        kind: "doors",
+                                        itemId: d.id,
+                                        prompt:
+                                          "Tap the corner, then the floor below the door",
+                                      })
+                                  : undefined
+                              }
                               onChange={(positionM, approx) => {
                                 const doors = room.doors.map((x) =>
                                   x.id === d.id
@@ -3351,6 +3428,18 @@ export default function MeasureIntakeForm() {
                                 w.positionM ? Number.parseFloat(w.positionM) : null
                               }
                               approx={w.positionApprox === true}
+                              onMeasureWithCamera={
+                                arSupport === "yes" || SCAN_ENABLED
+                                  ? () =>
+                                      setMeasureTarget({
+                                        roomId: room.id,
+                                        kind: "windows",
+                                        itemId: w.id,
+                                        prompt:
+                                          "Tap the corner, then the floor below the window",
+                                      })
+                                  : undefined
+                              }
                               onChange={(positionM, approx) => {
                                 const windows = room.windows.map((x) =>
                                   x.id === w.id
@@ -3516,6 +3605,18 @@ export default function MeasureIntakeForm() {
                               s.positionM ? Number.parseFloat(s.positionM) : null
                             }
                             approx={s.positionApprox === true}
+                            onMeasureWithCamera={
+                              arSupport === "yes" || SCAN_ENABLED
+                                ? () =>
+                                    setMeasureTarget({
+                                      roomId: room.id,
+                                      kind: "stairs",
+                                      itemId: s.id,
+                                      prompt:
+                                        "Tap the corner, then the bottom step",
+                                    })
+                                : undefined
+                            }
                             onChange={(positionM, approx) =>
                               setStairs(room.id, s.id, {
                                 positionM: String(positionM),
