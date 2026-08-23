@@ -15,11 +15,11 @@ import RoomPlan
  * each capture starts a fresh world origin wherever the phone happened
  * to be.
  *
- * StructureBuilder (iOS 17+) solves it. Feed it the raw CapturedRoomData
- * from a sequence of captures and it returns a CapturedStructure with
- * every room, wall and opening expressed in one shared frame. That is
- * the difference between a list of room sizes and an actual plan — and
- * it is also where door and window POSITIONS come from, which manual
+ * StructureBuilder (iOS 17+) solves it. Hand it the CapturedRooms from
+ * a sequence of captures and it returns a CapturedStructure with every
+ * room, wall and opening expressed in one shared frame. That is the
+ * difference between a list of room sizes and an actual plan — and it
+ * is also where door and window POSITIONS come from, which manual
  * measurement cannot practically provide.
  *
  * Flow:
@@ -61,10 +61,14 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate {
     private let unit: String
     private let completion: (Result<[String: Any], Error>) -> Void
 
-    /// Raw capture data, one entry per completed room. StructureBuilder
-    /// needs the RAW data, not the processed CapturedRoom — processing
-    /// discards what it needs to align rooms with each other.
-    private var capturedData: [CapturedRoomData] = []
+    /// One processed room per completed capture.
+    ///
+    /// StructureBuilder takes `[CapturedRoom]`. An earlier version of
+    /// this file collected `CapturedRoomData` on the assumption that
+    /// merging needed the raw scan, which does not compile and was not
+    /// true: the processed room retains the transforms the merge aligns
+    /// on.
+    private var capturedRooms: [CapturedRoom] = []
     private var roomNames: [String] = []
     private var startedAt: Date = Date()
 
@@ -111,7 +115,7 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate {
             buildAndFinish()
             return
         }
-        let count = capturedData.count
+        let count = capturedRooms.count
         let alert = UIAlertController(
             title: "\(count) room\(count == 1 ? "" : "s") scanned",
             message: "Walk to the next room and scan it, or finish and send this plan.",
@@ -119,7 +123,7 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate {
         )
         alert.addAction(UIAlertAction(title: "Scan another room", style: .default) { [weak self] _ in
             guard let self else { return }
-            self.presentCapture(roomNumber: self.capturedData.count + 1)
+            self.presentCapture(roomNumber: self.capturedRooms.count + 1)
         })
         alert.addAction(UIAlertAction(title: "Finish", style: .default) { [weak self] _ in
             self?.buildAndFinish()
@@ -138,7 +142,7 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate {
     /// Cancel button. Only aborts outright if nothing has been captured
     /// yet; otherwise we offer to keep what we have.
     func userCancelled() {
-        if capturedData.isEmpty {
+        if capturedRooms.isEmpty {
             dismissModal { [weak self] in
                 self?.finish(.failure(HouseError.cancelled))
             }
@@ -152,11 +156,11 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate {
     // MARK: - Merge
 
     private func buildAndFinish() {
-        guard !capturedData.isEmpty else {
+        guard !capturedRooms.isEmpty else {
             finish(.failure(HouseError.nothingCaptured))
             return
         }
-        let rooms = capturedData
+        let rooms = capturedRooms
         let elapsed = Date().timeIntervalSince(startedAt)
         let names = roomNames
 
@@ -189,8 +193,8 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate {
 
     // MARK: - RoomCaptureViewDelegate
 
-    /// Returning true lets Apple process the scan. We keep the RAW data
-    /// here because that is what StructureBuilder consumes later.
+    /// Returning true hands the raw scan to Apple's processing. The
+    /// result arrives in didPresent, which is where we keep it.
     func captureView(shouldPresent roomDataForProcessing: CapturedRoomData, error: Error?) -> Bool {
         if let error = error {
             dismissModal { [weak self] in
@@ -198,8 +202,6 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate {
             }
             return false
         }
-        capturedData.append(roomDataForProcessing)
-        roomNames.append("Room \(capturedData.count)")
         return true
     }
 
@@ -210,6 +212,8 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate {
             }
             return
         }
+        capturedRooms.append(processedResult)
+        roomNames.append("Room \(capturedRooms.count)")
         dismissModal { [weak self] in
             self?.askForNextStep()
         }
