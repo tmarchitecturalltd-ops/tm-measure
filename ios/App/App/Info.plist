@@ -12,6 +12,19 @@
 	<string>TM Measure reads the angle your phone is held at while you tap room corners. Without it, distances cannot be calculated.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>TM Measure uses your microphone to record voice notes when measuring rooms.</string>
+	<!-- Export compliance, declared once here instead of by hand on every
+	     upload. App Store Connect asks the encryption question per BUILD,
+	     not per app, so without this it appears on every single upload and
+	     blocks the build from reaching testers until someone answers it —
+	     usually noticed late, when the build is already needed.
+
+	     False is the correct answer: the app implements no encryption of
+	     its own. It talks HTTPS to the submission endpoint, which is the
+	     operating system's own encryption, and that is exempt. There are
+	     no crypto libraries in the project; the only `crypto` call in the
+	     codebase is randomUUID, which generates identifiers. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Allow TM Measure to save scan reference photos to your device.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
