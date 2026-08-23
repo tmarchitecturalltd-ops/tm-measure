@@ -333,6 +333,11 @@ export default function MeasureIntakeForm() {
           );
           const ceiling = scan.measurements.find((m) => m.kind === "ceiling");
           const doors = scan.measurements.filter((m) => m.kind === "door");
+          // Windows were filtered for nowhere. A LiDAR scan detects them,
+          // draws them in the model the customer is looking at, and then
+          // the room arrived with an empty windows list — so a room with
+          // three windows submitted as if it had none.
+          const windows = scan.measurements.filter((m) => m.kind === "window");
 
           // A scan of a rectangular room returns two measurements —
           // width and length — but the room has four wall slots, where
@@ -387,6 +392,17 @@ export default function MeasureIntakeForm() {
               ]
             : r.doors;
 
+          const nextWindows: Opening[] = windows.length
+            ? [
+                ...r.windows,
+                ...windows.map<Opening>((w) => ({
+                  id: newId(),
+                  widthM: w.valueM.toFixed(2),
+                  note: w.note ?? "Detected by scan",
+                })),
+              ]
+            : r.windows;
+
           const capturedAt =
             scan.context.capturedAt ?? new Date().toISOString();
           const overall = scanOverallConfidence(scan).toUpperCase();
@@ -405,6 +421,16 @@ export default function MeasureIntakeForm() {
               ? ceiling.valueM.toFixed(2)
               : r.ceilingHeightM,
             doors: nextDoors,
+            windows: nextWindows,
+            // A scan that measured more than two walls has described a
+            // shape a rectangle cannot hold. Rectangle mode shows only
+            // Width and Length, so those extra walls would sit in the
+            // payload, invisible and uneditable — the customer would be
+            // submitting numbers they were never shown. Switching to
+            // individual-wall editing puts every measured wall on
+            // screen where it can be checked.
+            shape:
+              wallMeasurements.length > 2 ? "custom" : (r.shape ?? "rectangle"),
             notes: r.notes.trim()
               ? `${r.notes.trim()}\n${stamp}`
               : stamp,

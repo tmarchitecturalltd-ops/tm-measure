@@ -45,6 +45,12 @@ type OverlayDims = {
   areaM2?: number;
   /** Whether the engine thought the quadrilateral was rectangular. */
   rectangular?: boolean;
+  /** Per-wall lengths from a LiDAR scan, in metres. See ScanDimensions. */
+  wallsM?: number[];
+  /** Detected door widths in metres. */
+  doorsM?: number[];
+  /** Detected window widths in metres. */
+  windowsM?: number[];
 };
 
 export type RoomScanReviewFlowProps = {
@@ -162,25 +168,39 @@ function buildScanResult({
   // best case put a "High confidence" chip next to numbers nothing had
   // validated, which is the one thing a measuring tool must not do.
   const overall: ScanConfidence = dims.confidence ?? "low";
-  // No compass here. The scan measures two perpendicular walls; it has
-  // no heading, so "(North)" and "(East)" were invented and travelled
-  // all the way into the customer's submission.
-  const walls = [
-    {
-      id: `w-${now}-a`,
-      label: "Wall 1",
-      kind: "wall" as const,
-      valueM: round2(dims.widthM),
-      confidence: overall,
-    },
-    {
-      id: `w-${now}-b`,
-      label: "Wall 2",
-      kind: "wall" as const,
-      valueM: round2(dims.lengthM),
-      confidence: overall,
-    },
-  ];
+  // No compass here. The scan has no heading, so "(North)" and "(East)"
+  // were invented and travelled all the way into the customer's
+  // submission.
+  //
+  // A LiDAR scan reports every wall it found. Collapsing that to a
+  // width and a length is right for a corner-tap scan, which can only
+  // produce two numbers, and wrong for RoomPlan — an L-shaped room has
+  // six walls and the bounding box describes none of them. Use the
+  // detailed list when it is there.
+  const walls = (dims.wallsM?.length ?? 0) > 0
+    ? dims.wallsM!.map((lengthM, i) => ({
+        id: `w-${now}-${i}`,
+        label: `Wall ${i + 1}`,
+        kind: "wall" as const,
+        valueM: round2(lengthM),
+        confidence: overall,
+      }))
+    : [
+        {
+          id: `w-${now}-a`,
+          label: "Wall 1",
+          kind: "wall" as const,
+          valueM: round2(dims.widthM),
+          confidence: overall,
+        },
+        {
+          id: `w-${now}-b`,
+          label: "Wall 2",
+          kind: "wall" as const,
+          valueM: round2(dims.lengthM),
+          confidence: overall,
+        },
+      ];
   const ceiling = {
     id: `c-${now}`,
     label: "Ceiling Height",
@@ -209,7 +229,33 @@ function buildScanResult({
       }
     : null;
 
-  const measurements = [...walls, ceiling, ...(door ? [door] : [])];
+  // Doors and windows RoomPlan detected individually. These used to be
+  // dropped on the floor: the scan found them, drew them in the 3D
+  // model the user was looking at, and then the measurement list showed
+  // neither. A room with three windows arrived as a bare rectangle.
+  const detectedDoors = (dims.doorsM ?? []).map((widthM, i) => ({
+    id: `d-${now}-${i}`,
+    label: `Door ${i + 1}`,
+    kind: "door" as const,
+    valueM: round2(widthM),
+    confidence: overall,
+  }));
+  const detectedWindows = (dims.windowsM ?? []).map((widthM, i) => ({
+    id: `wn-${now}-${i}`,
+    label: `Window ${i + 1}`,
+    kind: "window" as const,
+    valueM: round2(widthM),
+    confidence: overall,
+  }));
+
+  const measurements = [
+    ...walls,
+    ceiling,
+    // Only fall back to the single perspective-derived door when the
+    // scan did not detect any of its own.
+    ...(detectedDoors.length ? detectedDoors : door ? [door] : []),
+    ...detectedWindows,
+  ];
 
   const summary =
     dims.notes && dims.notes.length > 0

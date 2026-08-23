@@ -68,6 +68,20 @@ export type ScanDimensions = {
   areaM2?: number;
   /** True if opposite walls are within 10 % of each other. */
   rectangular?: boolean;
+  /**
+   * Every wall RoomPlan detected, in metres, in the order returned.
+   *
+   * Without this a LiDAR scan collapsed to a width and a length, which
+   * is all a corner-tap scan can produce. RoomPlan measures each wall
+   * individually — an L-shaped room has six, and forcing them into a
+   * bounding rectangle threw away the shape entirely. The user saw an
+   * accurate 3D model on screen and then a two-number result.
+   */
+  wallsM?: number[];
+  /** Door widths in metres, as detected. */
+  doorsM?: number[];
+  /** Window widths in metres, as detected. */
+  windowsM?: number[];
 };
 
 type Props = {
@@ -1206,15 +1220,28 @@ export default function RoomScanOverlay({
         );
       }
       notes.push(`Scan completed in ${r.durationS.toFixed(1)} s.`);
+      const round2 = (n: number) => Number(n.toFixed(2));
       return {
-        widthM: Number(room.widthM.toFixed(2)),
-        lengthM: Number(room.lengthM.toFixed(2)),
-        heightM: Number(room.heightM.toFixed(2)),
+        widthM: round2(room.widthM),
+        lengthM: round2(room.lengthM),
+        heightM: round2(room.heightM),
         method: "lidar",
         confidence: "high",
         notes,
         areaM2: room.floorAreaM2,
         rectangular: room.rectangular,
+        // Carry the per-wall and per-opening detail through. RoomPlan
+        // measured all of this; keeping only the bounding box was
+        // discarding the reason to use LiDAR in the first place.
+        wallsM: room.walls
+          .map((w) => round2(w.lengthM))
+          .filter((n) => Number.isFinite(n) && n > 0),
+        doorsM: room.doors
+          .map((d) => round2(d.widthM))
+          .filter((n) => Number.isFinite(n) && n > 0),
+        windowsM: room.windows
+          .map((w) => round2(w.widthM))
+          .filter((n) => Number.isFinite(n) && n > 0),
       };
     },
     [],
