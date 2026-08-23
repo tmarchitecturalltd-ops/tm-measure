@@ -28,7 +28,7 @@ import {
   scanOverallConfidence,
   makeRoomConnectionDraft,
   normalizeConnections,
-  buildFloorPlanDxf,
+  buildDetailedPlanDxf,
   type ConnectionKind,
   type ExteriorSide,
   type FieldIssue,
@@ -1676,8 +1676,15 @@ export default function MeasureIntakeForm() {
    * of unplaced rooms would stack every one of them at the origin,
    * which is worse than sending nothing.
    */
+  type DxfFile = {
+    name: string;
+    mimeType: string;
+    dataUri: string;
+    sizeBytes: number;
+  };
+
   const buildDxfAttachment = useCallback(():
-    | { name: string; mimeType: string; dataUri: string; sizeBytes: number }
+    | (DxfFile & { plain: DxfFile })
     | null => {
     const entries = rooms
       .map((room) => {
@@ -1693,25 +1700,50 @@ export default function MeasureIntakeForm() {
 
     if (!entries.length) return null;
 
-    const dxf = buildFloorPlanDxf(entries, {
-      floorLabel: projectName.trim() || "TM Measure floor plan",
-    });
-    // btoa is latin1-only and a room name can contain anything, so
-    // encode as UTF-8 bytes first. Without this an accented character
-    // in "Séjour" throws and takes the whole submission down with it.
-    const bytes = new TextEncoder().encode(dxf);
-    let binary = "";
-    bytes.forEach((b) => {
-      binary += String.fromCharCode(b);
-    });
+    // btoa is latin1-only and a room name can contain anything, so the
+    // string is encoded as UTF-8 bytes first. Without this an accented
+    // character in "Séjour" throws and takes the whole submission with
+    // it.
+    const encode = (dxf: string) => {
+      const bytes = new TextEncoder().encode(dxf);
+      let binary = "";
+      bytes.forEach((b) => {
+        binary += String.fromCharCode(b);
+      });
+      return { base64: btoa(binary), sizeBytes: bytes.length };
+    };
+
     const safeName =
       projectName.trim().replace(/[^A-Za-z0-9_-]+/g, "-").slice(0, 40) ||
       "floor-plan";
+
+    // Two drawings. The detailed one is what the architect works from;
+    // the plain one is a clean base to build on when the detail is
+    // wrong, which on a survey drawn from someone else's measurements
+    // it sometimes will be.
+    const detailed = buildDetailedPlanDxf(entries, {
+      projectName: projectName.trim(),
+      detailed: true,
+    });
+    const plain = buildDetailedPlanDxf(entries, {
+      projectName: projectName.trim(),
+      detailed: false,
+    });
+
+    const d = encode(detailed);
+    const p = encode(plain);
+
     return {
       name: `${safeName}.dxf`,
       mimeType: "application/dxf",
-      dataUri: `data:application/dxf;base64,${btoa(binary)}`,
-      sizeBytes: bytes.length,
+      dataUri: `data:application/dxf;base64,${d.base64}`,
+      sizeBytes: d.sizeBytes,
+      plain: {
+        name: `${safeName}-outline.dxf`,
+        mimeType: "application/dxf",
+        dataUri: `data:application/dxf;base64,${p.base64}`,
+        sizeBytes: p.sizeBytes,
+      },
     };
   }, [rooms, placements, projectName]);
 

@@ -516,6 +516,17 @@ function uploadPhotos_(payload, submissionId) {
   // bottom of the folder listing, next to the photos it was drawn from.
   if (payload.floorPlanDxf) {
     uploadMedia(payload.floorPlanDxf, submissionId + '-floor-plan', 'drawing');
+    // The plain-outline companion. Uploaded separately rather than
+    // nested-and-forgotten: a second drawing that never leaves the
+    // payload is worse than not generating one, because the app reports
+    // it as sent.
+    if (payload.floorPlanDxf.plain) {
+      uploadMedia(
+        payload.floorPlanDxf.plain,
+        submissionId + '-floor-plan-outline',
+        'drawing'
+      );
+    }
   }
 }
 
@@ -636,9 +647,14 @@ function appendRows_(payload, submissionId) {
   // Repeated on every room row of a submission on purpose: the plan
   // covers the whole property, and whichever row is being read should
   // link to it rather than sending the reader hunting for row one.
-  const dxfStr = (payload.floorPlanDxf && payload.floorPlanDxf.driveUrl)
-    ? (payload.floorPlanDxf.name || 'floor-plan.dxf') + ' → ' + payload.floorPlanDxf.driveUrl
-    : '';
+  const dxfParts = [];
+  if (payload.floorPlanDxf && payload.floorPlanDxf.driveUrl) {
+    dxfParts.push((payload.floorPlanDxf.name || 'floor-plan.dxf') + ' → ' + payload.floorPlanDxf.driveUrl);
+  }
+  if (payload.floorPlanDxf && payload.floorPlanDxf.plain && payload.floorPlanDxf.plain.driveUrl) {
+    dxfParts.push((payload.floorPlanDxf.plain.name || 'outline.dxf') + ' → ' + payload.floorPlanDxf.plain.driveUrl);
+  }
+  const dxfStr = dxfParts.join('\n');
   const raw = safeRaw_(payload);
 
   /**
@@ -1016,8 +1032,16 @@ function dxfHtmlBlock_(payload, gold, cream, dark, mid, border) {
           '<a href="' + dxf.driveUrl + '" style="color:' + gold + ';text-decoration:none;font-weight:600;">' +
             escapeHtml_(dxf.name || 'floor-plan.dxf') +
           '</a>' +
-          '<span style="color:' + mid + ';">' + kb + '</span>' +
+          '<span style="color:' + mid + ';">' + kb + ' · walls, doors, windows, stairs</span>' +
         '</div>' +
+        ((dxf.plain && dxf.plain.driveUrl)
+          ? '<div style="margin-top:4px;font-size:13px;">→ ' +
+              '<a href="' + dxf.plain.driveUrl + '" style="color:' + gold + ';text-decoration:none;">' +
+                escapeHtml_(dxf.plain.name || 'outline.dxf') +
+              '</a>' +
+              '<span style="color:' + mid + ';"> · plain outline to build on</span>' +
+            '</div>'
+          : '') +
       '</div>' +
     '</div>' +
   '</div>';

@@ -7,3 +7,4 @@ export * from "./perspective";
 export * from "./connectivity";
 export * from "./floorplan";
 export * from "./dxf";
+export * from "./dxfPlan";

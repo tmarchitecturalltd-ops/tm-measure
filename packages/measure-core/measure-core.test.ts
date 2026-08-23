@@ -27,6 +27,7 @@ import {
 } from "./src/perspective.ts";
 import { roomBoundingBox } from "./src/floorplan.ts";
 import { buildFloorPlanDxf, roomCornersM } from "./src/dxf.ts";
+import { buildWalls, buildDetailedPlanDxf } from "./src/dxfPlan.ts";
 import type { RoomDraft } from "./src/types.ts";
 import {
   normalizeConnections,
@@ -292,4 +293,96 @@ test("rotating a room by 90 degrees swaps its extents", () => {
   assert.equal(span(flat, "x"), 4);
   assert.equal(span(turned, "x"), 3);
   assert.equal(span(turned, "z"), 4);
+});
+
+/* ── Detailed plan ──────────────────────────────────────────────────
+ *
+ * Wall thickness is inferred, not measured, so the inference is the
+ * thing worth pinning: get it wrong and the drawing is confidently
+ * incorrect rather than obviously broken.
+ */
+
+const planRoom = (id: string, name: string, w: number, l: number): RoomDraft =>
+  ({
+    id,
+    name,
+    walls: [
+      { id: `${id}-1`, label: "Wall 1", lengthM: String(w) },
+      { id: `${id}-2`, label: "Wall 2", lengthM: String(l) },
+      { id: `${id}-3`, label: "Wall 3", lengthM: String(w) },
+      { id: `${id}-4`, label: "Wall 4", lengthM: String(l) },
+    ],
+    ceilingHeightM: "2.4",
+    doors: [],
+    windows: [],
+    irregularNotes: "",
+    notes: "",
+    photos: [],
+  }) as RoomDraft;
+
+test("a wall between two rooms is internal, the rest are external", () => {
+  // Two 4x3 rooms side by side: kitchen 0..4, hall 4..8 in x.
+  const walls = buildWalls([
+    { room: planRoom("k", "Kitchen", 4, 3), anchor: { x: 0, z: 0 }, rotationDeg: 0 },
+    { room: planRoom("h", "Hall", 4, 3), anchor: { x: 4, z: 0 }, rotationDeg: 0 },
+  ]);
+  const internal = walls.filter((w) => w.internal);
+  // The shared boundary is one wall of each room.
+  assert.equal(internal.length, 2);
+  assert.ok(internal.every((w) => w.roomId === "k" || w.roomId === "h"));
+});
+
+test("rooms that merely touch at a corner do not share a wall", () => {
+  const walls = buildWalls([
+    { room: planRoom("a", "A", 3, 3), anchor: { x: 0, z: 0 }, rotationDeg: 0 },
+    // Diagonally offset: corners meet, no run of shared wall.
+    { room: planRoom("b", "B", 3, 3), anchor: { x: 3, z: 3 }, rotationDeg: 0 },
+  ]);
+  assert.equal(walls.filter((w) => w.internal).length, 0);
+});
+
+test("a lone room is external all the way round", () => {
+  const walls = buildWalls([
+    { room: planRoom("a", "A", 4, 3), anchor: { x: 0, z: 0 }, rotationDeg: 0 },
+  ]);
+  assert.equal(walls.length, 4);
+  assert.equal(walls.filter((w) => w.internal).length, 0);
+});
+
+test("a door cuts the wall rather than being drawn over it", () => {
+  const room = planRoom("k", "Kitchen", 4, 3);
+  room.doors = [
+    { id: "d1", widthM: "0.9", note: "", wallIndex: 0, positionM: "2" },
+  ];
+  const dxf = buildDetailedPlanDxf([
+    { room, anchor: { x: 0, z: 0 }, rotationDeg: 0 },
+  ]);
+  // Door leaf and swing arc both present.
+  assert.match(dxf, /TM-DOORS/);
+  assert.match(dxf, /\nARC\n/);
+  // The reveal is closed off with jambs rather than the wall simply
+  // stopping — four wall lines minimum on that edge.
+  assert.ok(dxf.split("TM-WALLS").length > 4);
+});
+
+test("the detailed plan is still millimetres and still not mirrored", () => {
+  const dxf = buildDetailedPlanDxf([
+    { room: planRoom("a", "A", 4, 3), anchor: { x: 0, z: 0 }, rotationDeg: 0 },
+  ]);
+  assert.match(dxf, /4000\.00|3875\.00|4125\.00/);
+  assert.match(dxf, /-\d+\.\d\d/);
+  assert.match(dxf, /\$INSUNITS/);
+});
+
+test("the plain companion drawing has no doors, stairs or title block", () => {
+  const room = planRoom("k", "Kitchen", 4, 3);
+  room.doors = [
+    { id: "d1", widthM: "0.9", note: "", wallIndex: 0, positionM: "2" },
+  ];
+  const plain = buildDetailedPlanDxf(
+    [{ room, anchor: { x: 0, z: 0 }, rotationDeg: 0 }],
+    { detailed: false },
+  );
+  assert.ok(!plain.includes("TM-DOORS"));
+  assert.ok(!plain.includes("TM-TITLE"));
 });
