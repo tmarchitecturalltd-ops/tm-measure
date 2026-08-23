@@ -1592,6 +1592,50 @@ export default function RoomScanOverlay({
                   </button>
                 </div>
 
+                {/* LiDAR status, surfaced here on purpose.
+                    It used to live only inside the panel that renders when
+                    scanMode === "lidar", and the chips that switch to that
+                    mode are hidden whenever scanMode === "corners". On a
+                    phone where RoomPlan reports unsupported the mode never
+                    changes, so both the option and the explanation for its
+                    absence were unreachable: the feature simply wasn't
+                    there, with no way to find out why. This sheet is the
+                    one screen every user passes through. */}
+                <div className="mb-4">
+                  {roomPlanSupport === "yes" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScanMode("lidar");
+                        setMethodChosen(true);
+                        void handleLidarStart();
+                      }}
+                      className="w-full rounded-lg border p-3 text-left"
+                      style={{ borderColor: GOLD }}
+                    >
+                      <span className="block text-sm font-bold" style={{ color: GOLD }}>
+                        LiDAR auto-scan · most accurate
+                      </span>
+                      <span className="mt-0.5 block text-[11px] text-white/60">
+                        Walk around the room once and Apple RoomPlan measures
+                        it for you. No tapping.
+                      </span>
+                    </button>
+                  ) : roomPlanSupport === "no" ? (
+                    <p className="text-[11px] leading-relaxed text-white/40">
+                      <span className="font-semibold text-white/55">
+                        LiDAR auto-scan unavailable.
+                      </span>{" "}
+                      {roomPlanReason ??
+                        "Apple RoomPlan needs an iPhone or iPad Pro with a LiDAR sensor running iOS 16 or newer."}
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-white/35">
+                      Checking whether this device supports LiDAR auto-scan…
+                    </p>
+                  )}
+                </div>
+
                 <p className="mb-2 text-[11px] uppercase tracking-widest text-white/45">
                   Tap which corners?
                 </p>
