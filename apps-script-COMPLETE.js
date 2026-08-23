@@ -40,6 +40,11 @@ const CONFIG = {
   // iOS Safari gives audio/mp4, Firefox may give audio/ogg.
   audioMaxBytes: 10 * 1024 * 1024,
   audioAllowedMimes: ['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/ogg', 'audio/wav'],
+  // The CAD floor plan the app generates at submit time. DXF is plain
+  // text, so a whole house is tens of kilobytes; 5 MB is far more than
+  // it can plausibly need and still small enough to catch a runaway.
+  drawingMaxBytes: 5 * 1024 * 1024,
+  drawingAllowedMimes: ['application/dxf', 'image/vnd.dxf', 'text/plain'],
 };
 
 /**
@@ -363,7 +368,14 @@ function uploadPhotos_(payload, submissionId) {
     return (list || []).some(function (p) { return p && p.dataUri; });
   };
 
-  let hasData = rooms.some(function (r) {
+  if (payload.floorPlanDxf && payload.floorPlanDxf.dataUri) {
+    // A submission can legitimately have no photos at all but still
+    // carry a floor plan, and the early return below would have skipped
+    // creating the folder — silently dropping the drawing.
+    var forceFolder = true;
+  }
+
+  let hasData = forceFolder === true || rooms.some(function (r) {
     if (anyWithData(r.photos)) return true;
     if (anyWithData(r.voiceMemos)) return true;
     return (r.walls || []).some(function (w) { return anyWithData(w.photos); });
@@ -396,6 +408,7 @@ function uploadPhotos_(payload, submissionId) {
   };
 
   const audioAllowedMimes = CONFIG.audioAllowedMimes;
+  const drawingAllowedMimes = CONFIG.drawingAllowedMimes;
   const audioExtByMime = {
     'audio/webm': 'webm',
     'audio/mp4': 'm4a',
@@ -410,12 +423,25 @@ function uploadPhotos_(payload, submissionId) {
    * dataUri is deleted on EVERY exit path, so an unhandled file can
    * never leak its base64 into the sheet's Raw payload cell.
    */
+  const drawingExtByMime = {
+    'application/dxf': 'dxf',
+    'image/vnd.dxf': 'dxf',
+    'text/plain': 'dxf',
+  };
+
   const uploadMedia = function (item, fallbackName, kind) {
     if (!item || !item.dataUri) return;
     const isAudio = kind === 'audio';
-    const allowed = isAudio ? audioAllowedMimes : allowedMimes;
-    const maxBytes = isAudio ? CONFIG.audioMaxBytes : CONFIG.photoMaxBytes;
-    const extTable = isAudio ? audioExtByMime : extByMime;
+    const isDrawing = kind === 'drawing';
+    const allowed = isAudio ? audioAllowedMimes
+      : isDrawing ? drawingAllowedMimes
+      : allowedMimes;
+    const maxBytes = isAudio ? CONFIG.audioMaxBytes
+      : isDrawing ? CONFIG.drawingMaxBytes
+      : CONFIG.photoMaxBytes;
+    const extTable = isAudio ? audioExtByMime
+      : isDrawing ? drawingExtByMime
+      : extByMime;
     try {
       // Tolerate MIME parameters. MediaRecorder emits data URIs like
       // "data:audio/webm;codecs=opus;base64,…" — a regex anchored on
@@ -485,6 +511,12 @@ function uploadPhotos_(payload, submissionId) {
   sketches.forEach(function (photo, pi) {
     uploadPhoto(photo, 'proposal-sketch-' + (pi + 1));
   });
+
+  // The generated CAD floor plan. Uploaded last so it sits at the
+  // bottom of the folder listing, next to the photos it was drawn from.
+  if (payload.floorPlanDxf) {
+    uploadMedia(payload.floorPlanDxf, submissionId + '-floor-plan', 'drawing');
+  }
 }
 
 function findOrCreateFolder_(parent, name) {
@@ -517,6 +549,7 @@ const HEADERS = [
   'Position Z (m)',
   'Rotation (°)',
   'Voice memos',
+  'Floor plan (DXF)',
   'Exterior photos',
   'Proposal',
   'Proposal sketches',
@@ -600,6 +633,12 @@ function appendRows_(payload, submissionId) {
   const proposalText = (payload.proposal && payload.proposal.description)
     ? String(payload.proposal.description) : '';
   const sketchesStr = sketchesSummary_(payload);
+  // Repeated on every room row of a submission on purpose: the plan
+  // covers the whole property, and whichever row is being read should
+  // link to it rather than sending the reader hunting for row one.
+  const dxfStr = (payload.floorPlanDxf && payload.floorPlanDxf.driveUrl)
+    ? (payload.floorPlanDxf.name || 'floor-plan.dxf') + ' → ' + payload.floorPlanDxf.driveUrl
+    : '';
   const raw = safeRaw_(payload);
 
   /**
@@ -629,6 +668,7 @@ function appendRows_(payload, submissionId) {
       'Unit': csvSafe_(payload.unitPreference || ''),
       'Room': '(no rooms submitted)',
       'Connections': csvSafe_(connectionsStr),
+      'Floor plan (DXF)': csvSafe_(dxfStr),
       'Exterior photos': csvSafe_(exteriorStr),
       'Proposal': csvSafe_(proposalText),
       'Proposal sketches': csvSafe_(sketchesStr),
@@ -715,6 +755,7 @@ function appendRows_(payload, submissionId) {
       'Position Z (m)': posZCell,
       'Rotation (°)': rotationCell,
       'Voice memos': csvSafe_(voice),
+      'Floor plan (DXF)': csvSafe_(dxfStr),
       'Exterior photos': csvSafe_(exteriorStr),
       'Proposal': csvSafe_(proposalText),
       'Proposal sketches': csvSafe_(sketchesStr),
@@ -931,6 +972,8 @@ function buildHtmlEmail_(payload, submissionId) {
 
         connectionsHtmlBlock_(payload, gold, cream, dark, mid, border) +
 
+        dxfHtmlBlock_(payload, gold, cream, dark, mid, border) +
+
         proposalHtmlBlock_(payload, gold, cream, dark, mid, border) +
 
         floorPlanHtmlBlock_(payload, gold, cream, dark, mid, border) +
@@ -947,6 +990,39 @@ function buildHtmlEmail_(payload, submissionId) {
  * The customer's description of the work, plus sketches and exterior
  * elevations. All three used to be discarded entirely.
  */
+/**
+ * The generated CAD floor plan, near the top of the email.
+ *
+ * Placed above the proposal block deliberately: this is the file the
+ * person drawing the house opens first, and burying it under photo
+ * links would mean it goes unnoticed and the plan gets redrawn by hand
+ * anyway — which is the entire thing it exists to prevent.
+ */
+function dxfHtmlBlock_(payload, gold, cream, dark, mid, border) {
+  const dxf = payload.floorPlanDxf;
+  if (!dxf || !dxf.driveUrl) return '';
+  const kb = (typeof dxf.sizeBytes === 'number' && isFinite(dxf.sizeBytes))
+    ? ' · ' + Math.max(1, Math.round(dxf.sizeBytes / 1024)) + ' KB' : '';
+  return '<div style="padding:0 28px 8px 28px;">' +
+    '<div style="margin-top:20px;border:1px solid ' + gold + ';border-radius:8px;overflow:hidden;">' +
+      '<div style="padding:12px 16px;background:' + dark + ';color:' + cream + ';font-weight:600;font-size:15px;">' +
+        'CAD floor plan' +
+      '</div>' +
+      '<div style="padding:14px 16px;">' +
+        '<div style="font-size:13px;line-height:1.6;color:' + dark + ';">' +
+          'Generated from the submitted measurements. Millimetres, ready to open in CAD.' +
+        '</div>' +
+        '<div style="margin-top:8px;font-size:13px;">→ ' +
+          '<a href="' + dxf.driveUrl + '" style="color:' + gold + ';text-decoration:none;font-weight:600;">' +
+            escapeHtml_(dxf.name || 'floor-plan.dxf') +
+          '</a>' +
+          '<span style="color:' + mid + ';">' + kb + '</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
 function proposalHtmlBlock_(payload, gold, cream, dark, mid, border) {
   const description = (payload.proposal && payload.proposal.description)
     ? String(payload.proposal.description) : '';

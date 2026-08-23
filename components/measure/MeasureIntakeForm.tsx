@@ -28,6 +28,7 @@ import {
   scanOverallConfidence,
   makeRoomConnectionDraft,
   normalizeConnections,
+  buildFloorPlanDxf,
   type ConnectionKind,
   type ExteriorSide,
   type FieldIssue,
@@ -1416,16 +1417,57 @@ export default function MeasureIntakeForm() {
     unit,
   ]);
 
-  const downloadJson = () => {
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
+  /**
+   * Build the CAD floor plan that travels with the submission.
+   *
+   * Generated at submit time rather than offered as a download: the
+   * customer has no use for a DXF, and the architect had to redraw the
+   * house from a list of numbers. One file, produced from measurements
+   * that have already been checked on the review screen, opens straight
+   * into CAD.
+   *
+   * Returns null when no room has been placed on the plan — an export
+   * of unplaced rooms would stack every one of them at the origin,
+   * which is worse than sending nothing.
+   */
+  const buildDxfAttachment = useCallback(():
+    | { name: string; mimeType: string; dataUri: string; sizeBytes: number }
+    | null => {
+    const entries = rooms
+      .map((room) => {
+        const p = placements[room.id];
+        if (!p?.positionM) return null;
+        return {
+          room,
+          anchor: { x: p.positionM.x, z: p.positionM.z },
+          rotationDeg: p.rotationDeg ?? 0,
+        };
+      })
+      .filter((e): e is NonNullable<typeof e> => e !== null);
+
+    if (!entries.length) return null;
+
+    const dxf = buildFloorPlanDxf(entries, {
+      floorLabel: projectName.trim() || "TM Measure floor plan",
     });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `tm-measure-${projectName.replace(/\s+/g, "-").slice(0, 40) || "export"}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
+    // btoa is latin1-only and a room name can contain anything, so
+    // encode as UTF-8 bytes first. Without this an accented character
+    // in "Séjour" throws and takes the whole submission down with it.
+    const bytes = new TextEncoder().encode(dxf);
+    let binary = "";
+    bytes.forEach((b) => {
+      binary += String.fromCharCode(b);
+    });
+    const safeName =
+      projectName.trim().replace(/[^A-Za-z0-9_-]+/g, "-").slice(0, 40) ||
+      "floor-plan";
+    return {
+      name: `${safeName}.dxf`,
+      mimeType: "application/dxf",
+      dataUri: `data:application/dxf;base64,${btoa(binary)}`,
+      sizeBytes: bytes.length,
+    };
+  }, [rooms, placements, projectName]);
 
   /**
    * Downscale a photo blob URL to a JPEG data URI under ~200 KB.
@@ -1591,6 +1633,12 @@ export default function MeasureIntakeForm() {
       }
       const enrichedPayload = {
         ...payload,
+        // The CAD drawing, generated from the measurements the customer
+        // has just reviewed. Sent rather than offered as a download —
+        // it is of no use to them and saves the architect redrawing the
+        // house from a list of numbers. Null when nothing was placed on
+        // the plan; the backend simply finds no file to upload.
+        floorPlanDxf: buildDxfAttachment(),
         exterior: Object.fromEntries(
           Object.entries(payload.exterior).map(([side, photos]) => [
             side,
@@ -3871,15 +3919,14 @@ export default function MeasureIntakeForm() {
                   >
                     Edit floor plan
                   </button>
-                  <button
-                    type="button"
-                    onClick={downloadJson}
-                    disabled={submitStatus === "submitting"}
-                    className="inline-flex items-center gap-2 rounded-full bg-inverse-surface px-6 py-3 text-sm font-bold uppercase tracking-widest text-surface transition-opacity hover:opacity-90 disabled:opacity-50"
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: "18px" }} aria-hidden>download</span>
-                    Download JSON (backup)
-                  </button>
+                  {/* The JSON backup download used to sit here. It asked a
+                      homeowner to look after a file they cannot read, to
+                      guard against a failure they have no way to act on,
+                      and it sat next to the button that actually finishes
+                      the job. The CAD drawing it was adjacent to is now
+                      generated and sent with the submission instead, which
+                      is where it is useful — to the person drawing the
+                      house, not the person measuring it. */}
                   <button
                     type="button"
                     onClick={submitToBackend}

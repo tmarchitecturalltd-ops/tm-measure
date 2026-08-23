@@ -26,6 +26,8 @@ import {
   type FloorPoint3D,
 } from "./src/perspective.ts";
 import { roomBoundingBox } from "./src/floorplan.ts";
+import { buildFloorPlanDxf, roomCornersM } from "./src/dxf.ts";
+import type { RoomDraft } from "./src/types.ts";
 import {
   normalizeConnections,
   type RoomConnectionDraft,
@@ -219,4 +221,75 @@ test("self-loops and incomplete rows are dropped", () => {
     draft({ roomAId: "kitchen", roomBId: "", kind: "door" }),
   ]);
   assert.equal(out.length, 0);
+});
+
+/* ── DXF export ─────────────────────────────────────────────────────
+ *
+ * A wrong DXF is worse than no DXF: it opens, it looks like a floor
+ * plan, and the errors only surface when someone builds from it. These
+ * pin the three ways that happens silently.
+ */
+
+const dxfRoom = (over: Partial<RoomDraft> = {}): RoomDraft =>
+  ({
+    id: "r1",
+    name: "Kitchen",
+    walls: [
+      { id: "w1", label: "Wall 1", lengthM: "4" },
+      { id: "w2", label: "Wall 2", lengthM: "3" },
+      { id: "w3", label: "Wall 3", lengthM: "4" },
+      { id: "w4", label: "Wall 4", lengthM: "3" },
+    ],
+    ceilingHeightM: "2.4",
+    doors: [],
+    windows: [],
+    irregularNotes: "",
+    notes: "",
+    photos: [],
+    ...over,
+  }) as RoomDraft;
+
+test("DXF is written in millimetres, not metres", () => {
+  const dxf = buildFloorPlanDxf([
+    { room: dxfRoom(), anchor: { x: 0, z: 0 }, rotationDeg: 0 },
+  ]);
+  // A 4 m wall must appear as 4000, not 4. Importing at 1/1000 looks
+  // plausible right up until someone dimensions off it.
+  assert.match(dxf, /4000\.000/);
+  assert.match(dxf, /\$INSUNITS/);
+});
+
+test("the plan is not mirrored: screen-down z becomes CAD-up y", () => {
+  const dxf = buildFloorPlanDxf([
+    { room: dxfRoom(), anchor: { x: 0, z: 0 }, rotationDeg: 0 },
+  ]);
+  // z runs downward in the app, y upward in CAD. A room anchored at
+  // the origin must therefore occupy negative y. Get this wrong and
+  // every plan arrives mirrored — and a mirrored rectangle still looks
+  // like a rectangle.
+  assert.match(dxf, /-3000\.000/);
+  assert.ok(!/\n20\n3000\.000/.test(dxf), "y should not be positive here");
+});
+
+test("a newline in a room name cannot corrupt the file", () => {
+  const dxf = buildFloorPlanDxf([
+    {
+      room: dxfRoom({ name: "Kitchen\n0\nLINE" }),
+      anchor: { x: 0, z: 0 },
+      rotationDeg: 0,
+    },
+  ]);
+  // DXF is newline-delimited, so an unsanitised name could close the
+  // TEXT entity and inject entities of its own.
+  assert.ok(dxf.includes("Kitchen 0 LINE"));
+});
+
+test("rotating a room by 90 degrees swaps its extents", () => {
+  const flat = roomCornersM({ x: 0, z: 0 }, { widthM: 4, lengthM: 3 }, 0);
+  const turned = roomCornersM({ x: 0, z: 0 }, { widthM: 4, lengthM: 3 }, 90);
+  const span = (pts: { x: number; z: number }[], k: "x" | "z") =>
+    Math.max(...pts.map((p) => p[k])) - Math.min(...pts.map((p) => p[k]));
+  assert.equal(span(flat, "x"), 4);
+  assert.equal(span(turned, "x"), 3);
+  assert.equal(span(turned, "z"), 4);
 });
