@@ -39,6 +39,7 @@ import {
   type RoomDraft,
   type RoomPhoto,
   type RoomPlacement,
+  type RoomStairs,
   type ScanResult,
   type StairsShape,
   type WallSegment,
@@ -49,6 +50,7 @@ import FloorPlanEditor from "@/components/measure/FloorPlanEditor";
 import TutorialOverlay from "@/components/measure/TutorialOverlay";
 import CustomShapeEditor from "@/components/measure/CustomShapeEditor";
 import VoiceRecorder from "@/components/measure/VoiceRecorder";
+import WallPositionPicker from "@/components/measure/WallPositionPicker";
 import {
   RoomPlan,
   type RoomPlanScanResult,
@@ -885,6 +887,56 @@ export default function MeasureIntakeForm() {
     );
   }, []);
 
+  const addStairs = useCallback((roomId: string) => {
+    setRooms((prev) =>
+      prev.map((r) =>
+        r.id === roomId
+          ? {
+              ...r,
+              stairs: [
+                ...(r.stairs ?? []),
+                {
+                  id: newId(),
+                  widthM: "",
+                  // Up is the common case: most rooms containing stairs
+                  // are on the storey below the one they serve.
+                  direction: "up",
+                } satisfies RoomStairs,
+              ],
+            }
+          : r,
+      ),
+    );
+  }, []);
+
+  const setStairs = useCallback(
+    (roomId: string, stairsId: string, patch: Partial<RoomStairs>) => {
+      setRooms((prev) =>
+        prev.map((r) =>
+          r.id === roomId
+            ? {
+                ...r,
+                stairs: (r.stairs ?? []).map((s) =>
+                  s.id === stairsId ? { ...s, ...patch } : s,
+                ),
+              }
+            : r,
+        ),
+      );
+    },
+    [],
+  );
+
+  const removeStairs = useCallback((roomId: string, stairsId: string) => {
+    setRooms((prev) =>
+      prev.map((r) =>
+        r.id === roomId
+          ? { ...r, stairs: (r.stairs ?? []).filter((s) => s.id !== stairsId) }
+          : r,
+      ),
+    );
+  }, []);
+
   const addOpening = useCallback(
     (roomId: string, kind: "doors" | "windows") => {
       setRooms((prev) =>
@@ -1455,6 +1507,10 @@ export default function MeasureIntakeForm() {
             note: d.note || undefined,
             wallIndex: d.wallIndex,
             positionM: d.positionM ? parseMeters(d.positionM) : undefined,
+            // Sent even when false. Whoever draws from this needs to
+            // know whether a position was measured or eyeballed, and
+            // omitting the flag would leave that ambiguous.
+            positionApprox: d.positionM ? d.positionApprox === true : undefined,
           })),
         windows: r.windows
           .filter((w) => w.widthM.trim())
@@ -1463,9 +1519,21 @@ export default function MeasureIntakeForm() {
             note: w.note || undefined,
             wallIndex: w.wallIndex,
             positionM: w.positionM ? parseMeters(w.positionM) : undefined,
+            positionApprox: w.positionM ? w.positionApprox === true : undefined,
           })),
         irregularShapeNotes: r.irregularNotes.trim() || undefined,
         notes: r.notes.trim() || undefined,
+        stairs: (r.stairs ?? [])
+          .filter((st) => st.widthM.trim())
+          .map((st) => ({
+            widthM: parseMeters(st.widthM),
+            direction: st.direction,
+            wallIndex: st.wallIndex,
+            positionM: st.positionM ? parseMeters(st.positionM) : undefined,
+            positionApprox: st.positionM ? st.positionApprox === true : undefined,
+            treads: st.treads ? Number.parseInt(st.treads, 10) : undefined,
+            notes: st.notes || undefined,
+          })),
         shape: r.shape ?? "rectangle",
         // Undefined rather than false when unticked: the architect needs
         // to distinguish "the customer confirmed this is square" from
@@ -3146,21 +3214,29 @@ export default function MeasureIntakeForm() {
                               ))}
                             </select>
                           </div>
-                          <div className="flex-1">
-                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                              Offset (m)
-                            </label>
-                            <input
-                              inputMode="decimal"
-                              value={d.positionM ?? ""}
-                              onChange={(e) => {
+                          <div className="w-full">
+                            <WallPositionPicker
+                              label="Where on that wall?"
+                              wallLengthM={Number.parseFloat(
+                                room.walls[d.wallIndex ?? 0]?.lengthM ?? "",
+                              )}
+                              openingWidthM={Number.parseFloat(d.widthM || "0.8")}
+                              positionM={
+                                d.positionM ? Number.parseFloat(d.positionM) : null
+                              }
+                              approx={d.positionApprox === true}
+                              onChange={(positionM, approx) => {
                                 const doors = room.doors.map((x) =>
-                                  x.id === d.id ? { ...x, positionM: e.target.value } : x,
+                                  x.id === d.id
+                                    ? {
+                                        ...x,
+                                        positionM: String(positionM),
+                                        positionApprox: approx,
+                                      }
+                                    : x,
                                 );
                                 setRoom(room.id, { doors });
                               }}
-                              placeholder="from wall start"
-                              className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             />
                           </div>
                           <div className="flex-[2]">
@@ -3264,21 +3340,29 @@ export default function MeasureIntakeForm() {
                               ))}
                             </select>
                           </div>
-                          <div className="flex-1">
-                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                              Offset (m)
-                            </label>
-                            <input
-                              inputMode="decimal"
-                              value={w.positionM ?? ""}
-                              onChange={(e) => {
+                          <div className="w-full">
+                            <WallPositionPicker
+                              label="Where on that wall?"
+                              wallLengthM={Number.parseFloat(
+                                room.walls[w.wallIndex ?? 0]?.lengthM ?? "",
+                              )}
+                              openingWidthM={Number.parseFloat(w.widthM || "1.2")}
+                              positionM={
+                                w.positionM ? Number.parseFloat(w.positionM) : null
+                              }
+                              approx={w.positionApprox === true}
+                              onChange={(positionM, approx) => {
                                 const windows = room.windows.map((x) =>
-                                  x.id === w.id ? { ...x, positionM: e.target.value } : x,
+                                  x.id === w.id
+                                    ? {
+                                        ...x,
+                                        positionM: String(positionM),
+                                        positionApprox: approx,
+                                      }
+                                    : x,
                                 );
                                 setRoom(room.id, { windows });
                               }}
-                              placeholder="from wall start"
-                              className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             />
                           </div>
                           <div className="flex-[2]">
@@ -3311,6 +3395,151 @@ export default function MeasureIntakeForm() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                </div>
+
+                {/* Stairs.
+                    Previously recordable only as a connection between two
+                    rooms, which says the floors are linked and gives the
+                    architect nothing to draw — no width, no direction, no
+                    position. A staircase is one of the largest objects in
+                    a house and one of the few that genuinely constrains a
+                    design, and it was missing from every plan. */}
+                <div className="mb-6">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                      Stairs in this room
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => addStairs(room.id)}
+                      className="rounded-full border border-primary px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-primary"
+                    >
+                      + Add stairs
+                    </button>
+                  </div>
+                  {(room.stairs ?? []).length === 0 && (
+                    <p className="text-xs text-on-surface-variant">
+                      Only if a flight starts, ends or passes through this room.
+                    </p>
+                  )}
+                  <div className="space-y-4">
+                    {(room.stairs ?? []).map((s) => (
+                      <div
+                        key={s.id}
+                        className="rounded-lg border border-outline-variant/30 bg-surface-container-lowest p-4"
+                      >
+                        <div className="flex flex-wrap gap-3">
+                          <div className="min-w-[7rem] flex-1">
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                              Width (m) *
+                            </label>
+                            <input
+                              inputMode="decimal"
+                              value={s.widthM}
+                              onChange={(e) =>
+                                setStairs(room.id, s.id, { widthM: e.target.value })
+                              }
+                              placeholder="0.90"
+                              className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
+                            />
+                          </div>
+                          <div className="min-w-[7rem] flex-1">
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                              Going
+                            </label>
+                            <select
+                              value={s.direction}
+                              onChange={(e) =>
+                                setStairs(room.id, s.id, {
+                                  direction: e.target.value as "up" | "down",
+                                })
+                              }
+                              className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
+                            >
+                              <option value="up">Up from this room</option>
+                              <option value="down">Down from this room</option>
+                            </select>
+                          </div>
+                          <div className="min-w-[7rem] flex-1">
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                              Treads
+                            </label>
+                            <input
+                              inputMode="numeric"
+                              value={s.treads ?? ""}
+                              onChange={(e) =>
+                                setStairs(room.id, s.id, { treads: e.target.value })
+                              }
+                              placeholder="13"
+                              className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
+                            />
+                          </div>
+                          <div className="min-w-[8rem] flex-1">
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                              Runs along
+                            </label>
+                            <select
+                              value={s.wallIndex ?? 0}
+                              onChange={(e) =>
+                                setStairs(room.id, s.id, {
+                                  wallIndex: parseInt(e.target.value, 10),
+                                })
+                              }
+                              className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
+                            >
+                              {room.walls.map((w, i) => (
+                                <option key={w.id} value={i}>
+                                  Wall {i + 1}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeStairs(room.id, s.id)}
+                            aria-label="Remove stairs"
+                            className="material-symbols-outlined self-end rounded p-2 text-on-surface-variant hover:text-error"
+                          >
+                            close
+                          </button>
+                        </div>
+
+                        <div className="mt-3">
+                          <WallPositionPicker
+                            label="Where does the flight start?"
+                            wallLengthM={Number.parseFloat(
+                              room.walls[s.wallIndex ?? 0]?.lengthM ?? "",
+                            )}
+                            openingWidthM={Number.parseFloat(s.widthM || "0.9")}
+                            positionM={
+                              s.positionM ? Number.parseFloat(s.positionM) : null
+                            }
+                            approx={s.positionApprox === true}
+                            onChange={(positionM, approx) =>
+                              setStairs(room.id, s.id, {
+                                positionM: String(positionM),
+                                positionApprox: approx,
+                              })
+                            }
+                          />
+                        </div>
+
+                        <div className="mt-3">
+                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            Anything unusual (optional)
+                          </label>
+                          <input
+                            value={s.notes ?? ""}
+                            onChange={(e) =>
+                              setStairs(room.id, s.id, { notes: e.target.value })
+                            }
+                            placeholder="e.g. winders at the bottom, cupboard underneath"
+                            className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
+                          />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -3866,6 +4095,35 @@ export default function MeasureIntakeForm() {
               <p className="mb-6 text-sm text-on-surface-variant">
                 {customerName} · {email} · {projectName}
               </p>
+
+              {/* Openings with no position.
+                  A door or window with a width but no place on a wall is
+                  drawn in the middle by default, which is silently wrong
+                  far more often than it is right. This does not block
+                  submission -- someone may genuinely not know, and a
+                  centred guess plus a photo beats an abandoned survey --
+                  but it should not pass without being said out loud. */}
+              {(() => {
+                const unplaced = rooms.flatMap((r) =>
+                  [...r.doors, ...r.windows]
+                    .filter((o) => o.widthM.trim() && !o.positionM?.trim())
+                    .map(() => r.name.trim() || "an unnamed room"),
+                );
+                if (!unplaced.length) return null;
+                const names = Array.from(new Set(unplaced));
+                return (
+                  <div className="mb-6 rounded-lg bg-amber-100/60 px-4 py-3 text-sm leading-relaxed text-amber-900">
+                    <span className="font-semibold">
+                      {unplaced.length} door{unplaced.length === 1 ? "" : "s"} or
+                      window{unplaced.length === 1 ? "" : "s"} without a position
+                    </span>{" "}
+                    — in {names.join(", ")}. We&apos;ll draw them centred on
+                    their wall, which is usually wrong. Go back and drag each
+                    one roughly into place; it takes a second and saves a
+                    round of questions.
+                  </div>
+                );
+              })()}
               <div className="space-y-8">
                 {rooms.map((room, ri) => (
                   <div key={room.id}>

@@ -28,6 +28,16 @@ export type Opening = {
    * the right place. Optional — half the wall length if absent.
    */
   positionM?: string;
+  /**
+   * True when positionM came from dragging the opening along the wall
+   * diagram rather than being measured and typed.
+   *
+   * The two produce identical-looking numbers and mean very different
+   * things: one is "about a third of the way along", the other is a
+   * tape measurement. Whoever draws from this needs to know which they
+   * have, or an eyeballed 1.85 gets built as though it were surveyed.
+   */
+  positionApprox?: boolean;
 };
 
 /** Cross-platform photo reference (web: blob URI; native: file/content URI). */
@@ -86,6 +96,33 @@ export type RoomPlacement = {
  * "custom" uses an explicit `floorPolygonM` array of (x, z) points
  * traced by the customer; falls back to rectangle if absent.
  */
+/**
+ * A flight of stairs within a room.
+ *
+ * Stairs existed only as a connection *between* rooms, which records
+ * that two floors are linked but gives the architect nothing to draw —
+ * no width, no direction, no position. A staircase is one of the larger
+ * objects in a house and one of the few that genuinely constrains a
+ * design, so it was conspicuous by its absence on every plan.
+ */
+export type RoomStairs = {
+  id: string;
+  /** Clear width of the flight, in metres (string for form binding). */
+  widthM: string;
+  /** Which way the flight goes when you walk onto it from this room. */
+  direction: "up" | "down";
+  /** Wall the flight runs along or rises from. Optional. */
+  wallIndex?: number;
+  /** Distance from that wall's start corner to the bottom step. */
+  positionM?: string;
+  /** See Opening.positionApprox — same distinction, same reason. */
+  positionApprox?: boolean;
+  /** Number of treads, if the customer counted them. */
+  treads?: string;
+  /** Winders, half-landing, spiral, cupboard beneath, and so on. */
+  notes?: string;
+};
+
 export type RoomShape = "rectangle" | "l-shape" | "custom";
 
 export type RoomDraft = {
@@ -113,6 +150,8 @@ export type RoomDraft = {
   floorPolygonM?: { x: number; z: number }[];
   /** Voice memos captured for this room. Optional; defaults to none. */
   voiceMemos?: RoomAudio[];
+  /** Stairs within this room. Absent on rooms without any. */
+  stairs?: RoomStairs[];
   /**
    * Customer's assertion that every corner in this room is a right
    * angle. Optional; absent means "not stated", which is different from
