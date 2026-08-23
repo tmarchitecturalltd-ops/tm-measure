@@ -92,6 +92,33 @@ export default function ScanReviewScreen({
     ? `${scan.context.pointCount} Points Captured`
     : `${scan.measurements.length} Dimensions`;
 
+  /**
+   * What the scan actually found, stated plainly.
+   *
+   * The list below shows every measurement, but as an undifferentiated
+   * run of rows it is easy to scroll past a door or miss that no
+   * windows were detected at all. A LiDAR scan draws doors and windows
+   * in the 3D model the customer just watched being built, so "did it
+   * get my windows?" is the first thing they want answered — and the
+   * answer needs to be visible before they accept the scan, not after.
+   */
+  const foundSummary = useMemo(() => {
+    const count = (k: string) =>
+      scan.measurements.filter((m) => m.kind === k).length;
+    const parts: string[] = [];
+    const walls = count("wall");
+    const doors = count("door");
+    const windows = count("window");
+    if (walls) parts.push(`${walls} wall${walls === 1 ? "" : "s"}`);
+    if (doors) parts.push(`${doors} door${doors === 1 ? "" : "s"}`);
+    parts.push(
+      windows
+        ? `${windows} window${windows === 1 ? "" : "s"}`
+        : "no windows detected",
+    );
+    return parts.join(" · ");
+  }, [scan]);
+
   return (
     <div className="min-h-screen bg-surface text-on-surface font-body">
       {/* ─── Top app bar ───────────────────────────────────────────────── */}
@@ -192,6 +219,11 @@ export default function ScanReviewScreen({
                   {pointsLabel}
                 </span>
               </div>
+
+              <p className="-mt-2 mb-4 text-sm text-on-surface-variant">
+                Found: <span className="font-semibold text-on-surface">{foundSummary}</span>.
+                Anything missing or wrong can be corrected after you confirm.
+              </p>
 
               <ul className="space-y-3">
                 {scan.measurements.map((m) => (

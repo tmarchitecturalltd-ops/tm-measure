@@ -113,6 +113,16 @@ export type RoomDraft = {
   floorPolygonM?: { x: number; z: number }[];
   /** Voice memos captured for this room. Optional; defaults to none. */
   voiceMemos?: RoomAudio[];
+  /**
+   * Customer's assertion that every corner in this room is a right
+   * angle. Optional; absent means "not stated", which is different from
+   * "no" — we should not infer squareness from silence.
+   *
+   * When set, opposite walls in a four-wall room must match, so the app
+   * can flag a mistyped length that would otherwise reach the architect
+   * as a genuinely out-of-square room and be drawn that way.
+   */
+  cornersSquare?: boolean;
 };
 
 /**

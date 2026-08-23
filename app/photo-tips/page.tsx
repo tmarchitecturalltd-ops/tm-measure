@@ -117,17 +117,16 @@ const SECTIONS: TipSection[] = [
         strong: "All four walls in full.",
         rest: "Floor to ceiling, corner to corner. Don't crop the skirting or the cornice off.",
       },
-      {
-        strong: "Sockets, switches, radiators.",
-        rest: "These help us position furniture and confirm the layout in our drawings.",
-      },
+      // Sockets, ceilings and photographing doors both open and closed
+      // were all cut on the architect's instruction: he can read swing
+      // direction from the hinges, ceilings rarely change what he draws,
+      // and socket positions are not something he works from. Every
+      // extra instruction here is another thing a customer has to do
+      // before they can finish, and the list was asking for work that
+      // was never used.
       {
         strong: "Doors and windows.",
-        rest: "Closed and (if possible) open, so we can see swing direction and reveals.",
-      },
-      {
-        strong: "Ceiling features.",
-        rest: "Beams, downstand, sloping ceilings, loft hatches, vaulted sections — shoot up.",
+        rest: "One clear shot of each is plenty — we can read the swing direction from the hinges.",
       },
       {
         strong: "Awkward bits.",

@@ -1338,6 +1338,10 @@ export default function MeasureIntakeForm() {
         irregularShapeNotes: r.irregularNotes.trim() || undefined,
         notes: r.notes.trim() || undefined,
         shape: r.shape ?? "rectangle",
+        // Undefined rather than false when unticked: the architect needs
+        // to distinguish "the customer confirmed this is square" from
+        // "nobody said", and false would collapse the two.
+        cornersSquare: r.cornersSquare === true ? true : undefined,
         notchWidthM: r.notchWidthM ? parseMeters(r.notchWidthM) : undefined,
         notchLengthM: r.notchLengthM ? parseMeters(r.notchLengthM) : undefined,
         floorPolygonM: r.shape === "custom" ? r.floorPolygonM : undefined,
@@ -2406,6 +2410,72 @@ export default function MeasureIntakeForm() {
                       </button>
                     ))}
                   </div>
+
+                  {/* Right-angle declaration.
+                      Asked because the architect needs to know whether an
+                      unequal pair of opposite walls is a measuring error
+                      or a genuinely out-of-square room — the two look
+                      identical in a list of numbers and get drawn very
+                      differently. Left unset by default: silence must not
+                      be read as "square", which is the assumption that
+                      makes a skewed room arrive as a neat rectangle. */}
+                  <label className="mt-3 flex cursor-pointer items-start gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={room.cornersSquare === true}
+                      onChange={(e) =>
+                        setRoom(room.id, { cornersSquare: e.target.checked })
+                      }
+                      className="mt-0.5 h-4 w-4 accent-[#b89650]"
+                    />
+                    <span className="text-xs leading-relaxed text-on-surface-variant">
+                      <span className="font-semibold text-on-surface">
+                        All corners are square (90°)
+                      </span>
+                      <br />
+                      Tick if the room is a true rectangle. Leave unticked if
+                      any corner is off — a bay, a splay, an old house that has
+                      moved. We&apos;ll draw it as measured either way.
+                    </span>
+                  </label>
+
+                  {/* Consistency check, deliberately advisory. A mismatch
+                      is either a typo or a real room that is not square,
+                      and only the person standing in it knows which — so
+                      this points at the discrepancy and leaves the
+                      decision with them rather than blocking submission. */}
+                  {(() => {
+                    if (room.cornersSquare !== true) return null;
+                    if (room.walls.length < 4) return null;
+                    const n = (v: string) => {
+                      const x = Number.parseFloat(v);
+                      return Number.isFinite(x) && x > 0 ? x : null;
+                    };
+                    const pairs: [number, number, string][] = [
+                      [0, 2, "1 and 3"],
+                      [1, 3, "2 and 4"],
+                    ];
+                    const off = pairs.filter(([a, b]) => {
+                      const x = n(room.walls[a]?.lengthM ?? "");
+                      const y = n(room.walls[b]?.lengthM ?? "");
+                      if (x === null || y === null) return false;
+                      // 2 cm of slack: real tape measurements of the same
+                      // wall rarely agree to the millimetre, and flagging
+                      // that would be noise.
+                      return Math.abs(x - y) > 0.02;
+                    });
+                    if (!off.length) return null;
+                    return (
+                      <p className="mt-2 rounded-md bg-amber-100/60 px-3 py-2 text-xs leading-relaxed text-amber-900">
+                        You&apos;ve said the corners are square, but walls{" "}
+                        {off.map(([, , label]) => label).join(" and ")} don&apos;t
+                        match. In a true rectangle opposite walls are equal —
+                        worth a re-measure, or untick the box if the room really
+                        isn&apos;t square.
+                      </p>
+                    );
+                  })()}
+
                   {room.shape === "l-shape" && (
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <label className="text-xs text-on-surface-variant">
@@ -2728,16 +2798,28 @@ export default function MeasureIntakeForm() {
                     className="flex w-full items-center justify-between gap-3 rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-left transition-colors hover:border-primary/60"
                   >
                     <span className="font-label text-xs font-bold uppercase tracking-widest text-primary">
-                      Add detail
+                      Doors &amp; windows
                     </span>
                     <span className="flex items-center gap-2">
-                      {detailSummary(room) && (
+                      {detailSummary(room) ? (
                         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
                           {detailSummary(room)}
                         </span>
+                      ) : (
+                        !isDetailOpen(room.id, ri) && (
+                          /* When nothing has been added, say so. The
+                             section was labelled only "Add detail",
+                             which reads as optional polish rather than
+                             the place doors and windows live — people
+                             finished a room without ever opening it and
+                             submitted rooms with no openings at all. */
+                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                            None added yet
+                          </span>
+                        )
                       )}
                       <span className="text-[11px] text-on-surface-variant">
-                        {isDetailOpen(room.id, ri) ? "Hide" : "Doors, windows, ceiling, notes"}
+                        {isDetailOpen(room.id, ri) ? "Hide" : "Ceiling, notes too"}
                       </span>
                       <span aria-hidden className="text-on-surface-variant">
                         {isDetailOpen(room.id, ri) ? "▴" : "▾"}
