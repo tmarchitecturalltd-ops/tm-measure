@@ -55,6 +55,42 @@ export default function RootLayout({
   return (
     <html lang="en" className="scroll-smooth h-full antialiased">
       <head>
+        {/* Content Security Policy, as a meta tag rather than a header.
+            next.config.ts defines a CSP in headers(), and `output:
+            export` ignores headers() entirely — so the policy the
+            config appears to set has never actually reached a single
+            shipped page. Static files served by a native WebView have
+            no server to add headers, which makes the meta form the only
+            one that applies here.
+
+            frame-ancestors and X-Frame-Options are deliberately absent:
+            neither works from a meta tag, and both are meaningless in a
+            WebView that cannot be framed. The rest carry over from the
+            config so the two do not disagree.
+
+            connect-src covers the Apps Script endpoint; img-src covers
+            the marketing photography on the home screen. Removing
+            either shows as a blank hero or a submission that silently
+            fails, so widen with care. */}
+        <meta
+          httpEquiv="Content-Security-Policy"
+          content={[
+            "default-src 'self'",
+            // Next injects inline bootstrap scripts; nonces are not
+            // available in a static export.
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+            "font-src 'self' data: https://fonts.gstatic.com",
+            "img-src 'self' data: blob: https://images.pexels.com https://images.unsplash.com",
+            "media-src 'self' blob: data:",
+            "connect-src 'self' https:",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "object-src 'none'",
+          ].join("; ")}
+        />
+        <meta name="referrer" content="strict-origin-when-cross-origin" />
+
         {/* Favicon = same brand mark as the marketing site. We point
             at the SVG version of the app icon so the browser renders
             crisp at any size; falls back to /favicon.ico if SVG

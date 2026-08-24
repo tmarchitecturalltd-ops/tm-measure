@@ -96,6 +96,39 @@ function cleanWallLabel(label: string): string {
   return label.replace(/\s*\(e\.g\.[^)]*\)\s*$/i, "").trim();
 }
 
+/**
+ * A stable random id for this install, used only for rate limiting.
+ *
+ * Not a fingerprint and not derived from anything about the device or
+ * the person: it is a random string kept in local storage so repeated
+ * submissions from one phone can be counted together. It is disclosed
+ * as nothing because it identifies nothing — but it is worth being
+ * clear in the code that this is a counter key, not analytics, so
+ * nobody later mistakes it for one and starts reporting on it.
+ *
+ * Falls back to a fresh value when storage is unavailable (private
+ * browsing, cleared data). That weakens the limit rather than breaking
+ * submission, which is the right way round.
+ */
+const DEVICE_ID_KEY = "tm-measure:device-id:v1";
+
+function getDeviceId(): string {
+  const fresh = () =>
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  try {
+    if (typeof window === "undefined") return fresh();
+    const existing = window.localStorage.getItem(DEVICE_ID_KEY);
+    if (existing && /^[A-Za-z0-9-]{8,64}$/.test(existing)) return existing;
+    const id = fresh();
+    window.localStorage.setItem(DEVICE_ID_KEY, id);
+    return id;
+  } catch {
+    return fresh();
+  }
+}
+
 function wallDefaults(): WallSegment[] {
   return [
     { id: newId(), label: "Wall 1", lengthM: "" },
@@ -1631,6 +1664,13 @@ export default function MeasureIntakeForm() {
     return {
       version: 1,
       submittedAt: new Date().toISOString(),
+      // Lets the backend rate-limit per device instead of globally. A
+      // single global counter meant one abuser could exhaust the hour's
+      // allowance and lock out every real customer — the protection was
+      // the attack. Random, stored locally, tied to nothing: it is not
+      // an identifier for anything except "requests from this install",
+      // and it is not used for tracking or analytics.
+      deviceId: getDeviceId(),
       customerName: customerName.trim(),
       email: email.trim(),
       projectName: projectName.trim(),

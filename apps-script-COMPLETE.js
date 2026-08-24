@@ -95,15 +95,60 @@ function requireAdminSecret_(provided) {
 }
 
 /** Coarse anti-abuse limiter: cap submissions per UTC hour. */
-function checkSubmissionRate_() {
+/**
+ * Abuse limits.
+ *
+ * The endpoint is unauthenticated by design — a homeowner should not
+ * need an account to send a survey — and its URL ships inside a public
+ * app bundle, so it must be assumed known. That is an acceptable trade
+ * only if abuse cannot deny service to real customers.
+ *
+ * The previous limit was a single global counter of 60 per hour. It
+ * capped the damage to the sheet and, in doing so, handed anyone a
+ * trivial denial of service: sixty scripted requests and every genuine
+ * customer for the rest of the hour is turned away with "rate limit
+ * reached". The protection was the attack.
+ *
+ * Now the tight limit is per device and the global ceiling is a
+ * backstop set high enough that one abuser cannot reach it before
+ * their own per-device limit stops them. A flood from one source
+ * exhausts its own allowance, not everyone's.
+ *
+ * deviceId is client-supplied and therefore trivially rotated. This
+ * raises the cost of casual abuse rather than preventing determined
+ * abuse; without authentication nothing here can do more than that,
+ * and pretending otherwise would be worse than saying so.
+ */
+const RATE_PER_DEVICE_HOUR = 12;
+const RATE_GLOBAL_HOUR = 400;
+
+function checkSubmissionRate_(payload) {
   const cache = CacheService.getScriptCache();
   const hourBucket = String(Math.floor(Date.now() / 3600000));
-  const key = 'tm.submitcount.' + hourBucket;
-  const current = parseInt(cache.get(key) || '0', 10);
-  if (current >= 60) {
-    throw new Error('Rate limit reached. Try again in an hour.');
-  }
-  cache.put(key, String(current + 1), 3700);
+
+  const bump = function (key, limit, message) {
+    const current = parseInt(cache.get(key) || '0', 10);
+    if (current >= limit) throw new Error(message);
+    cache.put(key, String(current + 1), 3700);
+  };
+
+  const rawId = (payload && payload.deviceId) ? String(payload.deviceId) : '';
+  // Only the shape we issue. An arbitrary client string would let
+  // someone spray unique ids and fill the cache.
+  const deviceId = /^[A-Za-z0-9-]{8,64}$/.test(rawId) ? rawId : 'unknown';
+
+  bump(
+    'tm.submit.dev.' + deviceId + '.' + hourBucket,
+    RATE_PER_DEVICE_HOUR,
+    'You have sent several surveys in a short time. Please try again in an hour, '
+      + 'or reply to your confirmation email if you need to send more.'
+  );
+
+  bump(
+    'tm.submit.all.' + hourBucket,
+    RATE_GLOBAL_HOUR,
+    'The service is unusually busy. Please try again shortly.'
+  );
 }
 
 // ─── HTTP ENDPOINTS ────────────────────────────────────────
@@ -156,7 +201,7 @@ function doPost(e) {
 
     // No action → a survey submission.
     validatePayload_(payload);
-    checkSubmissionRate_();
+    checkSubmissionRate_(payload);
 
     const submissionId = Utilities.getUuid().slice(0, 8).toUpperCase();
     uploadPhotos_(payload, submissionId);
@@ -1423,6 +1468,29 @@ function validEmail_(s) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 }
 
+/**
+ * Shape and size checks.
+ *
+ * The previous version checked four things and nothing about size, so
+ * a payload claiming five hundred rooms was accepted and turned into
+ * five hundred spreadsheet rows and an email nobody could read. None of
+ * these limits should ever be reached by a real survey: a large house
+ * is a dozen rooms, and a name is not two hundred characters.
+ *
+ * Rejecting with a specific message matters — a customer who hits one
+ * of these needs to know which field to fix, not that "submission
+ * failed".
+ */
+const LIMITS = {
+  rooms: 60,
+  openingsPerRoom: 40,
+  wallsPerRoom: 40,
+  stairsPerRoom: 6,
+  nameChars: 200,
+  emailChars: 254,
+  notesChars: 5000,
+};
+
 function validatePayload_(payload) {
   if (!payload || typeof payload !== 'object') {
     throw new Error('Payload is not an object.');
@@ -1430,11 +1498,52 @@ function validatePayload_(payload) {
   if (!payload.email || typeof payload.email !== 'string') {
     throw new Error('Missing email.');
   }
+  if (payload.email.length > LIMITS.emailChars || !validEmail_(payload.email)) {
+    throw new Error('That email address does not look valid.');
+  }
   if (!payload.customerName || typeof payload.customerName !== 'string') {
     throw new Error('Missing customer name.');
   }
+  if (payload.customerName.length > LIMITS.nameChars) {
+    throw new Error('Customer name is too long.');
+  }
+  if (payload.projectName && String(payload.projectName).length > LIMITS.nameChars) {
+    throw new Error('Project name is too long.');
+  }
   if (!Array.isArray(payload.rooms)) {
     throw new Error('Missing rooms array.');
+  }
+  if (payload.rooms.length > LIMITS.rooms) {
+    throw new Error(
+      'That is more than ' + LIMITS.rooms + ' rooms. Please send them as separate surveys.'
+    );
+  }
+
+  payload.rooms.forEach(function (r, i) {
+    const where = 'Room ' + (i + 1);
+    if (!r || typeof r !== 'object') throw new Error(where + ' is not valid.');
+    if (Array.isArray(r.walls) && r.walls.length > LIMITS.wallsPerRoom) {
+      throw new Error(where + ' has too many walls.');
+    }
+    ['doors', 'windows'].forEach(function (k) {
+      if (Array.isArray(r[k]) && r[k].length > LIMITS.openingsPerRoom) {
+        throw new Error(where + ' has too many ' + k + '.');
+      }
+    });
+    if (Array.isArray(r.stairs) && r.stairs.length > LIMITS.stairsPerRoom) {
+      throw new Error(where + ' has too many flights of stairs.');
+    }
+    if (r.notes && String(r.notes).length > LIMITS.notesChars) {
+      throw new Error(where + ' notes are too long.');
+    }
+  });
+
+  if (
+    payload.proposal &&
+    payload.proposal.description &&
+    String(payload.proposal.description).length > LIMITS.notesChars
+  ) {
+    throw new Error('The project description is too long.');
   }
 }
 
