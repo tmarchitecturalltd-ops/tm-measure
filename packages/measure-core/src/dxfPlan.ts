@@ -118,11 +118,46 @@ export function wallsAreShared(
   return overlap > 0.3;
 }
 
-/** Every room's four wall centrelines, classified internal or external. */
+/**
+ * The room's outline in world metres.
+ *
+ * Uses the real floor polygon when there is one, and the bounding
+ * rectangle otherwise. A bounding rectangle is a complete description
+ * of a rectangular room and a poor one of an L-shape, a bay or a
+ * splayed corner — and an L-shape drawn as a rectangle with six wall
+ * lengths listed beside it is wrong in the worst way, because it looks
+ * finished.
+ *
+ * The polygon is stored relative to the room's anchor, so it takes the
+ * same rotation about that anchor as the rectangle would.
+ */
+export function roomOutlineM(entry: PlanRoomInput): Pt[] {
+  const { room, anchor, rotationDeg } = entry;
+  const poly = room.floorPolygonM;
+  if (!poly || poly.length < 3) {
+    return roomCornersM(anchor, roomFootprint(room), rotationDeg);
+  }
+  const rot = ((rotationDeg % 360) + 360) % 360;
+  return poly.map(({ x, z }) => {
+    switch (rot) {
+      case 90:
+        return { x: anchor.x - z, z: anchor.z + x };
+      case 180:
+        return { x: anchor.x - x, z: anchor.z - z };
+      case 270:
+        return { x: anchor.x + z, z: anchor.z - x };
+      default:
+        return { x: anchor.x + x, z: anchor.z + z };
+    }
+  });
+}
+
+/** Every room's wall centrelines, classified internal or external. */
 export function buildWalls(entries: PlanRoomInput[]): PlanWall[] {
   const raw: PlanWall[] = [];
-  for (const { room, anchor, rotationDeg } of entries) {
-    const corners = roomCornersM(anchor, roomFootprint(room), rotationDeg);
+  for (const entry of entries) {
+    const { room } = entry;
+    const corners = roomOutlineM(entry);
     for (let i = 0; i < corners.length; i++) {
       raw.push({
         roomId: room.id,
@@ -378,9 +413,12 @@ export function buildDetailedPlanDxf(
   }
 
   // Rooms: labels, and stairs where present.
-  for (const { room, anchor, rotationDeg } of placed) {
+  for (const entry of placed) {
+    const { room } = entry;
     const size = roomFootprint(room);
-    const corners = roomCornersM(anchor, size, rotationDeg);
+    const corners = roomOutlineM(entry);
+    // Centroid of the actual outline, so a label sits inside an L-shaped
+    // room rather than in the notch it does not occupy.
     const cx = corners.reduce((s, c) => s + c.x, 0) / corners.length;
     const cz = corners.reduce((s, c) => s + c.z, 0) / corners.length;
 
@@ -390,7 +428,21 @@ export function buildDetailedPlanDxf(
       const h = Math.max(120, Math.min(350, shortest / 12));
       out.push(text(LAYER.labels, { x: cx, z: cz }, h, name));
       if (detailed) {
-        const area = size.widthM * size.lengthM;
+        // Shoelace on the real outline. The bounding-box area overstates
+        // an L-shaped room by whatever the notch removes, and an area
+        // written on a drawing gets used.
+        const area =
+          corners.length >= 3
+            ? Math.abs(
+                corners.reduce(
+                  (sum, p, i) => {
+                    const q = corners[(i + 1) % corners.length];
+                    return sum + (p.x * q.z - q.x * p.z);
+                  },
+                  0,
+                ),
+              ) / 2
+            : size.widthM * size.lengthM;
         out.push(
           text(
             LAYER.labels,
@@ -484,9 +536,7 @@ function drawTitleBlock(
   placed: PlanRoomInput[],
   options: PlanDxfOptions,
 ): void {
-  const all = placed.flatMap(({ room, anchor, rotationDeg }) =>
-    roomCornersM(anchor, roomFootprint(room), rotationDeg),
-  );
+  const all = placed.flatMap((e) => roomOutlineM(e));
   if (!all.length) return;
   const minX = Math.min(...all.map((p) => p.x));
   const maxX = Math.max(...all.map((p) => p.x));

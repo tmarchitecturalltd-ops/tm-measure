@@ -27,7 +27,7 @@ import {
 } from "./src/perspective.ts";
 import { roomBoundingBox } from "./src/floorplan.ts";
 import { buildFloorPlanDxf, roomCornersM } from "./src/dxf.ts";
-import { buildWalls, buildDetailedPlanDxf } from "./src/dxfPlan.ts";
+import { buildWalls, buildDetailedPlanDxf, roomOutlineM } from "./src/dxfPlan.ts";
 import type { RoomDraft } from "./src/types.ts";
 import {
   normalizeConnections,
@@ -385,4 +385,63 @@ test("the plain companion drawing has no doors, stairs or title block", () => {
   );
   assert.ok(!plain.includes("TM-DOORS"));
   assert.ok(!plain.includes("TM-TITLE"));
+});
+
+test("an L-shaped room is drawn as an L, not as its bounding box", () => {
+  // Six corners: a 4x4 square with a 2x2 bite out of one corner.
+  const room = planRoom("l", "Lounge", 4, 4);
+  room.floorPolygonM = [
+    { x: 0, z: 0 },
+    { x: 4, z: 0 },
+    { x: 4, z: 2 },
+    { x: 2, z: 2 },
+    { x: 2, z: 4 },
+    { x: 0, z: 4 },
+  ];
+  const entry = {
+    room,
+    anchor: { x: 0, z: 0 },
+    rotationDeg: 0 as const,
+  };
+
+  // The outline must have six corners, not four.
+  assert.equal(roomOutlineM(entry).length, 6);
+  // Six walls, not four. Drawing this as a rectangle produced a shape
+  // with six wall lengths listed beside it and no way to tell it was
+  // wrong -- wrong in the worst way, because it looks finished.
+  assert.equal(buildWalls([entry]).length, 6);
+
+  // And the notch is genuinely absent from the drawing: no wall runs
+  // along the far edge of the bite.
+  const dxf = buildDetailedPlanDxf([entry]);
+  assert.match(dxf, /TM-WALLS/);
+  // 12 m² of floor, not the 16 m² of the bounding box. An area written
+  // on a drawing gets used.
+  assert.match(dxf, /12\.0 m²/);
+});
+
+test("a rectangular room still uses its bounding rectangle", () => {
+  const room = planRoom("r", "Kitchen", 4, 3);
+  const entry = { room, anchor: { x: 0, z: 0 }, rotationDeg: 0 as const };
+  assert.equal(roomOutlineM(entry).length, 4);
+  assert.equal(buildWalls([entry]).length, 4);
+});
+
+test("a room outline rotates about its anchor like the rectangle does", () => {
+  const room = planRoom("l", "Lounge", 4, 4);
+  room.floorPolygonM = [
+    { x: 0, z: 0 },
+    { x: 4, z: 0 },
+    { x: 4, z: 2 },
+    { x: 0, z: 2 },
+  ];
+  const flat = roomOutlineM({ room, anchor: { x: 0, z: 0 }, rotationDeg: 0 });
+  const turned = roomOutlineM({ room, anchor: { x: 0, z: 0 }, rotationDeg: 90 });
+  const span = (pts: { x: number; z: number }[], k: "x" | "z") =>
+    Math.max(...pts.map((p) => p[k])) - Math.min(...pts.map((p) => p[k]));
+  // 4 x 2 becomes 2 x 4. A polygon that ignored rotation would place
+  // the shape correctly at 0 degrees and wrongly everywhere else.
+  assert.equal(span(flat, "x"), 4);
+  assert.equal(span(turned, "x"), 2);
+  assert.equal(span(turned, "z"), 4);
 });

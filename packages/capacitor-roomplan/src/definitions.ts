@@ -98,6 +98,16 @@ export interface RoomPlanRoom {
    * Merged scans only.
    */
   rotationDeg?: number;
+  /**
+   * The room's actual floor outline in the shared frame, corner by
+   * corner. Merged scans only.
+   *
+   * width/length describe a bounding box, which is all a rectangular
+   * room needs and a poor description of an L-shape, a bay or a splayed
+   * corner. This is the real shape, and it is the main thing a scan can
+   * record that somebody with a tape measure and a form cannot.
+   */
+  floorPolygonM?: { x: number; z: number }[];
   /** Longest axis-aligned dimension of the floor bounding box (metres). */
   widthM: number;
   /** Shorter axis-aligned dimension of the floor bounding box (metres). */

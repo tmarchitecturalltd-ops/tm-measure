@@ -613,6 +613,23 @@ export default function MeasureIntakeForm() {
         notes: stamp,
         photos: [],
         shape: useDetailed ? "custom" : "rectangle",
+        // The real outline, translated from the shared frame into the
+        // room's own coordinates — floorPolygonM is defined relative to
+        // the room's anchor, while the scan reports it relative to the
+        // whole property. Skipping that translation would place every
+        // room's shape at the origin of the plan.
+        //
+        // Kept only when the room genuinely is not a rectangle. Storing
+        // a four-corner polygon for a plain rectangular room adds a
+        // second source of truth for the same shape, and the two would
+        // eventually disagree.
+        floorPolygonM:
+          !sr.rectangular && (sr.floorPolygonM?.length ?? 0) >= 3 && sr.originM
+            ? sr.floorPolygonM!.map((p) => ({
+                x: Number((p.x - sr.originM!.x).toFixed(3)),
+                z: Number((p.z - sr.originM!.z).toFixed(3)),
+              }))
+            : undefined,
       } satisfies RoomDraft;
     });
 

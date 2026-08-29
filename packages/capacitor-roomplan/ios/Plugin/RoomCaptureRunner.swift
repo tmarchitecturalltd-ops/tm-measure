@@ -518,6 +518,17 @@ enum CaptureSerializer {
             let heightM = room.walls.map { Double($0.dimensions.y) }.max() ?? 2.4
             let name = index < roomNames.count ? roomNames[index] : "Room \(index + 1)"
 
+            // The true outline, in the shared frame.
+            //
+            // This was computed and then used only to derive a width and
+            // a length, so an L-shaped room reached the drawing as a
+            // rectangle with six wall lengths listed against it —
+            // wrong in a way that looks finished. Capturing the shape of
+            // an awkward room is the main thing a scan can do that a
+            // tape and a form cannot, and it was being discarded one
+            // step before anyone could use it.
+            let polygonDicts: [[String: Any]] = pts.map { ["x": $0.0, "z": $0.1] }
+
             roomDicts.append([
                 "id": UUID().uuidString,
                 "name": name,
@@ -528,6 +539,7 @@ enum CaptureSerializer {
                 "rectangular": rectangular,
                 "originM": ["x": minX, "z": minZ],
                 "rotationDeg": rotationDeg,
+                "floorPolygonM": polygonDicts,
                 "walls": wallDicts,
                 "doors": doorDicts,
                 "windows": windowDicts,
