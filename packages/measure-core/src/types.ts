@@ -153,6 +153,16 @@ export type RoomDraft = {
   /** Stairs within this room. Absent on rooms without any. */
   stairs?: RoomStairs[];
   /**
+   * True when these dimensions came from a scan rather than being typed.
+   *
+   * Drives whether the measurement fields start collapsed — there is
+   * nothing for the customer to fill in on a scanned room — and tells
+   * the architect that the numbers were produced by the sensor. Both
+   * matter: a scanned 3.47 and a typed 3.47 were arrived at very
+   * differently.
+   */
+  measuredByScan?: boolean;
+  /**
    * Customer's assertion that every corner in this room is a right
    * angle. Optional; absent means "not stated", which is different from
    * "no" — we should not infer squareness from silence.

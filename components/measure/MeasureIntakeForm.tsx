@@ -471,6 +471,7 @@ export default function MeasureIntakeForm() {
             // screen where it can be checked.
             shape:
               wallMeasurements.length > 2 ? "custom" : (r.shape ?? "rectangle"),
+            measuredByScan: true,
             notes: r.notes.trim()
               ? `${r.notes.trim()}\n${stamp}`
               : stamp,
@@ -490,6 +491,11 @@ export default function MeasureIntakeForm() {
    * shared frame, so the floor plan is already correct and the DXF has
    * real geometry rather than rectangles someone dragged into place.
    */
+  /** Rooms whose scanned measurements have been unfolded for checking. */
+  const [measurementsOpen, setMeasurementsOpen] = useState<
+    Record<string, boolean>
+  >({});
+
   const [houseScanning, setHouseScanning] = useState(false);
   const [houseScanError, setHouseScanError] = useState<string | null>(null);
 
@@ -613,6 +619,7 @@ export default function MeasureIntakeForm() {
         notes: stamp,
         photos: [],
         shape: useDetailed ? "custom" : "rectangle",
+        measuredByScan: true,
         // The real outline, translated from the shared frame into the
         // room's own coordinates — floorPolygonM is defined relative to
         // the room's anchor, while the scan reports it relative to the
@@ -953,7 +960,12 @@ export default function MeasureIntakeForm() {
   /** Manual list is forced open for non-rectangles, and whenever a wall
    *  fails validation so the error is reachable. */
   const wallsEditorOpen = (room: RoomDraft, ri: number) =>
-    !isRectangle(room) ||
+    // A scanned room keeps its wall list folded until the customer asks
+    // to see it, whatever its shape — an eight-wall scan would otherwise
+    // open to a wall of populated inputs nobody needs to touch.
+    (room.measuredByScan && !measurementsOpen[room.id]
+      ? false
+      : !isRectangle(room)) ||
     (openWallsRooms[room.id] ??
       issues.some((i) => i.path.startsWith(`room-${ri}-wall-`)));
 
@@ -1639,6 +1651,10 @@ export default function MeasureIntakeForm() {
         // to distinguish "the customer confirmed this is square" from
         // "nobody said", and false would collapse the two.
         cornersSquare: r.cornersSquare === true ? true : undefined,
+        // Tells the architect the numbers came from the sensor rather
+        // than a tape. A scanned 3.47 and a typed 3.47 were arrived at
+        // very differently.
+        measuredByScan: r.measuredByScan === true ? true : undefined,
         notchWidthM: r.notchWidthM ? parseMeters(r.notchWidthM) : undefined,
         notchLengthM: r.notchLengthM ? parseMeters(r.notchLengthM) : undefined,
         floorPolygonM: r.shape === "custom" ? r.floorPolygonM : undefined,
@@ -2970,8 +2986,54 @@ export default function MeasureIntakeForm() {
                     )}
                   </div>
 
+                  {/* Scanned rooms: the numbers are already right, so
+                      they start folded away. There is nothing here for
+                      the customer to fill in, and a screen of populated
+                      fields invites them to "check" measurements taken
+                      by a sensor with a tape they have not got.
+
+                      Folded, not removed. Until the scan's accuracy has
+                      been checked against a tape, these figures are the
+                      only chance anyone has of noticing a bad scan
+                      before it becomes a drawing — so they stay one tap
+                      away rather than gone. */}
+                  {room.measuredByScan && !measurementsOpen[room.id] && (
+                    <div className="mb-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+                      <p className="text-sm text-on-surface">
+                        <span className="font-semibold">Measured by scan.</span>{" "}
+                        {room.walls.filter((w) => w.lengthM.trim()).length} wall
+                        {room.walls.filter((w) => w.lengthM.trim()).length === 1
+                          ? ""
+                          : "s"}
+                        {room.ceilingHeightM.trim()
+                          ? `, ceiling ${room.ceilingHeightM} m`
+                          : ""}
+                        {room.doors.length
+                          ? `, ${room.doors.length} door${room.doors.length === 1 ? "" : "s"}`
+                          : ""}
+                        {room.windows.length
+                          ? `, ${room.windows.length} window${room.windows.length === 1 ? "" : "s"}`
+                          : ""}
+                        .
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMeasurementsOpen((prev) => ({
+                            ...prev,
+                            [room.id]: true,
+                          }))
+                        }
+                        className="mt-2 text-xs font-bold uppercase tracking-widest text-primary hover:underline"
+                      >
+                        Check or edit the measurements
+                      </button>
+                    </div>
+                  )}
+
                   {/* Rectangular rooms only need two numbers. */}
-                  {isRectangle(room) && (
+                  {isRectangle(room) &&
+                    (!room.measuredByScan || measurementsOpen[room.id]) && (
                     <div className="mb-3 rounded-lg bg-surface-container-lowest p-4">
                       <p className="mb-3 text-xs text-on-surface-variant">
                         Just the two dimensions — we&apos;ll apply them to the
