@@ -512,6 +512,10 @@ export default function MeasureIntakeForm() {
           };
         }),
       );
+      // Same reasoning as the whole-house scan: this is the expensive
+      // step and it finishes as the app returns from the native capture
+      // view. Don't leave it sitting in a debounce timer.
+      setTimeout(() => draftSaver.current.flush(), 0);
     },
     [],
   );
@@ -685,6 +689,19 @@ export default function MeasureIntakeForm() {
     });
     setPlacements((prev) => ({ ...prev, ...nextPlacements }));
     setActiveRoomIndex(0);
+
+    // Write it out now rather than waiting for the debounce.
+    //
+    // A scan is minutes of walking round a house and cannot be
+    // re-taken from memory the way a mistyped wall length can. It also
+    // lands at the moment the app is returning from the native capture
+    // view, which is when iOS is most inclined to suspend it. The
+    // 400 ms delay that makes typing feel smooth buys nothing here.
+    //
+    // Deferred a tick so the state updates above are committed and the
+    // autosave effect has queued the new snapshot; flushing
+    // synchronously would write the state as it was before the scan.
+    setTimeout(() => draftSaver.current.flush(), 0);
   }, []);
 
   /**
@@ -1396,6 +1413,42 @@ export default function MeasureIntakeForm() {
     setUnitLocked(true);
     setStep("rooms");
   };
+
+  /**
+   * Force the pending save out when the app goes away.
+   *
+   * The saver waits 400 ms for typing to settle, and nothing was ever
+   * flushing it. On iOS a backgrounded WKWebView can be suspended and
+   * then killed outright, and a pending setTimeout dies with it — so
+   * the last 400 ms of work was never written, and the app had already
+   * been claiming it was saved.
+   *
+   * The window that matters most is right after a LiDAR scan: the
+   * customer finishes capturing a room, the app is mid-transition back
+   * from the native capture view, and that is exactly the moment iOS is
+   * most likely to suspend it. A whole room's geometry sat in a 400 ms
+   * timer that might never fire.
+   *
+   * visibilitychange covers backgrounding and app-switching; pagehide
+   * covers navigation and the browser case. Both fire before suspension
+   * rather than after, which is the only reason this works.
+   */
+  useEffect(() => {
+    const saver = draftSaver.current;
+    const flush = () => {
+      if (document.visibilityState === "hidden") saver.flush();
+    };
+    const flushNow = () => saver.flush();
+    document.addEventListener("visibilitychange", flush);
+    window.addEventListener("pagehide", flushNow);
+    return () => {
+      document.removeEventListener("visibilitychange", flush);
+      window.removeEventListener("pagehide", flushNow);
+      // Unmounting is also a departure — write what's outstanding
+      // rather than dropping it.
+      saver.flush();
+    };
+  }, []);
 
   // Offer any previously-saved draft when the form first mounts.
   useEffect(() => {

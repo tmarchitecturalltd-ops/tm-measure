@@ -513,3 +513,83 @@ function draftStub() {
     typeof import("../../lib/draftStorage.ts").saveDraft
   >[0];
 }
+
+test("a scanned room survives the draft round trip intact", async () => {
+  /*
+   * The scan is the expensive step: walking a house with RoomPlan, then
+   * losing it because the app was backgrounded, is the worst failure
+   * this form has available.
+   *
+   * The draft deliberately drops blob-backed media, and the risk is
+   * that the scan's output gets dropped with it -- floorPolygonM is
+   * what carries an awkward, non-rectangular room all the way to the
+   * DXF, and measuredByScan is what tells the architect the numbers
+   * came from a sensor rather than a tape. Neither is a blob, so
+   * neither should be stripped. This pins that.
+   */
+  const { saveDraft, loadDraft } = await import("../../lib/draftStorage.ts");
+  const store = new Map<string, string>();
+  const g = globalThis as unknown as { window?: unknown };
+  const had = "window" in g;
+  g.window = {
+    localStorage: {
+      setItem: (k: string, v: string) => store.set(k, v),
+      getItem: (k: string) => store.get(k) ?? null,
+      removeItem: (k: string) => store.delete(k),
+    },
+  };
+  try {
+    const scanned = {
+      id: "r1",
+      name: "Lounge",
+      measuredByScan: true,
+      ceilingHeightM: "2.41",
+      walls: [
+        { id: "w1", label: "Wall 1", lengthM: "4.13", photos: [] },
+        { id: "w2", label: "Wall 2", lengthM: "3.07", photos: [] },
+      ],
+      floorPolygonM: [
+        { x: 0, z: 0 },
+        { x: 4.13, z: 0 },
+        { x: 4.13, z: 3.07 },
+        { x: 2.0, z: 3.07 },
+        { x: 2.0, z: 1.5 },
+        { x: 0, z: 1.5 },
+      ],
+      doors: [{ id: "d1", widthM: "0.81", note: "", wallIndex: 0 }],
+      windows: [],
+      photos: [{ id: "p1", uri: "blob:dead", name: "x.jpg" }],
+      voiceMemos: [{ id: "m1", uri: "blob:dead", name: "m.m4a" }],
+      irregularNotes: "",
+      notes: "",
+    };
+    const draft = draftStub();
+    draft.rooms = [scanned] as unknown as typeof draft.rooms;
+    draft.placements = { r1: { positionM: { x: 1, z: 2 }, rotationDeg: 90, floor: 0 } };
+
+    assert.equal(saveDraft(draft), true);
+    const back = loadDraft();
+    assert.ok(back, "draft should load");
+    const room = back!.rooms[0] as Record<string, unknown>;
+
+    // The scan's own output must come back untouched.
+    assert.equal(room.measuredByScan, true);
+    assert.equal(room.ceilingHeightM, "2.41");
+    assert.deepEqual(room.floorPolygonM, scanned.floorPolygonM);
+    assert.equal((room.walls as unknown[]).length, 2);
+    assert.equal((room.doors as { widthM: string }[])[0].widthM, "0.81");
+    // Six points, not four: the L-shaped bite is the whole reason the
+    // polygon exists, and a round trip that squared it off would lose
+    // the awkward corner silently.
+    assert.equal((room.floorPolygonM as unknown[]).length, 6);
+    // Placement survives too, or the scanned room comes back unplaced.
+    assert.deepEqual(back!.placements, draft.placements);
+
+    // Blob-backed media is still dropped -- restoring a dead blob URL
+    // is worse than restoring nothing.
+    assert.deepEqual(room.photos, []);
+    assert.deepEqual(room.voiceMemos, []);
+  } finally {
+    if (!had) delete g.window;
+  }
+});
