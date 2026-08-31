@@ -53,6 +53,7 @@ import TutorialOverlay from "@/components/measure/TutorialOverlay";
 import CustomShapeEditor from "@/components/measure/CustomShapeEditor";
 import VoiceRecorder from "@/components/measure/VoiceRecorder";
 import WallPositionPicker from "@/components/measure/WallPositionPicker";
+import GuidedRoomFlow from "@/components/measure/GuidedRoomFlow";
 import {
   RoomPlan,
   type RoomPlanScanResult,
@@ -168,6 +169,20 @@ const SCAN_ENABLED = process.env.NEXT_PUBLIC_ENABLE_SCAN === "1";
 
 export default function MeasureIntakeForm() {
   const [step, setStep] = useState<Step>("project");
+  /**
+   * Guided mode: one question per screen, on by default.
+   *
+   * The all-at-once card asks a homeowner about thirty things at once,
+   * which is what a surveyor's form looks like and not what someone
+   * standing in their kitchen can work through. Guided is the default
+   * because most people filling this in have never done it before.
+   *
+   * It is a toggle rather than a replacement. If a guided step ever
+   * misbehaves, someone part-way round a house must still have a route
+   * to the end — "Show all at once" is that route, and it is the same
+   * screen that has been shipping all along.
+   */
+  const [guidedMode, setGuidedMode] = useState(true);
   const [customerName, setCustomerName] = useState("");
   const [email, setEmail] = useState("");
   const [projectName, setProjectName] = useState("");
@@ -2691,7 +2706,44 @@ export default function MeasureIntakeForm() {
               )}
             </div>
 
-            {rooms.map((room, ri) => ri !== activeRoomIndex ? null : (
+            {guidedMode && rooms[activeRoomIndex] && (
+              <GuidedRoomFlow
+                key={rooms[activeRoomIndex].id}
+                room={rooms[activeRoomIndex]}
+                roomIndex={activeRoomIndex}
+                totalRooms={rooms.length}
+                onPatch={(patch) => setRoom(rooms[activeRoomIndex].id, patch)}
+                onSetShape={(shape) => setShape(rooms[activeRoomIndex].id, shape)}
+                onAddOpening={(kind) => addOpening(rooms[activeRoomIndex].id, kind)}
+                onRemoveOpening={(kind, id) =>
+                  removeOpening(rooms[activeRoomIndex].id, kind, id)
+                }
+                onAddStairs={() => addStairs(rooms[activeRoomIndex].id)}
+                onRemoveStairs={(id) => removeStairs(rooms[activeRoomIndex].id, id)}
+                onSetStairs={(id, patch) =>
+                  setStairs(rooms[activeRoomIndex].id, id, patch)
+                }
+                onPhotos={(files) => attachPhotos(rooms[activeRoomIndex].id, files)}
+                onDone={() => {
+                  // Last room finished: check the whole set before
+                  // leaving the step, exactly as the manual Continue
+                  // button does, so guided mode cannot smuggle an
+                  // incomplete survey past the same validation.
+                  if (activeRoomIndex < rooms.length - 1) {
+                    setActiveRoomIndex((i) => i + 1);
+                    return;
+                  }
+                  const v = nonBlockingIssues(rooms);
+                  setIssues(v);
+                  if (v.length) return;
+                  setStep("exterior");
+                }}
+                onExitGuided={() => setGuidedMode(false)}
+                issueFor={(suffix) => issueFor(`room-${activeRoomIndex}-${suffix}`)}
+              />
+            )}
+
+            {!guidedMode && rooms.map((room, ri) => ri !== activeRoomIndex ? null : (
               <section
                 key={room.id}
                 className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 md:p-8"
@@ -3807,6 +3859,16 @@ export default function MeasureIntakeForm() {
 
               </section>
             ))}
+
+            {!guidedMode && (
+              <button
+                type="button"
+                onClick={() => setGuidedMode(true)}
+                className="w-full rounded-full border border-outline-variant/40 px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant"
+              >
+                Ask me one question at a time
+              </button>
+            )}
 
             {/* Pager navigation */}
             <div className="flex items-center justify-between gap-3">

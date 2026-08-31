@@ -27,7 +27,7 @@
  */
 
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   GRID_STEP_M,
   autoLayoutRooms,
@@ -293,6 +293,36 @@ export default function FloorPlanEditor({
     const seed = autoLayoutRooms(
       rooms.filter((r) => placementFor(r.id).floor === currentFloor),
     );
+    for (const [id, placement] of seed.entries()) {
+      onPlacementChange(id, placement);
+    }
+  }, [rooms, placementFor, currentFloor, onPlacementChange]);
+
+  /**
+   * Lay the floor out automatically the first time it has rooms but no
+   * placements.
+   *
+   * Dragging rectangles around a plan with a fingertip is the hardest
+   * thing this app asks of anyone, and it was the *first* thing it
+   * asked. Seeding a layout from the room list turns that into
+   * nudging something that already looks roughly right — which most
+   * people will not need to do at all.
+   *
+   * Only when nothing on this floor is placed, so it can never move a
+   * room the customer positioned themselves. `laidOut` guards against
+   * re-seeding after they deliberately clear the floor.
+   */
+  const laidOut = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    if (laidOut.current.has(currentFloor)) return;
+    const onFloor = rooms.filter((r) => placementFor(r.id).floor === currentFloor);
+    if (!onFloor.length) return;
+    if (onFloor.some((r) => placementFor(r.id).positionM)) {
+      laidOut.current.add(currentFloor);
+      return;
+    }
+    laidOut.current.add(currentFloor);
+    const seed = autoLayoutRooms(onFloor);
     for (const [id, placement] of seed.entries()) {
       onPlacementChange(id, placement);
     }
@@ -590,6 +620,62 @@ export default function FloorPlanEditor({
               </g>
             );
           })}
+          {/* Scale bar.
+              Drawn in viewBox metres, so it stretches and shrinks with
+              the plan and always represents the distance it claims. A
+              fixed-pixel bar would lie the moment anyone zoomed.
+
+              The 1:100 note is about the drawing that leaves here, not
+              this screen — on a phone we have no idea how many
+              millimetres a pixel is, so stating a screen ratio would be
+              made up. The exported plan is what gets printed to scale. */}
+          {(() => {
+            // Longest round number that fits comfortably across the view.
+            const barM =
+              [10, 5, 2, 1].find((m) => m <= activeViewBox.w * 0.3) ?? 1;
+            const x0 = activeViewBox.x + activeViewBox.w * 0.04;
+            const y0 = activeViewBox.z + activeViewBox.h * 0.95;
+            const tick = activeViewBox.h * 0.014;
+            return (
+              <g pointerEvents="none" aria-hidden>
+                <line
+                  x1={x0}
+                  y1={y0}
+                  x2={x0 + barM}
+                  y2={y0}
+                  stroke="#6e6a5f"
+                  strokeWidth={1.4}
+                  vectorEffect="non-scaling-stroke"
+                />
+                <line
+                  x1={x0}
+                  y1={y0 - tick}
+                  x2={x0}
+                  y2={y0 + tick}
+                  stroke="#6e6a5f"
+                  strokeWidth={1.4}
+                  vectorEffect="non-scaling-stroke"
+                />
+                <line
+                  x1={x0 + barM}
+                  y1={y0 - tick}
+                  x2={x0 + barM}
+                  y2={y0 + tick}
+                  stroke="#6e6a5f"
+                  strokeWidth={1.4}
+                  vectorEffect="non-scaling-stroke"
+                />
+                <text
+                  x={x0}
+                  y={y0 - tick * 1.6}
+                  fontSize={activeViewBox.h * 0.032}
+                  fill="#6e6a5f"
+                >
+                  {barM} m · grid {GRID_STEP_M} m · plotted 1:100
+                </text>
+              </g>
+            );
+          })()}
         </svg>
 
         {roomsOnFloor.length === 0 && (
