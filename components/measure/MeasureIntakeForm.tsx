@@ -39,6 +39,7 @@ import {
   type RoomDraft,
   type RoomPhoto,
   type RoomPlacement,
+  type RoomShape,
   type RoomStairs,
   type ScanResult,
   type StairsShape,
@@ -698,118 +699,12 @@ export default function MeasureIntakeForm() {
     ]);
   }, [defaultCeilingHeightM]);
 
-  /**
-   * Project templates — pre-built room sets for the most common UK
-   * residential typologies. Skipping the empty-state ten-minute-think
-   * is the goal; the customer still tweaks dimensions per room.
-   *
-   * Each entry returns an array of {name, floor} pairs. Wall slots
-   * and ceiling default to the empty-room blanks so the user has to
-   * type the actual dimensions, but the structure is laid out.
-   */
-  const TEMPLATES: Record<string, { name: string; rooms: { name: string; floor: number }[] }> = {
-    flat1: {
-      name: "1-bed flat",
-      rooms: [
-        { name: "Living / kitchen", floor: 0 },
-        { name: "Bedroom", floor: 0 },
-        { name: "Bathroom", floor: 0 },
-        { name: "Hallway", floor: 0 },
-      ],
-    },
-    flat2: {
-      name: "2-bed flat",
-      rooms: [
-        { name: "Living room", floor: 0 },
-        { name: "Kitchen", floor: 0 },
-        { name: "Bedroom 1", floor: 0 },
-        { name: "Bedroom 2", floor: 0 },
-        { name: "Bathroom", floor: 0 },
-        { name: "Hallway", floor: 0 },
-      ],
-    },
-    semi3: {
-      name: "3-bed semi-detached",
-      rooms: [
-        { name: "Living room", floor: 0 },
-        { name: "Kitchen / diner", floor: 0 },
-        { name: "Downstairs WC", floor: 0 },
-        { name: "Hallway", floor: 0 },
-        { name: "Bedroom 1", floor: 1 },
-        { name: "Bedroom 2", floor: 1 },
-        { name: "Bedroom 3", floor: 1 },
-        { name: "Bathroom", floor: 1 },
-        { name: "Landing", floor: 1 },
-      ],
-    },
-    detached4: {
-      name: "4-bed detached",
-      rooms: [
-        { name: "Living room", floor: 0 },
-        { name: "Dining room", floor: 0 },
-        { name: "Kitchen", floor: 0 },
-        { name: "Utility", floor: 0 },
-        { name: "Downstairs WC", floor: 0 },
-        { name: "Hallway", floor: 0 },
-        { name: "Bedroom 1 (master)", floor: 1 },
-        { name: "Ensuite", floor: 1 },
-        { name: "Bedroom 2", floor: 1 },
-        { name: "Bedroom 3", floor: 1 },
-        { name: "Bedroom 4", floor: 1 },
-        { name: "Family bathroom", floor: 1 },
-        { name: "Landing", floor: 1 },
-      ],
-    },
-  };
+  /* Property templates removed along with the Quick start panel.
+     They pre-built a room list from an archetype, so the customer's
+     first task was correcting a guess about their own house. Left as
+     a note rather than silently deleted: the idea recurs, and it is
+     worth knowing it was tried. */
 
-  const applyTemplate = useCallback(
-    (key: keyof typeof TEMPLATES) => {
-      const t = TEMPLATES[key];
-      if (!t) return;
-      setRooms((prev) => {
-        // Replace blank first room if it's truly empty, otherwise
-        // append the template after whatever's already there.
-        const allBlank =
-          prev.length === 1 &&
-          !prev[0].name.trim() &&
-          prev[0].walls.every((w) => !w.lengthM.trim()) &&
-          !prev[0].ceilingHeightM.trim();
-        // Seed the property-wide ceiling height, exactly as addRoom
-        // does. Without it, choosing a layout meant being asked for the
-        // ceiling height once per generated room — the repetition the
-        // property-wide default exists to remove — and the customer was
-        // blocked from continuing with no visible explanation until the
-        // Add detail panel was opened on each room in turn.
-        const generated: RoomDraft[] = t.rooms.map((r) => ({
-          ...emptyRoom(),
-          name: r.name,
-          ceilingHeightM: defaultCeilingHeightM,
-        }));
-        // Stamp the floor onto placements so the multi-storey selector
-        // already reflects the template's assumption.
-        const ids = generated.map((g) => g.id);
-        setPlacements((pp) => {
-          const next = { ...pp };
-          generated.forEach((g, i) => {
-            next[ids[i]] = {
-              positionM: null,
-              rotationDeg: 0,
-              floor: t.rooms[i].floor,
-            };
-          });
-          return next;
-        });
-        return allBlank ? generated : [...prev, ...generated];
-      });
-    },
-    // defaultCeilingHeightM must be a dependency: with an empty list the
-    // callback captures its first-render value (""), which would seed
-    // every generated room with a blank ceiling no matter what the
-    // customer typed on the project step. TEMPLATES is a module-level
-    // constant, hence the remaining suppression.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [defaultCeilingHeightM],
-  );
 
   const removeRoom = useCallback((id: string) => {
     setRooms((prev) => {
@@ -995,6 +890,40 @@ export default function MeasureIntakeForm() {
         if (r.id !== roomId) return r;
         if (r.walls.length <= 3) return r;
         return { ...r, walls: r.walls.filter((w) => w.id !== wallId) };
+      }),
+    );
+  }, []);
+
+  /**
+   * Change a room's shape, giving it the right number of wall slots.
+   *
+   * An L-shaped room has six walls. It was previously modelled as a
+   * rectangle plus two "notch" numbers, which is a description of how
+   * to cut the shape rather than a description of the room — nobody
+   * stands in their lounge thinking about notch dimensions, and it
+   * still presented four wall fields for a six-walled room.
+   *
+   * Extra slots are appended blank rather than guessed, and existing
+   * lengths are never discarded: someone who types four walls and then
+   * realises it is an L keeps what they entered.
+   */
+  const setShape = useCallback((roomId: string, shape: RoomShape) => {
+    const wallsFor = (n: number, existing: WallSegment[]): WallSegment[] => {
+      if (existing.length >= n) return existing;
+      const added = Array.from({ length: n - existing.length }, (_, i) => ({
+        id: newId(),
+        label: `Wall ${existing.length + i + 1}`,
+        lengthM: "",
+      }));
+      return [...existing, ...added];
+    };
+    setRooms((prev) =>
+      prev.map((r) => {
+        if (r.id !== roomId) return r;
+        if (shape === "l-shape") {
+          return { ...r, shape, walls: wallsFor(6, r.walls) };
+        }
+        return { ...r, shape, walls: wallsFor(4, r.walls) };
       }),
     );
   }, []);
@@ -2619,30 +2548,33 @@ export default function MeasureIntakeForm() {
               </section>
             )}
 
-            {/* Quick-start templates — pre-build the room list for the
-                most common UK property types. The customer still tweaks
-                wall lengths / ceilings, but skips the typing. */}
-            <section className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-5">
-              <h2 className="font-headline text-lg text-on-surface">
-                Quick start
-              </h2>
-              <p className="mt-1 text-xs text-on-surface-variant">
-                Pick a typical layout and we&apos;ll add the rooms for you. Tap a
-                room afterwards to fill in dimensions.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {(Object.keys(TEMPLATES) as Array<keyof typeof TEMPLATES>).map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => applyTemplate(key)}
-                    className="rounded-full border border-primary/50 px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest text-primary hover:bg-primary hover:text-on-primary"
-                  >
-                    {TEMPLATES[key].name}
-                  </button>
-                ))}
-              </div>
-            </section>
+            {/* Quick-start templates removed.
+                They pre-built a room list from a property archetype, so
+                the customer's first job was correcting a guess about
+                their own house — often slower than adding rooms as they
+                walk round, and it left people with rooms they did not
+                have. Rooms are added one at a time now.
+
+                An empty rooms step needs something to press, though, or
+                the page just looks broken. */}
+            {rooms.length === 0 && (
+              <section className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 text-center">
+                <h2 className="font-headline text-lg text-on-surface">
+                  Add your first room
+                </h2>
+                <p className="mx-auto mt-1 max-w-md text-xs text-on-surface-variant">
+                  Start with whichever room you&apos;re standing in. You can add
+                  the rest as you go.
+                </p>
+                <button
+                  type="button"
+                  onClick={addRoom}
+                  className="mt-4 rounded-full bg-primary px-6 py-2.5 text-xs font-bold uppercase tracking-widest text-on-primary"
+                >
+                  + Add a room
+                </button>
+              </section>
+            )}
 
             {SCAN_ENABLED && (
             <div className="rounded-xl border-2 border-primary/40 bg-inverse-surface p-6 text-on-primary shadow-lg md:p-8">
@@ -2706,25 +2638,55 @@ export default function MeasureIntakeForm() {
                   }}
                 />
               </div>
+              {/* Jump to a room.
+                  This was one numbered chip per room, which is fine for
+                  four rooms and unusable for sixty — a wall of numbers
+                  that says nothing about which room is which. A list
+                  named by room does the same job at any length, and
+                  reads as "Kitchen" rather than "17".
+
+                  Previous/next sit alongside it because moving one room
+                  at a time is the common case and should not require
+                  opening a menu. */}
               {rooms.length > 1 && (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {rooms.map((r, i) => (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => setActiveRoomIndex(i)}
-                      aria-current={i === activeRoomIndex}
-                      className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-colors ${
-                        i === activeRoomIndex
-                          ? "bg-primary text-on-primary"
-                          : issues.some((x) => x.path.startsWith(`room-${i}-`))
-                            ? "border border-error/60 text-error"
-                            : "border border-outline-variant/40 text-on-surface-variant hover:border-primary/60"
-                      }`}
-                    >
-                      {i + 1}
-                    </button>
-                  ))}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveRoomIndex((i) => Math.max(0, i - 1))}
+                    disabled={activeRoomIndex === 0}
+                    aria-label="Previous room"
+                    className="rounded-full border border-outline-variant/40 px-3 py-1.5 text-[11px] font-bold text-on-surface-variant disabled:opacity-40"
+                  >
+                    ←
+                  </button>
+                  <select
+                    value={activeRoomIndex}
+                    onChange={(e) =>
+                      setActiveRoomIndex(parseInt(e.target.value, 10))
+                    }
+                    aria-label="Jump to room"
+                    className="min-w-0 flex-1 rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
+                  >
+                    {rooms.map((r, i) => (
+                      <option key={r.id} value={i}>
+                        {i + 1}. {r.name?.trim() || "Unnamed room"}
+                        {issues.some((x) => x.path.startsWith(`room-${i}-`))
+                          ? "  — needs attention"
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActiveRoomIndex((i) => Math.min(rooms.length - 1, i + 1))
+                    }
+                    disabled={activeRoomIndex >= rooms.length - 1}
+                    aria-label="Next room"
+                    className="rounded-full border border-outline-variant/40 px-3 py-1.5 text-[11px] font-bold text-on-surface-variant disabled:opacity-40"
+                  >
+                    →
+                  </button>
                 </div>
               )}
             </div>
@@ -2849,7 +2811,7 @@ export default function MeasureIntakeForm() {
                       <button
                         key={s}
                         type="button"
-                        onClick={() => setRoom(room.id, { shape: s })}
+                        onClick={() => setShape(room.id, s)}
                         className={`rounded-full px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest transition ${
                           (room.shape ?? "rectangle") === s
                             ? "bg-primary text-on-primary"
@@ -2930,37 +2892,22 @@ export default function MeasureIntakeForm() {
                     );
                   })()}
 
+                  {/* The notch inputs are gone. They asked the customer to
+                      describe an L-shaped room as "a rectangle with a bite
+                      cut out of one corner, and here are the bite's
+                      dimensions" — a description of how to construct the
+                      shape rather than of the room. Nobody stands in their
+                      lounge thinking in notches, and it still showed four
+                      wall fields for a six-walled room.
+
+                      Choosing L-shape now simply gives six walls to
+                      measure, which is what the room has. */}
                   {room.shape === "l-shape" && (
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <label className="text-xs text-on-surface-variant">
-                        Notch width (m)
-                        <input
-                          inputMode="decimal"
-                          value={room.notchWidthM ?? ""}
-                          onChange={(e) =>
-                            setRoom(room.id, { notchWidthM: e.target.value })
-                          }
-                          placeholder="0.00"
-                          className="mt-1 w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
-                        />
-                      </label>
-                      <label className="text-xs text-on-surface-variant">
-                        Notch length (m)
-                        <input
-                          inputMode="decimal"
-                          value={room.notchLengthM ?? ""}
-                          onChange={(e) =>
-                            setRoom(room.id, { notchLengthM: e.target.value })
-                          }
-                          placeholder="0.00"
-                          className="mt-1 w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
-                        />
-                      </label>
-                      <p className="sm:col-span-2 text-[11px] text-on-surface-variant">
-                        Imagine the room as a rectangle with a rectangular bite cut
-                        out of one corner. Width × length here is the size of that bite.
-                      </p>
-                    </div>
+                    <p className="mt-3 text-[11px] leading-relaxed text-on-surface-variant">
+                      Six walls to measure. Work round the room in order and
+                      the lengths will come back to the start — the wall
+                      lengths below are numbered to match.
+                    </p>
                   )}
                   {room.shape === "custom" && (
                     <CustomShapeEditor
@@ -3441,6 +3388,17 @@ export default function MeasureIntakeForm() {
                                 d.positionM ? Number.parseFloat(d.positionM) : null
                               }
                               approx={d.positionApprox === true}
+                              startCornerLabel={
+                                room.walls[
+                                  ((d.wallIndex ?? 0) - 1 + room.walls.length) %
+                                    room.walls.length
+                                ]?.label
+                              }
+                              endCornerLabel={
+                                room.walls[
+                                  ((d.wallIndex ?? 0) + 1) % room.walls.length
+                                ]?.label
+                              }
                               onMeasureWithCamera={
                                 arSupport === "yes" || SCAN_ENABLED
                                   ? () =>
@@ -3579,6 +3537,17 @@ export default function MeasureIntakeForm() {
                                 w.positionM ? Number.parseFloat(w.positionM) : null
                               }
                               approx={w.positionApprox === true}
+                              startCornerLabel={
+                                room.walls[
+                                  ((w.wallIndex ?? 0) - 1 + room.walls.length) %
+                                    room.walls.length
+                                ]?.label
+                              }
+                              endCornerLabel={
+                                room.walls[
+                                  ((w.wallIndex ?? 0) + 1) % room.walls.length
+                                ]?.label
+                              }
                               onMeasureWithCamera={
                                 arSupport === "yes" || SCAN_ENABLED
                                   ? () =>
@@ -3756,6 +3725,17 @@ export default function MeasureIntakeForm() {
                               s.positionM ? Number.parseFloat(s.positionM) : null
                             }
                             approx={s.positionApprox === true}
+                            startCornerLabel={
+                              room.walls[
+                                ((s.wallIndex ?? 0) - 1 + room.walls.length) %
+                                  room.walls.length
+                              ]?.label
+                            }
+                            endCornerLabel={
+                              room.walls[
+                                ((s.wallIndex ?? 0) + 1) % room.walls.length
+                              ]?.label
+                            }
                             onMeasureWithCamera={
                               arSupport === "yes" || SCAN_ENABLED
                                 ? () =>

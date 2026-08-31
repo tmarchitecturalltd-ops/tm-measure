@@ -42,6 +42,16 @@ type Props = {
    * than offered and then failing.
    */
   onMeasureWithCamera?: () => void;
+  /**
+   * Names for the two ends of the wall, e.g. "Wall 4" and "Wall 2".
+   *
+   * "Distance from the corner" is ambiguous on a wall with two corners,
+   * and there is no convention a homeowner could be expected to know.
+   * Naming both ends by the wall they meet removes the guess entirely:
+   * the customer can see which end the app is measuring from.
+   */
+  startCornerLabel?: string;
+  endCornerLabel?: string;
 };
 
 export default function WallPositionPicker({
@@ -52,6 +62,8 @@ export default function WallPositionPicker({
   onChange,
   label = "Position along wall",
   onMeasureWithCamera,
+  startCornerLabel,
+  endCornerLabel,
 }: Props) {
   const trackRef = useRef<HTMLDivElement | null>(null);
 
@@ -153,11 +165,13 @@ export default function WallPositionPicker({
           }}
         />
 
-        <span className="absolute left-2 top-1 text-[9px] text-on-surface-variant">
-          corner
+        <span className="absolute left-2 top-1 max-w-[45%] truncate text-[9px] text-on-surface-variant">
+          {startCornerLabel ? `corner w/ ${startCornerLabel}` : "corner"}
         </span>
-        <span className="absolute right-2 top-1 text-[9px] text-on-surface-variant">
-          {usableLength.toFixed(2)} m
+        <span className="absolute right-2 top-1 max-w-[45%] truncate text-right text-[9px] text-on-surface-variant">
+          {endCornerLabel
+            ? `corner w/ ${endCornerLabel} · ${usableLength.toFixed(2)} m`
+            : `${usableLength.toFixed(2)} m`}
         </span>
       </div>
 
@@ -176,8 +190,9 @@ export default function WallPositionPicker({
           className="w-28 rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
         />
         <span className="text-[11px] leading-snug text-on-surface-variant">
-          metres from the corner to the centre. Drag above for roughly, or type
-          it if you&apos;ve measured.
+          metres from the {startCornerLabel ? `${startCornerLabel} corner` : "left corner"} to
+          the centre. Drag above for roughly, or type it if you&apos;ve
+          measured.
         </span>
       </div>
 
