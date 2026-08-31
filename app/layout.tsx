@@ -19,20 +19,29 @@ export const metadata: Metadata = {
  * underneath the status bar and the title collided with the clock and
  * the battery icon.
  *
- * The scale is locked, which is a reversal.
+ * Pinch-zoom is allowed again, with a ceiling.
  *
- * It was left unlocked on the reasoning that pinch-zoom is an
- * accessibility requirement. That reasoning applies to a website. This
- * is a native app in a WKWebView, where zooming the entire UI is not
- * expected behaviour, and iOS Accessibility → Zoom keeps working
- * system-wide regardless of what a viewport tag says — so the
- * accessibility path is not the one being removed here.
+ * It was locked after build 1030, where zooming in left users unable to
+ * get back out and rotating to landscape stuck mid-zoom. Those were
+ * real faults and the lock did stop them. But it stopped them by
+ * removing the only way anyone can enlarge this app's text, and the
+ * people most likely to need that are exactly the customers this is
+ * built for — homeowners, frequently older, reading measurements.
  *
- * What was actually happening, reported on build 1030: zooming in left
- * the user unable to get back out, and rotating to landscape got stuck
- * mid-zoom. There is no horizontal overflow on any page (checked at
- * 428 and 926 CSS px), so this is WKWebView's own scaling behaviour
- * inside a full-screen native shell rather than a layout fault.
+ * "iOS Accessibility → Zoom still works" was the justification, and it
+ * is not good enough: that is a system-wide magnifier a person has to
+ * know about and turn on in Settings, not a pinch on the screen in
+ * front of them.
+ *
+ * maximumScale 5 rather than unbounded is what stops the runaway: the
+ * 1030 reports were of zoom that would not come back, and a bounded
+ * scale cannot run away to a level the user can't reverse. If the
+ * landscape-rotation fault reappears, fix the rotation handler — do
+ * not take zoom away again.
+ *
+ * The in-app text size control (globals.css / TextSizeControl) is the
+ * belt to this braces. It does not depend on WKWebView behaving, and
+ * it survives being run as a website.
  *
  * The 16px minimum on inputs in globals.css stays. That solves a
  * different problem — iOS auto-zooming on focus of a small field — and
@@ -41,8 +50,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  maximumScale: 5,
+  userScalable: true,
   viewportFit: "cover",
   themeColor: "#b89650",
 };
@@ -90,6 +99,23 @@ export default function RootLayout({
           ].join("; ")}
         />
         <meta name="referrer" content="strict-origin-when-cross-origin" />
+
+        {/* Apply the saved text size before first paint.
+            Without this the app renders at the default size and then
+            jumps once React hydrates, which is precisely the moment a
+            customer who set "Largest" is looking at it and concluding
+            the setting didn't stick. Runs inline and synchronously so
+            there is no frame at the wrong size. Wrapped in try/catch
+            because localStorage throws in private browsing and a
+            blocked storage read must not stop the page rendering. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var s=localStorage.getItem('tm-measure:text-size:v1');" +
+              "if(s==='large'||s==='larger')" +
+              "document.documentElement.setAttribute('data-text-size',s);}catch(e){}",
+          }}
+        />
 
         {/* Favicon = same brand mark as the marketing site. We point
             at the SVG version of the app icon so the browser renders

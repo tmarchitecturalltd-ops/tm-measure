@@ -185,7 +185,7 @@ export default function VoiceRecorder({ memos, onChange }: VoiceRecorderProps) {
           <button
             type="button"
             onClick={start}
-            className="inline-flex items-center gap-2 rounded-full border border-primary px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-primary hover:bg-primary hover:text-on-primary"
+            className="inline-flex items-center gap-2 rounded-full border border-primary px-4 py-2 text-sm font-bold uppercase tracking-widest text-primary hover:bg-primary hover:text-on-primary"
           >
             <span className="material-symbols-outlined" style={{ fontSize: "16px" }} aria-hidden>mic</span>
             Record voice memo
@@ -194,19 +194,19 @@ export default function VoiceRecorder({ memos, onChange }: VoiceRecorderProps) {
           <button
             type="button"
             onClick={stop}
-            className="inline-flex items-center gap-2 rounded-full bg-error px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-on-error hover:opacity-90"
+            className="inline-flex items-center gap-2 rounded-full bg-error px-4 py-2 text-sm font-bold uppercase tracking-widest text-on-error hover:opacity-90"
             style={{ color: "#fff", backgroundColor: "#9e3b3b" }}
           >
             <span className="material-symbols-outlined" style={{ fontSize: "16px" }} aria-hidden>stop_circle</span>
             Stop ({(elapsedMs / 1000).toFixed(1)}s)
           </button>
         )}
-        <span className="text-[11px] text-on-surface-variant">
+        <span className="text-sm text-on-surface-variant">
           {memos.length} memo{memos.length === 1 ? "" : "s"}
         </span>
       </div>
       {error && (
-        <p role="alert" className="mt-2 text-xs text-error">
+        <p role="alert" className="mt-2 text-sm text-error">
           {error}
         </p>
       )}
@@ -218,13 +218,13 @@ export default function VoiceRecorder({ memos, onChange }: VoiceRecorderProps) {
               className="flex flex-wrap items-center gap-3 rounded-md border border-outline-variant/30 bg-surface-container-lowest p-2"
             >
               <audio controls src={m.uri} preload="metadata" className="h-9 w-full max-w-[260px]" />
-              <span className="text-[10px] uppercase tracking-widest text-on-surface-variant">
+              <span className="text-sm uppercase tracking-widest text-on-surface-variant">
                 {m.durationMs ? `${(m.durationMs / 1000).toFixed(1)}s` : ""}
               </span>
               <button
                 type="button"
                 onClick={() => remove(m.id)}
-                className="ml-auto rounded px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant hover:text-error"
+                className="ml-auto rounded px-2 py-1 text-sm font-bold uppercase tracking-widest text-on-surface-variant hover:text-error"
                 aria-label="Remove memo"
               >
                 ✕

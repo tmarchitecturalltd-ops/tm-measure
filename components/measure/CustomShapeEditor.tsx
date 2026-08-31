@@ -137,7 +137,7 @@ export default function CustomShapeEditor({ room, onPatch }: CustomShapeEditorPr
   return (
     <div className="mt-3 space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="text-xs text-on-surface-variant">
+        <label className="text-sm text-on-surface-variant">
           Bounding width (m)
           <input
             inputMode="decimal"
@@ -150,7 +150,7 @@ export default function CustomShapeEditor({ room, onPatch }: CustomShapeEditorPr
             className="mt-1 w-full rounded border border-outline-variant/30 bg-surface px-3 py-2 text-sm"
           />
         </label>
-        <label className="text-xs text-on-surface-variant">
+        <label className="text-sm text-on-surface-variant">
           Bounding length (m)
           <input
             inputMode="decimal"
@@ -165,7 +165,7 @@ export default function CustomShapeEditor({ room, onPatch }: CustomShapeEditorPr
         </label>
       </div>
 
-      <p className="text-[11px] text-on-surface-variant">
+      <p className="text-sm text-on-surface-variant">
         Tap inside the box to place each corner of the room in order
         (clockwise or anti-clockwise, doesn&apos;t matter). Drag any
         corner to adjust it. Hit Close shape when you&apos;re done.
@@ -281,7 +281,7 @@ export default function CustomShapeEditor({ room, onPatch }: CustomShapeEditorPr
           type="button"
           onClick={undoLast}
           disabled={!polygon.length}
-          className="rounded-full border border-outline-variant/40 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-on-surface disabled:opacity-40"
+          className="rounded-full border border-outline-variant/40 px-3 py-1 text-sm font-bold uppercase tracking-widest text-on-surface disabled:opacity-40"
         >
           Undo last
         </button>
@@ -289,11 +289,11 @@ export default function CustomShapeEditor({ room, onPatch }: CustomShapeEditorPr
           type="button"
           onClick={clearAll}
           disabled={!polygon.length}
-          className="rounded-full border border-outline-variant/40 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-on-surface disabled:opacity-40"
+          className="rounded-full border border-outline-variant/40 px-3 py-1 text-sm font-bold uppercase tracking-widest text-on-surface disabled:opacity-40"
         >
           Clear all
         </button>
-        <span className="rounded-full bg-surface-container-high px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+        <span className="rounded-full bg-surface-container-high px-3 py-1 text-sm font-bold uppercase tracking-widest text-on-surface-variant">
           {polygon.length} corner{polygon.length === 1 ? "" : "s"}
         </span>
       </div>

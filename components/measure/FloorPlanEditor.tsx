@@ -342,7 +342,7 @@ export default function FloorPlanEditor({
     <div className="flex flex-col gap-3">
       {/* Floor tabs */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">
+        <span className="text-sm font-bold uppercase tracking-[0.2em] text-on-surface-variant">
           Floor
         </span>
         {usedFloors.map((f) => {
@@ -352,7 +352,7 @@ export default function FloorPlanEditor({
               key={f}
               type="button"
               onClick={() => setCurrentFloor(f)}
-              className="rounded-full border px-3 py-1 text-xs font-semibold transition"
+              className="rounded-full border px-3 py-1 text-sm font-semibold transition"
               style={{
                 borderColor: active ? GOLD : "#d9d3c8",
                 backgroundColor: active ? GOLD : "transparent",
@@ -366,14 +366,14 @@ export default function FloorPlanEditor({
         <button
           type="button"
           onClick={addFloor}
-          className="rounded-full border border-dashed border-[#b89650]/60 px-3 py-1 text-xs font-semibold text-[#8a6f2f]"
+          className="rounded-full border border-dashed border-[#b89650]/60 px-3 py-1 text-sm font-semibold text-[#8a6f2f]"
         >
           + Floor up
         </button>
         <button
           type="button"
           onClick={addBasement}
-          className="rounded-full border border-dashed border-[#b89650]/60 px-3 py-1 text-xs font-semibold text-[#8a6f2f]"
+          className="rounded-full border border-dashed border-[#b89650]/60 px-3 py-1 text-sm font-semibold text-[#8a6f2f]"
         >
           + Basement
         </button>
@@ -585,7 +585,16 @@ export default function FloorPlanEditor({
                     rotateRoom(r.id);
                   }}
                 >
-                  <circle r={0.3} fill={DARK} />
+                  {/* Invisible hit area.
+                      The visible chip is 0.3 m across, which on a phone
+                      is roughly a 20 px target — well under the 44 px
+                      floor, and these two chips sit close together, so
+                      a near miss on "rotate" lands on "remove". The
+                      transparent circle enlarges the target without
+                      making the plan look like it is covered in
+                      buttons. */}
+                  <circle r={0.62} fill="transparent" />
+                  <circle r={0.3} fill={DARK} pointerEvents="none" />
                   <text
                     x={0}
                     y={0.1}
@@ -606,7 +615,16 @@ export default function FloorPlanEditor({
                     unplaceRoom(r.id);
                   }}
                 >
-                  <circle r={0.3} fill="#8a2f2f" />
+                  {/* Invisible hit area.
+                      The visible chip is 0.3 m across, which on a phone
+                      is roughly a 20 px target — well under the 44 px
+                      floor, and these two chips sit close together, so
+                      a near miss on "rotate" lands on "remove". The
+                      transparent circle enlarges the target without
+                      making the plan look like it is covered in
+                      buttons. */}
+                  <circle r={0.62} fill="transparent" />
+                  <circle r={0.3} fill="#8a2f2f" pointerEvents="none" />
                   <text
                     x={0}
                     y={0.1}
@@ -680,7 +698,7 @@ export default function FloorPlanEditor({
 
         {roomsOnFloor.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <p className="rounded-lg bg-white/80 px-4 py-2 text-xs font-semibold text-[#6e6a5f] shadow-sm">
+            <p className="rounded-lg bg-white/80 px-4 py-2 text-sm font-semibold text-[#6e6a5f] shadow-sm">
               Tap a room below to place it on {floorLabel(currentFloor)}.
             </p>
           </div>
@@ -688,7 +706,7 @@ export default function FloorPlanEditor({
       </div>
 
       {/* Controls */}
-      <div className="flex flex-wrap items-center gap-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
         <button
           type="button"
           onClick={applyAutoLayout}
@@ -703,7 +721,7 @@ export default function FloorPlanEditor({
         >
           Clear layout
         </button>
-        <span className="text-[11px] text-on-surface-variant">
+        <span className="text-sm text-on-surface-variant">
           Grid = 25 cm · drag rooms · ↻ rotates 90° · × removes from plan
         </span>
       </div>
@@ -713,11 +731,11 @@ export default function FloorPlanEditor({
         className="rounded-lg border border-dashed border-[#d9d3c8] p-3"
         style={{ backgroundColor: "#fffdf8" }}
       >
-        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant">
+        <p className="mb-2 text-sm font-bold uppercase tracking-[0.2em] text-on-surface-variant">
           Rooms to place on {floorLabel(currentFloor)}
         </p>
         {unplacedOnFloor.length === 0 ? (
-          <p className="text-xs text-on-surface-variant">
+          <p className="text-sm text-on-surface-variant">
             All rooms on this floor are placed. Switch floors or add a new one above.
           </p>
         ) : (
@@ -729,10 +747,10 @@ export default function FloorPlanEditor({
                   key={r.id}
                   type="button"
                   onClick={() => placeRoomOnCurrentFloor(r.id)}
-                  className="rounded-lg border border-[#b89650] bg-white px-3 py-2 text-left text-xs font-semibold text-[#1c1c1a] shadow-sm transition hover:bg-[#fff8ea]"
+                  className="rounded-lg border border-[#b89650] bg-white px-3 py-2 text-left text-sm font-semibold text-[#1c1c1a] shadow-sm transition hover:bg-[#fff8ea]"
                 >
                   <span className="block">{r.name || "Room"}</span>
-                  <span className="text-[10px] font-normal text-[#6e6a5f]">
+                  <span className="text-sm font-normal text-[#6e6a5f]">
                     {size.widthM.toFixed(2)} × {size.lengthM.toFixed(2)} m
                   </span>
                 </button>
@@ -744,7 +762,7 @@ export default function FloorPlanEditor({
 
       {/* Rooms on other floors — quick floor-move affordance */}
       {rooms.some((r) => placementFor(r.id).floor !== currentFloor) && (
-        <details className="rounded-lg border border-[#e6dfd0] p-3 text-xs">
+        <details className="rounded-lg border border-[#e6dfd0] p-3 text-sm">
           <summary className="cursor-pointer font-semibold text-[#6e6a5f]">
             Rooms on other floors ({rooms.filter((r) => placementFor(r.id).floor !== currentFloor).length})
           </summary>
@@ -758,11 +776,11 @@ export default function FloorPlanEditor({
                     key={r.id}
                     type="button"
                     onClick={() => moveRoomToFloor(r.id, currentFloor)}
-                    className="rounded-lg border border-[#d9d3c8] bg-white px-3 py-1.5 text-left text-[11px] font-semibold text-[#1c1c1a]"
+                    className="rounded-lg border border-[#d9d3c8] bg-white px-3 py-1.5 text-left text-sm font-semibold text-[#1c1c1a]"
                     title={`Currently on ${floorLabel(p.floor)} — click to move here`}
                   >
                     {r.name || "Room"}
-                    <span className="ml-1 text-[10px] font-normal text-[#8a6f2f]">
+                    <span className="ml-1 text-sm font-normal text-[#8a6f2f]">
                       ({floorLabel(p.floor)} → {floorLabel(currentFloor)})
                     </span>
                   </button>

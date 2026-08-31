@@ -69,9 +69,23 @@ function stripMedia(room: Record<string, unknown>): Record<string, unknown> {
 /**
  * Save the draft. Measurements, names and notes persist; media does
  * not, so the customer re-takes photos and memos on resume.
+ *
+ * Returns whether the write actually happened.
+ *
+ * It used to return void and swallow the failure, and the form showed
+ * "Draft saved · just now" regardless. So the one case where the
+ * reassurance matters — storage full, private browsing, an iOS webview
+ * that has evicted the origin's data — was also the case where the app
+ * confidently told the customer their work was safe. Someone could
+ * measure a whole house, close the app on that promise, and lose it.
+ *
+ * A caller is free to ignore the result, but it can no longer claim a
+ * save it did not get.
  */
-export function saveDraft(snapshot: Omit<ProjectDraftSnapshot, "version" | "savedAt">): void {
-  if (typeof window === "undefined") return;
+export function saveDraft(
+  snapshot: Omit<ProjectDraftSnapshot, "version" | "savedAt">,
+): boolean {
+  if (typeof window === "undefined") return false;
   try {
     const payload: ProjectDraftSnapshot = {
       ...snapshot,
@@ -80,8 +94,11 @@ export function saveDraft(snapshot: Omit<ProjectDraftSnapshot, "version" | "save
       savedAt: new Date().toISOString(),
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    return true;
   } catch {
-    /* quota exceeded, private mode, etc. — silently drop */
+    // Quota exceeded, private mode, evicted origin. Nothing we can do
+    // here, but the caller must know so it can say so.
+    return false;
   }
 }
 
@@ -116,6 +133,15 @@ export function clearDraft(): void {
  */
 export function makeDebouncedSaver<T extends ProjectDraftSnapshot>(
   delayMs = 300,
+  /**
+   * Called after each actual write with whether it succeeded.
+   *
+   * The form previously marked the draft "saved" at schedule time,
+   * which is before the debounce has even elapsed — so the timestamp
+   * on screen described an intention, not a save. This reports the
+   * real outcome, at the real time.
+   */
+  onResult?: (saved: boolean) => void,
 ): {
   schedule: (snapshot: Omit<T, "version" | "savedAt">) => void;
   flush: () => void;
@@ -124,7 +150,10 @@ export function makeDebouncedSaver<T extends ProjectDraftSnapshot>(
   let pending: Omit<T, "version" | "savedAt"> | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
   const fire = () => {
-    if (pending) saveDraft(pending);
+    if (pending) {
+      const ok = saveDraft(pending);
+      onResult?.(ok);
+    }
     pending = null;
     timer = null;
   };

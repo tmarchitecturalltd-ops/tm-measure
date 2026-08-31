@@ -3,6 +3,90 @@
 @import "tailwindcss";
 
 /*
+ * In-app text size.
+ *
+ * Everything in this app is sized in rem via Tailwind, so moving the
+ * root font-size moves the whole interface together — text, padding,
+ * and tap targets stay in proportion instead of text growing until it
+ * overflows the button around it.
+ *
+ * This exists because pinch-zoom in a WKWebView cannot be relied on:
+ * it was disabled outright for a whole release after it misbehaved,
+ * and while it is back now (with a ceiling), a control that lives in
+ * the app and cannot be broken by the web view is the one that should
+ * carry the weight.
+ *
+ * The scale is applied to html and read from a data attribute so the
+ * value survives in localStorage and is applied before paint, rather
+ * than the text visibly jumping a size after hydration.
+ *
+ * Capped at 1.35. Beyond that the floor plan canvas and the wall
+ * position slider stop being usable on a narrow phone, and an
+ * unusable large control is not an accessibility win.
+ */
+html {
+  font-size: 16px;
+}
+html[data-text-size="large"] {
+  font-size: 18.5px;
+}
+html[data-text-size="larger"] {
+  font-size: 21.5px;
+}
+
+/*
+ * Minimum tap target.
+ *
+ * A scatter of controls in the survey were 28-36px tall — the icon-only
+ * remove buttons on doors and windows, the room pager arrows, the
+ * rotate handles on the floor plan. Every platform guideline puts the
+ * floor at 44px, and the gap matters most for someone with less steady
+ * hands, which is the customer this app is for. A mis-tap on a "remove
+ * window" button is not a cosmetic problem.
+ *
+ * Applied as a rule rather than by editing a hundred buttons, so a
+ * button added next month inherits it instead of quietly reintroducing
+ * a 30px target.
+ *
+ * Sized in px, not rem: this is a physical-finger measurement and must
+ * not shrink when someone picks a smaller text size.
+ *
+ * inline-flex + centring because min-height alone leaves the label
+ * pinned to the top of a now-taller box.
+ *
+ * .tm-target-auto opts out, for genuine inline text links styled as
+ * buttons where a 44px box would tear a paragraph apart.
+ */
+button:not(.tm-target-auto),
+[role="button"]:not(.tm-target-auto),
+[role="radio"]:not(.tm-target-auto),
+label:has(> input[type="checkbox"]):not(.tm-target-auto) {
+  min-height: 44px;
+}
+
+button:not(.tm-target-auto),
+[role="button"]:not(.tm-target-auto),
+[role="radio"]:not(.tm-target-auto) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Icon-only controls need width as well — a 44px-tall, 20px-wide
+   target is still a 20px-wide target. */
+button:not(.tm-target-auto) {
+  min-width: 44px;
+}
+
+/* Form fields are tapped too, and a 32px-high select is as hard to hit
+   as a 32px button. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+select,
+textarea {
+  min-height: 44px;
+}
+
+/*
  * Material Symbols safety net.
  *
  * Several iOS Capacitor and PWA-mode users were seeing raw glyph

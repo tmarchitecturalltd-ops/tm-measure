@@ -27,6 +27,7 @@ import { useMemo, useState } from "react";
 import type { Opening, RoomDraft, RoomShape } from "@tm-designs/measure-core";
 import WallPositionPicker from "@/components/measure/WallPositionPicker";
 import VoiceRecorder from "@/components/measure/VoiceRecorder";
+import LengthHint from "@/components/measure/LengthHint";
 
 type StepId =
   | "name"
@@ -140,7 +141,7 @@ export default function GuidedRoomFlow({
           >
             <div className="flex flex-wrap items-end gap-3">
               <div className="min-w-[7rem] flex-1">
-                <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                   Width (m)
                 </label>
                 <input
@@ -156,9 +157,10 @@ export default function GuidedRoomFlow({
                   placeholder={kind === "doors" ? "0.80" : "1.20"}
                   className={input}
                 />
+                <LengthHint value={o.widthM} kind="opening" />
               </div>
               <div className="min-w-[7rem] flex-1">
-                <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                   On which wall
                 </label>
                 <select
@@ -230,7 +232,7 @@ export default function GuidedRoomFlow({
         <button
           type="button"
           onClick={() => onAddOpening(kind)}
-          className="rounded-full border border-primary px-5 py-2 text-xs font-bold uppercase tracking-widest text-primary"
+          className="rounded-full border border-primary px-5 py-2 text-sm font-bold uppercase tracking-widest text-primary"
         >
           + Add {noun}
         </button>
@@ -243,14 +245,14 @@ export default function GuidedRoomFlow({
       {/* Where am I, and how much is left. A guided flow without a
           visible end is just an interrogation. */}
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-        <p className="font-label text-[10px] font-bold uppercase tracking-widest text-primary">
+        <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">
           Room {roomIndex + 1} of {totalRooms} · step {stepIndex + 1} of{" "}
           {steps.length}
         </p>
         <button
           type="button"
           onClick={onExitGuided}
-          className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary"
+          className="text-sm font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary"
         >
           Show all at once
         </button>
@@ -275,7 +277,7 @@ export default function GuidedRoomFlow({
             className={input}
             autoFocus
           />
-          <p className="mt-2 text-xs text-on-surface-variant">
+          <p className="mt-2 text-sm text-on-surface-variant">
             Whatever you call it at home is fine.
           </p>
         </div>
@@ -301,7 +303,7 @@ export default function GuidedRoomFlow({
                     ? "L-shaped"
                     : "Something else"}
               </span>
-              <span className="mt-0.5 block text-xs text-on-surface-variant">
+              <span className="mt-0.5 block text-sm text-on-surface-variant">
                 {s === "rectangle"
                   ? "The usual — a simple box"
                   : s === "l-shape"
@@ -320,28 +322,33 @@ export default function GuidedRoomFlow({
             is enough to carry on.
           </p>
           {room.walls.map((w, i) => (
-            <div key={w.id} className="flex items-center gap-3">
-              <span className="w-20 shrink-0 text-xs font-bold uppercase tracking-widest text-on-surface-variant">
-                {w.label || `Wall ${i + 1}`}
-              </span>
-              <input
-                inputMode="decimal"
-                value={w.lengthM}
-                onChange={(e) =>
-                  onPatch({
-                    walls: room.walls.map((x) =>
-                      x.id === w.id ? { ...x, lengthM: e.target.value } : x,
-                    ),
-                  })
-                }
-                placeholder="0.00"
-                className={input}
-              />
-              <span className="text-sm text-on-surface-variant">m</span>
+            <div key={w.id}>
+              <div className="flex items-center gap-3">
+                <span className="w-20 shrink-0 text-sm font-bold uppercase tracking-widest text-on-surface-variant">
+                  {w.label || `Wall ${i + 1}`}
+                </span>
+                <input
+                  inputMode="decimal"
+                  value={w.lengthM}
+                  onChange={(e) =>
+                    onPatch({
+                      walls: room.walls.map((x) =>
+                        x.id === w.id ? { ...x, lengthM: e.target.value } : x,
+                      ),
+                    })
+                  }
+                  placeholder="0.00"
+                  className={input}
+                />
+                <span className="text-sm text-on-surface-variant">m</span>
+              </div>
+              <div className="pl-[5.75rem]">
+                <LengthHint value={w.lengthM} kind="wall" />
+              </div>
             </div>
           ))}
           {issueFor("wall-0") && (
-            <p className="text-xs text-error">{issueFor("wall-0")}</p>
+            <p className="text-sm text-error">{issueFor("wall-0")}</p>
           )}
         </div>
       )}
@@ -355,7 +362,8 @@ export default function GuidedRoomFlow({
             placeholder="2.40"
             className={input}
           />
-          <p className="mt-2 text-xs text-on-surface-variant">
+          <LengthHint value={room.ceilingHeightM} kind="ceiling" />
+          <p className="mt-2 text-sm text-on-surface-variant">
             Metres, floor to ceiling. Most UK homes are around 2.4.
           </p>
         </div>
@@ -379,7 +387,7 @@ export default function GuidedRoomFlow({
             >
               <div className="flex flex-wrap items-end gap-3">
                 <div className="min-w-[7rem] flex-1">
-                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                     Width (m)
                   </label>
                   <input
@@ -393,7 +401,7 @@ export default function GuidedRoomFlow({
                   />
                 </div>
                 <div className="min-w-[7rem] flex-1">
-                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                     Going
                   </label>
                   <select
@@ -423,7 +431,7 @@ export default function GuidedRoomFlow({
           <button
             type="button"
             onClick={onAddStairs}
-            className="rounded-full border border-primary px-5 py-2 text-xs font-bold uppercase tracking-widest text-primary"
+            className="rounded-full border border-primary px-5 py-2 text-sm font-bold uppercase tracking-widest text-primary"
           >
             + Add stairs
           </button>
@@ -437,7 +445,7 @@ export default function GuidedRoomFlow({
             can&apos;t show — a chimney breast, a radiator, the state of the
             room.
           </p>
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-primary px-6 py-3 text-xs font-bold uppercase tracking-widest text-on-primary">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold uppercase tracking-widest text-on-primary">
             <span
               className="material-symbols-outlined"
               style={{ fontSize: "18px" }}
@@ -458,17 +466,17 @@ export default function GuidedRoomFlow({
             />
           </label>
           {room.photos.length > 0 && (
-            <p className="text-xs text-on-surface-variant">
+            <p className="text-sm text-on-surface-variant">
               {room.photos.length} photo
               {room.photos.length === 1 ? "" : "s"} added.
             </p>
           )}
 
           <div className="border-t border-outline-variant/20 pt-4">
-            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+            <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
               Anything else? (optional)
             </label>
-            <p className="mb-2 text-xs text-on-surface-variant">
+            <p className="mb-2 text-sm text-on-surface-variant">
               Faster to say than type — awkward corners, sloping ceilings,
               anything odd.
             </p>
@@ -481,7 +489,7 @@ export default function GuidedRoomFlow({
       )}
 
       {block && (
-        <p className="mt-4 rounded-md bg-amber-100/60 px-3 py-2 text-xs text-amber-900">
+        <p className="mt-4 rounded-md bg-amber-100/60 px-3 py-2 text-sm text-amber-900">
           {block}
         </p>
       )}
@@ -491,7 +499,7 @@ export default function GuidedRoomFlow({
           type="button"
           onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
           disabled={stepIndex === 0}
-          className="rounded-full border border-outline px-5 py-2.5 text-xs font-bold uppercase tracking-widest disabled:opacity-40"
+          className="rounded-full border border-outline px-5 py-2.5 text-sm font-bold uppercase tracking-widest disabled:opacity-40"
         >
           Back
         </button>
@@ -503,7 +511,7 @@ export default function GuidedRoomFlow({
             else setStepIndex((i) => i + 1);
           }}
           disabled={!!block}
-          className="rounded-full bg-primary px-7 py-2.5 text-xs font-bold uppercase tracking-widest text-on-primary disabled:opacity-40"
+          className="rounded-full bg-primary px-7 py-2.5 text-sm font-bold uppercase tracking-widest text-on-primary disabled:opacity-40"
         >
           {isLast ? "Finish this room" : "Next"}
         </button>

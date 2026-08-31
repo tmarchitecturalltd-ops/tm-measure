@@ -51,7 +51,7 @@ export default function WelcomeScreen({ onGetStarted }: { onGetStarted: () => vo
         {/* Brand lockup */}
         <div className="flex flex-col items-center pt-6 text-center">
           <AppLogo size={96} />
-          <p className="mt-6 text-[11px] font-medium uppercase tracking-[0.28em] text-primary">
+          <p className="mt-6 text-sm font-medium uppercase tracking-[0.28em] text-primary">
             TM Architectural Designs
           </p>
           <h1 className="mt-3 font-serif text-3xl leading-tight text-on-surface">
@@ -91,11 +91,11 @@ export default function WelcomeScreen({ onGetStarted }: { onGetStarted: () => vo
           <button
             type="button"
             onClick={onGetStarted}
-            className="w-full rounded-full bg-primary px-6 py-4 text-[12px] font-bold uppercase tracking-[0.2em] text-on-primary transition hover:opacity-90 active:opacity-80"
+            className="w-full rounded-full bg-primary px-6 py-4 text-sm font-bold uppercase tracking-[0.2em] text-on-primary transition hover:opacity-90 active:opacity-80"
           >
             Get started
           </button>
-          <p className="mt-4 text-center text-[11px] text-on-surface-variant">
+          <p className="mt-4 text-center text-sm text-on-surface-variant">
             You can revisit this any time from the home screen.
           </p>
         </div>

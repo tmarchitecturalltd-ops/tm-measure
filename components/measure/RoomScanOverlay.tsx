@@ -1391,7 +1391,7 @@ export default function RoomScanOverlay({
       {(phase === "camera" || phase === "calibrate") &&
         scanMode === "corners" && (
           <div
-            className="pointer-events-none absolute left-1/2 top-6 z-10 -translate-x-1/2 rounded-full px-3 py-1.5 text-center text-[11px] font-semibold"
+            className="pointer-events-none absolute left-1/2 top-6 z-10 -translate-x-1/2 rounded-full px-3 py-1.5 text-center text-sm font-semibold"
             style={{ backgroundColor: `${HUD}dd`, color: GOLD }}
             aria-hidden
           >
@@ -1413,7 +1413,7 @@ export default function RoomScanOverlay({
         }}
       >
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: GOLD }}>
+          <p className="text-sm font-bold uppercase tracking-[0.2em]" style={{ color: GOLD }}>
             {distanceMode ? "Measure a distance" : "Scan your room"}
           </p>
           <p className="truncate text-sm font-semibold text-white/90">
@@ -1426,7 +1426,7 @@ export default function RoomScanOverlay({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-full px-4 py-2 text-xs font-bold uppercase tracking-wider text-white/80 transition hover:bg-white/10 hover:text-white"
+          className="rounded-full px-4 py-2 text-sm font-bold uppercase tracking-wider text-white/80 transition hover:bg-white/10 hover:text-white"
         >
           Close
         </button>
@@ -1443,7 +1443,7 @@ export default function RoomScanOverlay({
             <button
               type="button"
               onClick={onClose}
-              className="mt-4 rounded-lg px-6 py-3 text-xs font-bold uppercase tracking-widest text-[#1c1c1a]"
+              className="mt-4 rounded-lg px-6 py-3 text-sm font-bold uppercase tracking-widest text-[#1c1c1a]"
               style={{ backgroundColor: GOLD }}
             >
               Dismiss
@@ -1477,27 +1477,27 @@ export default function RoomScanOverlay({
                   Set up first
                 </p>
                 <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2">
-                <p className="mb-4 text-xs text-white/70">
+                <p className="mb-4 text-sm text-white/70">
                   Two quick steps. Without them the measurements will be
                   badly wrong.
                 </p>
 
                 {/* Step 1 — motion sensor */}
                 <div className="mb-3 rounded-lg bg-white/5 p-3">
-                  <p className="mb-2 text-xs font-semibold text-white">
+                  <p className="mb-2 text-sm font-semibold text-white">
                     1. Motion sensor{" "}
                     {tiltPermission === "granted" && (
                       <span style={{ color: "#9ce29c" }}>✓</span>
                     )}
                   </p>
-                  <p className="mb-2 text-[11px] text-white/60">
+                  <p className="mb-2 text-sm text-white/60">
                     Lets the app read the angle your phone is pointing at.
                   </p>
                   {tiltPermission !== "granted" && (
                     <button
                       type="button"
                       onClick={() => void requestTiltPermission()}
-                      className="w-full rounded-full px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-[#1c1c1a]"
+                      className="w-full rounded-full px-4 py-2.5 text-sm font-bold uppercase tracking-widest text-[#1c1c1a]"
                       style={{ backgroundColor: GOLD }}
                     >
                       Enable motion sensor
@@ -1507,13 +1507,13 @@ export default function RoomScanOverlay({
 
                 {/* Step 2 — calibration */}
                 <div className="mb-4 rounded-lg bg-white/5 p-3">
-                  <p className="mb-2 text-xs font-semibold text-white">
+                  <p className="mb-2 text-sm font-semibold text-white">
                     2. Calibrate{" "}
                     {calibratedFocalPx !== null && (
                       <span style={{ color: "#9ce29c" }}>✓</span>
                     )}
                   </p>
-                  <p className="mb-2 text-[11px] text-white/60">
+                  <p className="mb-2 text-sm text-white/60">
                     Put a long object <strong className="text-white">on the
                     floor</strong> — a 1 m tape, floor tile edge or A4 sheet —
                     and tap each end. Teaches the app your camera lens.
@@ -1532,7 +1532,7 @@ export default function RoomScanOverlay({
                         tiltPerCornerRef.current = [];
                         setPhase("calibrate");
                       }}
-                      className="w-full rounded-full px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-[#1c1c1a] disabled:opacity-40"
+                      className="w-full rounded-full px-4 py-2.5 text-sm font-bold uppercase tracking-widest text-[#1c1c1a] disabled:opacity-40"
                       style={{ backgroundColor: GOLD }}
                     >
                       Start calibration
@@ -1551,7 +1551,7 @@ export default function RoomScanOverlay({
                   <button
                     type="button"
                     onClick={() => setSetupDismissed(true)}
-                    className="w-full text-[11px] font-bold uppercase tracking-widest text-white/50 underline"
+                    className="w-full text-sm font-bold uppercase tracking-widest text-white/50 underline"
                   >
                     Skip — measure anyway (less accurate)
                   </button>
@@ -1597,7 +1597,7 @@ export default function RoomScanOverlay({
                     refuses to shrink below its content height and the
                     overflow never engages. */}
                 <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2">
-                <p className="mb-2 text-[11px] uppercase tracking-widest text-white/45">
+                <p className="mb-2 text-sm uppercase tracking-widest text-white/45">
                   Method
                 </p>
                 <div className="mb-4 flex flex-col gap-2">
@@ -1611,11 +1611,11 @@ export default function RoomScanOverlay({
                         : { border: "1px solid rgba(255,255,255,0.2)" }
                     }
                   >
-                    <span className="block text-xs font-bold uppercase tracking-widest">
+                    <span className="block text-sm font-bold uppercase tracking-widest">
                       Wall to wall · easiest
                     </span>
                     <span
-                      className={`mt-0.5 block text-[11px] ${measureMode === "span" ? "text-[#1c1c1a]/70" : "text-white/60"}`}
+                      className={`mt-0.5 block text-sm ${measureMode === "span" ? "text-[#1c1c1a]/70" : "text-white/60"}`}
                     >
                       Back against one wall, one tap at the base of the wall
                       opposite. Nothing to fit in frame.
@@ -1631,11 +1631,11 @@ export default function RoomScanOverlay({
                         : { border: "1px solid rgba(255,255,255,0.2)" }
                     }
                   >
-                    <span className="block text-xs font-bold uppercase tracking-widest">
+                    <span className="block text-sm font-bold uppercase tracking-widest">
                       One wall at a time
                     </span>
                     <span
-                      className={`mt-0.5 block text-[11px] ${measureMode === "wall" ? "text-[#1c1c1a]/70" : "text-white/60"}`}
+                      className={`mt-0.5 block text-sm ${measureMode === "wall" ? "text-[#1c1c1a]/70" : "text-white/60"}`}
                     >
                       Two corners per wall. Needs both ends in frame.
                     </span>
@@ -1656,11 +1656,11 @@ export default function RoomScanOverlay({
                         genuinely have to be in one frame, which a phone
                         cannot manage indoors unless the space is large
                         or you can stand well back through a doorway. */}
-                    <span className="block text-xs font-bold uppercase tracking-widest">
+                    <span className="block text-sm font-bold uppercase tracking-widest">
                       Whole room · rarely fits
                     </span>
                     <span
-                      className={`mt-0.5 block text-[11px] ${measureMode === "room" ? "text-[#1c1c1a]/70" : "text-white/60"}`}
+                      className={`mt-0.5 block text-sm ${measureMode === "room" ? "text-[#1c1c1a]/70" : "text-white/60"}`}
                     >
                       All four floor corners must be visible at once. Only
                       works in large rooms — use Wall to wall otherwise.
@@ -1692,13 +1692,13 @@ export default function RoomScanOverlay({
                       <span className="block text-sm font-bold" style={{ color: GOLD }}>
                         LiDAR auto-scan · most accurate
                       </span>
-                      <span className="mt-0.5 block text-[11px] text-white/60">
+                      <span className="mt-0.5 block text-sm text-white/60">
                         Walk around the room once and Apple RoomPlan measures
                         it for you. No tapping.
                       </span>
                     </button>
                   ) : roomPlanSupport === "no" ? (
-                    <p className="text-[11px] leading-relaxed text-white/40">
+                    <p className="text-sm leading-relaxed text-white/40">
                       <span className="font-semibold text-white/55">
                         LiDAR auto-scan unavailable.
                       </span>{" "}
@@ -1706,13 +1706,13 @@ export default function RoomScanOverlay({
                         "Apple RoomPlan needs an iPhone or iPad Pro with a LiDAR sensor running iOS 16 or newer."}
                     </p>
                   ) : (
-                    <p className="text-[11px] text-white/35">
+                    <p className="text-sm text-white/35">
                       Checking whether this device supports LiDAR auto-scan…
                     </p>
                   )}
                 </div>
 
-                <p className="mb-2 text-[11px] uppercase tracking-widest text-white/45">
+                <p className="mb-2 text-sm uppercase tracking-widest text-white/45">
                   Tap which corners?
                 </p>
                 <div className="mb-4 flex gap-2">
@@ -1721,7 +1721,7 @@ export default function RoomScanOverlay({
                       key={p}
                       type="button"
                       onClick={() => setTapPlane(p)}
-                      className="flex-1 rounded-lg px-3 py-2 text-[11px] font-bold uppercase tracking-widest"
+                      className="flex-1 rounded-lg px-3 py-2 text-sm font-bold uppercase tracking-widest"
                       style={
                         tapPlane === p
                           ? { backgroundColor: GOLD, color: "#1c1c1a" }
@@ -1737,7 +1737,7 @@ export default function RoomScanOverlay({
                 </div>
                 {tapPlane === "ceiling" && (
                   <div className="mb-4">
-                    <label className="flex items-center gap-2 text-[11px] text-white/70">
+                    <label className="flex items-center gap-2 text-sm text-white/70">
                       <span className="uppercase tracking-widest text-white/45">
                         Ceiling height
                       </span>
@@ -1758,7 +1758,7 @@ export default function RoomScanOverlay({
                         by the wrong factor. A 2.4 default in a 3.5 m room
                         makes results roughly half what they should be. */}
                     <p
-                      className="mt-1.5 rounded-md px-2 py-1.5 text-[11px]"
+                      className="mt-1.5 rounded-md px-2 py-1.5 text-sm"
                       style={{
                         backgroundColor: "rgba(184,150,80,0.16)",
                         color: GOLD,
@@ -1780,15 +1780,15 @@ export default function RoomScanOverlay({
                       onClick={() => setLensPickerOpen((o) => !o)}
                       className="mb-2 flex w-full items-center justify-between rounded-lg border border-white/15 px-3 py-2 text-left"
                     >
-                      <span className="text-[11px] uppercase tracking-widest text-white/45">
+                      <span className="text-sm uppercase tracking-widest text-white/45">
                         Camera lens
                       </span>
-                      <span className="text-[11px] font-semibold" style={{ color: GOLD }}>
+                      <span className="text-sm font-semibold" style={{ color: GOLD }}>
                         {lensPickerOpen ? "Hide" : "Change"}
                       </span>
                     </button>
                     <div className={lensPickerOpen ? "block" : "hidden"}>
-                    <p className="mb-2 text-[11px] text-white/60">
+                    <p className="mb-2 text-sm text-white/60">
                       Can&apos;t fit the wall in? Pick an ultra-wide lens — it
                       sees roughly twice as much.
                     </p>
@@ -1814,7 +1814,7 @@ export default function RoomScanOverlay({
                             setActiveDeviceId(d.deviceId);
                             setSetupDismissed(false);
                           }}
-                          className="rounded-lg px-3 py-2 text-left text-[11px] font-semibold"
+                          className="rounded-lg px-3 py-2 text-left text-sm font-semibold"
                           style={
                             d.deviceId === (activeDeviceId ?? detectedDeviceId)
                               ? { backgroundColor: GOLD, color: "#1c1c1a" }
@@ -1848,7 +1848,7 @@ export default function RoomScanOverlay({
                       setMethodChosen(true);
                       setHudCollapsed(true);
                     }}
-                    className="w-full rounded-full px-4 py-3 text-[11px] font-bold uppercase tracking-widest text-[#1c1c1a]"
+                    className="w-full rounded-full px-4 py-3 text-sm font-bold uppercase tracking-widest text-[#1c1c1a]"
                     style={{ backgroundColor: GOLD }}
                   >
                     Start measuring
@@ -1910,7 +1910,7 @@ export default function RoomScanOverlay({
 
             {scanMode === "lidar" && (
               <div
-                className="pointer-events-auto mx-4 mb-3 rounded-xl border border-white/10 p-4 text-xs leading-relaxed text-white/75"
+                className="pointer-events-auto mx-4 mb-3 rounded-xl border border-white/10 p-4 text-sm leading-relaxed text-white/75"
                 style={{ backgroundColor: `${HUD}ee` }}
               >
                 {roomPlanSupport === "yes" ? (
@@ -1927,7 +1927,7 @@ export default function RoomScanOverlay({
                       type="button"
                       onClick={() => void handleLidarStart()}
                       disabled={roomPlanRunning}
-                      className="w-full rounded-lg py-3 text-xs font-bold uppercase tracking-widest text-[#1c1c1a] disabled:opacity-50"
+                      className="w-full rounded-lg py-3 text-sm font-bold uppercase tracking-widest text-[#1c1c1a] disabled:opacity-50"
                       style={{ backgroundColor: GOLD }}
                     >
                       {roomPlanRunning ? "Opening RoomPlan…" : "Start RoomPlan capture"}
@@ -1954,7 +1954,7 @@ export default function RoomScanOverlay({
                           void requestTiltPermission();
                         }
                       }}
-                      className="w-full rounded-lg py-3 text-xs font-bold uppercase tracking-widest text-[#1c1c1a]"
+                      className="w-full rounded-lg py-3 text-sm font-bold uppercase tracking-widest text-[#1c1c1a]"
                       style={{ backgroundColor: GOLD }}
                     >
                       Switch to Corner mark
@@ -1971,7 +1971,7 @@ export default function RoomScanOverlay({
                 object you were meant to be tapping the ends of. */}
             {scanMode === "corners" && phase !== "calibrate" && (
               <div
-                className={`pointer-events-auto mx-4 mb-3 rounded-xl text-xs text-white/75 ${hudCollapsed ? "p-2" : "p-4"}`}
+                className={`pointer-events-auto mx-4 mb-3 rounded-xl text-sm text-white/75 ${hudCollapsed ? "p-2" : "p-4"}`}
                 style={{ backgroundColor: `${HUD}ee` }}
               >
                 <div
@@ -2043,7 +2043,7 @@ export default function RoomScanOverlay({
                     buried on a previous screen. */}
                 {cornerCount === 0 && (
                   <div className="mb-2 flex items-center gap-2">
-                    <span className="text-[10px] uppercase tracking-widest text-white/45">
+                    <span className="text-sm uppercase tracking-widest text-white/45">
                       Tapping
                     </span>
                     {(["floor", "ceiling"] as const).map((p) => (
@@ -2059,7 +2059,7 @@ export default function RoomScanOverlay({
                           subTapsRef.current = [];
                           setSubTapCount(0);
                         }}
-                        className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest"
+                        className="rounded-full px-2.5 py-0.5 text-sm font-bold uppercase tracking-widest"
                         style={
                           tapPlane === p
                             ? { backgroundColor: GOLD, color: "#1c1c1a" }
@@ -2073,7 +2073,7 @@ export default function RoomScanOverlay({
                       </button>
                     ))}
                     {tapPlane === "ceiling" && (
-                      <span className="text-[10px] text-white/50">
+                      <span className="text-sm text-white/50">
                         ceiling {ceilingHeightM} m
                       </span>
                     )}
@@ -2083,7 +2083,7 @@ export default function RoomScanOverlay({
                 {/* Progress through the two spans / walls. */}
                 {(measureMode === "wall" || measureMode === "span") &&
                   wallLengths.length > 0 && (
-                    <p className="mb-2 rounded-md bg-white/10 px-2 py-1.5 text-[11px] text-white/85">
+                    <p className="mb-2 rounded-md bg-white/10 px-2 py-1.5 text-sm text-white/85">
                       First measurement ={" "}
                       <strong className="text-white">
                         {wallLengths[0]?.toFixed(2)} m
@@ -2124,7 +2124,7 @@ export default function RoomScanOverlay({
 
                 {!hudCollapsed && (
                 <div className="flex flex-wrap items-center gap-3">
-                  <label className="flex items-center gap-2 text-[11px] text-white/70">
+                  <label className="flex items-center gap-2 text-sm text-white/70">
                     <span className="uppercase tracking-widest text-white/45">Eye height</span>
                     <input
                       type="number"
@@ -2142,7 +2142,7 @@ export default function RoomScanOverlay({
                     <span className="text-white/40">m</span>
                   </label>
 
-                  <span className="text-[11px] text-white/60">
+                  <span className="text-sm text-white/60">
                     Tilt:{" "}
                     <span className="font-mono" style={{ color: GOLD }}>
                       {liveTiltDeg === null
@@ -2153,7 +2153,7 @@ export default function RoomScanOverlay({
 
                   {!isStable && (
                     <span
-                      className="rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest"
+                      className="rounded-full px-3 py-1 text-sm font-bold uppercase tracking-widest"
                       style={{ backgroundColor: "rgba(244,168,156,0.18)", color: "#f4a89c" }}
                       title={`Tilt spread ${tiltSpreadDeg.toFixed(1)}° — hold still to tap`}
                     >
@@ -2185,7 +2185,7 @@ export default function RoomScanOverlay({
                     const colour = bucket === "HIGH" ? "#9ce29c" : bucket === "MEDIUM" ? GOLD : "#f4a89c";
                     return (
                       <span
-                        className="rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest"
+                        className="rounded-full px-3 py-1 text-sm font-bold uppercase tracking-widest"
                         style={{ backgroundColor: `${colour}22`, color: colour }}
                         title={reasons.length ? `Issues: ${reasons.join(", ")}` : "All good"}
                       >
@@ -2198,7 +2198,7 @@ export default function RoomScanOverlay({
                     <button
                       type="button"
                       onClick={() => void requestTiltPermission()}
-                      className="rounded-full border border-white/20 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white/80 hover:bg-white/10"
+                      className="rounded-full border border-white/20 px-3 py-1 text-sm font-bold uppercase tracking-widest text-white/80 hover:bg-white/10"
                     >
                       Enable motion sensor
                     </button>
@@ -2226,7 +2226,7 @@ export default function RoomScanOverlay({
                       // prominently on the setup gate before the camera
                       // opens, so this is just the escape hatch for redoing
                       // it mid-scan and shouldn't compete with the viewfinder.
-                      className="rounded-full border border-white/20 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white/80"
+                      className="rounded-full border border-white/20 px-3 py-1 text-sm font-bold uppercase tracking-widest text-white/80"
                     >
                       Calibrate
                     </button>
@@ -2250,7 +2250,7 @@ export default function RoomScanOverlay({
                   tiltPerCornerRef.current = [];
                         setPhase("calibrate");
                       }}
-                      className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest hover:bg-white/15"
+                      className="rounded-full bg-white/10 px-3 py-1 text-sm font-bold uppercase tracking-widest hover:bg-white/15"
                       style={{ color: GOLD }}
                       title="Tap to re-calibrate"
                     >
@@ -2264,7 +2264,7 @@ export default function RoomScanOverlay({
 
             {phase === "calibrate" && (
               <div
-                className="pointer-events-auto mx-4 mb-3 rounded-xl p-4 text-xs text-white/75"
+                className="pointer-events-auto mx-4 mb-3 rounded-xl p-4 text-sm text-white/75"
                 style={{ backgroundColor: `${HUD}ee` }}
               >
                 {/* Verbose setup copy only before the first tap. From the
@@ -2285,13 +2285,13 @@ export default function RoomScanOverlay({
                       — not pointing away from you. Then tap each end, so the
                       two dots sit side by side on screen.
                     </p>
-                    <p className="mb-3 text-[11px] text-white/45">
+                    <p className="mb-3 text-sm text-white/45">
                       Both taps must touch the floor. The side of a bin or box
                       won&apos;t work — those points sit above it. And an
                       object pointing away from you gives the maths almost
                       nothing to work with.
                     </p>
-                    <label className="mb-3 flex items-center gap-2 text-[11px] text-white/70">
+                    <label className="mb-3 flex items-center gap-2 text-sm text-white/70">
                       <span className="uppercase tracking-widest text-white/45">Reference length</span>
                       <input
                         type="number"
@@ -2314,14 +2314,14 @@ export default function RoomScanOverlay({
                   </p>
                 )}
                 {calibError && (
-                  <p className="mb-2 text-[11px] text-red-200">{calibError}</p>
+                  <p className="mb-2 text-sm text-red-200">{calibError}</p>
                 )}
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={resolveCalibration}
                     disabled={calibTapCount !== 2}
-                    className="rounded-full px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-[#1c1c1a] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-full px-4 py-2 text-sm font-bold uppercase tracking-widest text-[#1c1c1a] disabled:cursor-not-allowed disabled:opacity-40"
                     style={{ backgroundColor: GOLD }}
                   >
                     Confirm calibration
@@ -2334,7 +2334,7 @@ export default function RoomScanOverlay({
                       setCalibError(null);
                       setMarkers([]);
                     }}
-                    className="rounded-full border border-white/20 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-white/80"
+                    className="rounded-full border border-white/20 px-3 py-2 text-sm font-bold uppercase tracking-widest text-white/80"
                   >
                     Re-tap
                   </button>
@@ -2347,7 +2347,7 @@ export default function RoomScanOverlay({
                       setMarkers([]);
                       setPhase("camera");
                     }}
-                    className="rounded-full border border-white/20 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-white/80"
+                    className="rounded-full border border-white/20 px-3 py-2 text-sm font-bold uppercase tracking-widest text-white/80"
                   >
                     Skip
                   </button>
@@ -2357,7 +2357,7 @@ export default function RoomScanOverlay({
 
             {scanMode === "video" && (
               <div
-                className="pointer-events-auto mx-4 mb-3 rounded-xl p-4 text-xs text-white/75"
+                className="pointer-events-auto mx-4 mb-3 rounded-xl p-4 text-sm text-white/75"
                 style={{ backgroundColor: `${HUD}ee` }}
               >
                 <p style={{ color: GOLD }} className="mb-2 font-semibold">
@@ -2378,7 +2378,7 @@ export default function RoomScanOverlay({
               className="pointer-events-auto flex flex-wrap items-center justify-between gap-3 px-4 pb-8 pt-2"
               style={{ backgroundColor: HUD }}
             >
-              <p className="text-[10px] uppercase tracking-widest text-white/40">
+              <p className="text-sm uppercase tracking-widest text-white/40">
                 HUD · {HUD} / {GOLD}
               </p>
             </div>
@@ -2387,7 +2387,7 @@ export default function RoomScanOverlay({
 
         {phase === "processing" && (
           <div className="pointer-events-auto mx-4 mb-16 rounded-xl p-6" style={{ backgroundColor: `${HUD}f0` }}>
-            <p className="mb-2 text-xs font-bold uppercase tracking-widest" style={{ color: GOLD }}>
+            <p className="mb-2 text-sm font-bold uppercase tracking-widest" style={{ color: GOLD }}>
               Processing
             </p>
             <p className="mb-4 text-sm text-white/80">{processLine}</p>
@@ -2397,14 +2397,14 @@ export default function RoomScanOverlay({
                 style={{ width: `${processPct}%`, backgroundColor: GOLD }}
               />
             </div>
-            <p className="mt-2 text-right text-xs text-white/40">{processPct}%</p>
+            <p className="mt-2 text-right text-sm text-white/40">{processPct}%</p>
           </div>
         )}
 
         {phase === "result" && result && (
           <div className="pointer-events-auto mx-4 mb-8 space-y-4 rounded-xl p-5" style={{ backgroundColor: `${HUD}f2` }}>
             <div className="flex items-center justify-between">
-              <p className="text-xs font-bold uppercase tracking-widest" style={{ color: GOLD }}>
+              <p className="text-sm font-bold uppercase tracking-widest" style={{ color: GOLD }}>
                 Scan captured
               </p>
               {result.method === "corners" && result.confidence && (
@@ -2417,14 +2417,14 @@ export default function RoomScanOverlay({
               <DimChip label="Height" v={result.heightM} />
             </div>
             {result.method === "corners" && typeof result.areaM2 === "number" && (
-              <p className="text-center text-[11px] text-white/55">
+              <p className="text-center text-sm text-white/55">
                 Floor area{" "}
                 <span className="font-mono text-white/80">{result.areaM2.toFixed(2)} m²</span>
                 {result.rectangular === false ? " · non-rectangular" : ""}
               </p>
             )}
             {result.notes && result.notes.length > 0 && (
-              <ul className="space-y-1 rounded-lg bg-white/5 p-3 text-[11px] leading-relaxed text-white/70">
+              <ul className="space-y-1 rounded-lg bg-white/5 p-3 text-sm leading-relaxed text-white/70">
                 {result.notes.map((n, i) => (
                   <li key={i} className="flex gap-2">
                     <span className="mt-[2px]" style={{ color: GOLD }}>
@@ -2447,7 +2447,7 @@ export default function RoomScanOverlay({
                   onApply(result);
                   onClose();
                 }}
-                className="flex-1 rounded-lg py-3 text-xs font-bold uppercase tracking-widest text-[#1c1c1a] sm:flex-none sm:px-8"
+                className="flex-1 rounded-lg py-3 text-sm font-bold uppercase tracking-widest text-[#1c1c1a] sm:flex-none sm:px-8"
                 style={{ backgroundColor: GOLD }}
               >
                 Apply to form
@@ -2462,7 +2462,7 @@ export default function RoomScanOverlay({
                   tiltPerCornerRef.current = [];
                   void startCamera();
                 }}
-                className="rounded-lg border border-white/20 px-6 py-3 text-xs font-bold uppercase tracking-widest text-white/80 hover:bg-white/5"
+                className="rounded-lg border border-white/20 px-6 py-3 text-sm font-bold uppercase tracking-widest text-white/80 hover:bg-white/5"
               >
                 Rescan
               </button>
@@ -2494,7 +2494,7 @@ function ModeChip({
       onClick={onClick}
       disabled={disabled}
       aria-disabled={disabled}
-      className="rounded-full px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition disabled:cursor-not-allowed"
+      className="rounded-full px-4 py-2 text-sm font-bold uppercase tracking-wider transition disabled:cursor-not-allowed"
       style={{
         backgroundColor: active ? GOLD : "rgba(255,255,255,0.06)",
         color: active
@@ -2513,7 +2513,7 @@ function ModeChip({
 function DimChip({ label, v }: { label: string; v: number }) {
   return (
     <div className="rounded-lg bg-white/5 py-3">
-      <p className="text-[9px] font-bold uppercase tracking-widest text-white/45">{label}</p>
+      <p className="text-sm font-bold uppercase tracking-widest text-white/45">{label}</p>
       <p className="font-mono text-lg" style={{ color: GOLD }}>
         {v.toFixed(2)}m
       </p>
@@ -2527,7 +2527,7 @@ function ConfidencePill({ c }: { c: ScanConfidence }) {
   const label = c === "high" ? "High confidence" : c === "medium" ? "Medium confidence" : "Low confidence";
   return (
     <span
-      className="rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest"
+      className="rounded-full px-3 py-1 text-sm font-bold uppercase tracking-widest"
       style={{
         backgroundColor: `${colour}22`,
         color: colour,

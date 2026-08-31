@@ -73,7 +73,7 @@ export default function WallPositionPicker({
   // bar representing an unknown distance would invite nonsense.
   if (usableLength <= 0) {
     return (
-      <p className="text-[11px] leading-relaxed text-on-surface-variant">
+      <p className="text-sm leading-relaxed text-on-surface-variant">
         Enter this wall&apos;s length first and you&apos;ll be able to drag the
         opening into place.
       </p>
@@ -112,10 +112,10 @@ export default function WallPositionPicker({
   return (
     <div>
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+        <span className="font-label text-sm font-bold uppercase tracking-widest text-on-surface-variant">
           {label}
         </span>
-        <span className="text-[10px] text-on-surface-variant">
+        <span className="text-sm text-on-surface-variant">
           {approx ? "approximate" : "measured"}
         </span>
       </div>
@@ -165,10 +165,10 @@ export default function WallPositionPicker({
           }}
         />
 
-        <span className="absolute left-2 top-1 max-w-[45%] truncate text-[9px] text-on-surface-variant">
+        <span className="absolute left-2 top-1 max-w-[45%] truncate text-sm text-on-surface-variant">
           {startCornerLabel ? `corner w/ ${startCornerLabel}` : "corner"}
         </span>
-        <span className="absolute right-2 top-1 max-w-[45%] truncate text-right text-[9px] text-on-surface-variant">
+        <span className="absolute right-2 top-1 max-w-[45%] truncate text-right text-sm text-on-surface-variant">
           {endCornerLabel
             ? `corner w/ ${endCornerLabel} · ${usableLength.toFixed(2)} m`
             : `${usableLength.toFixed(2)} m`}
@@ -189,7 +189,7 @@ export default function WallPositionPicker({
           aria-label="Exact distance from the corner in metres"
           className="w-28 rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
         />
-        <span className="text-[11px] leading-snug text-on-surface-variant">
+        <span className="text-sm leading-snug text-on-surface-variant">
           metres from the {startCornerLabel ? `${startCornerLabel} corner` : "left corner"} to
           the centre. Drag above for roughly, or type it if you&apos;ve
           measured.
@@ -200,7 +200,7 @@ export default function WallPositionPicker({
         <button
           type="button"
           onClick={onMeasureWithCamera}
-          className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-primary"
+          className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary px-3.5 py-1.5 text-sm font-bold uppercase tracking-widest text-primary"
         >
           <span
             className="material-symbols-outlined"

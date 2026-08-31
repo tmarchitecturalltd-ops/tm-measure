@@ -54,6 +54,8 @@ import CustomShapeEditor from "@/components/measure/CustomShapeEditor";
 import VoiceRecorder from "@/components/measure/VoiceRecorder";
 import WallPositionPicker from "@/components/measure/WallPositionPicker";
 import GuidedRoomFlow from "@/components/measure/GuidedRoomFlow";
+import LengthHint from "@/components/measure/LengthHint";
+import TextSizeControl from "@/components/measure/TextSizeControl";
 import {
   RoomPlan,
   type RoomPlanScanResult,
@@ -280,7 +282,23 @@ export default function MeasureIntakeForm() {
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   /** Re-render tick so the "x min ago" label ages without a save. */
   const [savedTick, setSavedTick] = useState(0);
-  const draftSaver = useRef(makeDebouncedSaver<ProjectDraftSnapshot>(400));
+  /**
+   * Whether the last write to storage actually landed.
+   *
+   * null until the first attempt. false means the customer's work is
+   * only in memory, which they need telling about before they close the
+   * app rather than after.
+   */
+  const [draftSaveOk, setDraftSaveOk] = useState<boolean | null>(null);
+  const draftSaver = useRef(
+    makeDebouncedSaver<ProjectDraftSnapshot>(400, (ok) => {
+      setDraftSaveOk(ok);
+      // Only stamp the clock on a real save. Timestamping a failure
+      // produces the worst outcome available: a confident "saved 2 min
+      // ago" over nothing at all.
+      if (ok) setLastSavedAt(Date.now());
+    }),
+  );
   const [scanRoomId, setScanRoomId] = useState<string | null>(null);
   /**
    * Confirmation of the last scan written into a room.
@@ -721,39 +739,160 @@ export default function MeasureIntakeForm() {
      worth knowing it was tried. */
 
 
-  const removeRoom = useCallback((id: string) => {
-    setRooms((prev) => {
-      // Release the room's media. Individual photo deletes already
-      // revoke; deleting a whole room did not, so a long Capacitor
-      // session that added and removed photographed rooms held on to
-      // every blob until the app was killed.
-      //
-      // Revoking inside the updater is safe here only because
-      // revokeObjectURL is idempotent — React invokes updaters twice in
-      // development, and a second revoke on a dead URL is a no-op. Do
-      // not add non-idempotent work to this block.
-      const doomed = prev.find((r) => r.id === id);
-      if (doomed) {
-        for (const p of doomed.photos) URL.revokeObjectURL(p.uri);
-        for (const w of doomed.walls) {
-          for (const p of w.photos ?? []) URL.revokeObjectURL(p.uri);
-        }
-        for (const m of doomed.voiceMemos ?? []) URL.revokeObjectURL(m.uri);
-      }
-      const next = prev.filter((r) => r.id !== id);
-      return next.length ? next : [emptyRoom()];
-    });
-    // Drop any connections referencing a deleted room.
-    setConnections((prev) =>
-      prev.filter((c) => c.roomAId !== id && c.roomBId !== id),
-    );
-    // Drop any floor-plan placement so stale entries don't haunt the payload.
-    setPlacements((prev) => {
-      if (!(id in prev)) return prev;
-      const { [id]: _dropped, ...rest } = prev;
-      return rest;
-    });
+  /**
+   * Undo for deletions.
+   *
+   * Every delete in this form was immediate and silent. A customer who
+   * mis-tapped "remove room" — on a target that until this release was
+   * about 30 px across — lost a room's worth of tape work with no way
+   * back, and quite possibly without noticing until the review screen.
+   *
+   * This keeps one snapshot of the rooms/connections/placements as they
+   * were, and offers it back for a few seconds. One level only: an undo
+   * stack invites a customer to hunt backwards through history, which
+   * is a worse experience than "that was wrong, put it back".
+   *
+   * The blob URLs are the awkward part. Deleting used to revoke a
+   * room's photo URLs immediately, which would make any restored room
+   * come back with dead images — visually, a room whose photos have all
+   * turned into broken boxes, which is arguably worse than losing it
+   * cleanly. So revocation is deferred to the moment the undo window
+   * closes, and cancelled if the customer takes the undo. The cost is
+   * holding a few blobs for a few seconds longer.
+   */
+  const [undoAction, setUndoAction] = useState<{
+    label: string;
+    restore: () => void;
+  } | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRevoke = useRef<string[]>([]);
+
+  /** Revoke whatever the lapsed deletion was holding, and clear the bar. */
+  const settleUndo = useCallback(() => {
+    for (const uri of pendingRevoke.current) URL.revokeObjectURL(uri);
+    pendingRevoke.current = [];
+    setUndoAction(null);
   }, []);
+
+  const offerUndo = useCallback(
+    (label: string, restore: () => void, revokeOnLapse: string[] = []) => {
+      // A second deletion during the window settles the first: its
+      // blobs are released and its snapshot is dropped, because we only
+      // ever hold one.
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+      for (const uri of pendingRevoke.current) URL.revokeObjectURL(uri);
+      pendingRevoke.current = revokeOnLapse;
+      setUndoAction({ label, restore });
+      // Twelve seconds. Long enough to notice a mistake and reach the
+      // button without hurrying; short enough that the bar is not still
+      // sitting there covering the next question.
+      undoTimer.current = setTimeout(settleUndo, 12000);
+    },
+    [settleUndo],
+  );
+
+  const takeUndo = useCallback(() => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    // Deliberately NOT revoking: the restored draft needs these URLs.
+    pendingRevoke.current = [];
+    undoAction?.restore();
+    setUndoAction(null);
+  }, [undoAction]);
+
+  // Release anything still pending if the form unmounts mid-window,
+  // rather than leaking the blobs for the life of the app process.
+  useEffect(() => {
+    return () => {
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+      for (const uri of pendingRevoke.current) URL.revokeObjectURL(uri);
+    };
+  }, []);
+
+  const removeRoom = useCallback(
+    (id: string) => {
+      // Capture only what is being removed, plus where it sat.
+      //
+      // Deleting a room also drops its connections and its floor-plan
+      // placement, so putting back the room alone would return it
+      // stranded — unplaced, and no longer recorded as leading
+      // anywhere. All three come back together.
+      //
+      // Restoring a whole snapshot of `rooms` would be simpler and
+      // wrong: the customer can keep typing during the twelve seconds
+      // the offer is up, and an undo that rolls the entire form back to
+      // a moment ago would silently discard those edits. Undoing a
+      // deletion must undo the deletion and nothing else.
+      const index = rooms.findIndex((r) => r.id === id);
+      const doomed = rooms[index];
+      const droppedConnections = connections.filter(
+        (c) => c.roomAId === id || c.roomBId === id,
+      );
+      const droppedPlacement = placements[id];
+
+      // Collected, not revoked. See offerUndo — these are released when
+      // the undo window closes, so a restored room still has its
+      // photographs.
+      if (!doomed) return;
+      const uris: string[] = [];
+      for (const p of doomed.photos) uris.push(p.uri);
+      for (const w of doomed.walls) {
+        for (const p of w.photos ?? []) uris.push(p.uri);
+      }
+      for (const m of doomed.voiceMemos ?? []) uris.push(m.uri);
+
+      setRooms((prev) => {
+        const next = prev.filter((r) => r.id !== id);
+        return next.length ? next : [emptyRoom()];
+      });
+      setConnections((prev) =>
+        prev.filter((c) => c.roomAId !== id && c.roomBId !== id),
+      );
+      setPlacements((prev) => {
+        if (!(id in prev)) return prev;
+        const { [id]: _dropped, ...rest } = prev;
+        return rest;
+      });
+
+      offerUndo(
+        `Removed ${doomed.name?.trim() || "the room"}`,
+        () => {
+          setRooms((prev) => {
+            // Already back (double-tapped undo, or a restore from
+            // elsewhere) — do not add a duplicate.
+            if (prev.some((r) => r.id === doomed.id)) return prev;
+            const next = [...prev];
+            // Deleting the last room substitutes a blank one; drop that
+            // stand-in on the way back rather than leaving the customer
+            // with an empty room they never asked for.
+            const placeholder = next.findIndex(
+              (r) =>
+                r.name.trim() === "" &&
+                r.walls.every((w) => !w.lengthM.trim()) &&
+                !r.photos.length,
+            );
+            if (next.length === 1 && placeholder === 0) next.splice(0, 1);
+            next.splice(Math.min(index, next.length), 0, doomed);
+            return next;
+          });
+          setConnections((prev) => {
+            const missing = droppedConnections.filter(
+              (d) => !prev.some((c) => c.id === d.id),
+            );
+            return missing.length ? [...prev, ...missing] : prev;
+          });
+          if (droppedPlacement) {
+            setPlacements((prev) =>
+              doomed.id in prev
+                ? prev
+                : { ...prev, [doomed.id]: droppedPlacement },
+            );
+          }
+        },
+        uris,
+      );
+    },
+    [rooms, connections, placements, offerUndo],
+  );
 
   /**
    * Move a room up or down in the list. Order matters in the
@@ -983,15 +1122,33 @@ export default function MeasureIntakeForm() {
     [],
   );
 
-  const removeStairs = useCallback((roomId: string, stairsId: string) => {
-    setRooms((prev) =>
-      prev.map((r) =>
-        r.id === roomId
-          ? { ...r, stairs: (r.stairs ?? []).filter((s) => s.id !== stairsId) }
-          : r,
-      ),
-    );
-  }, []);
+  const removeStairs = useCallback(
+    (roomId: string, stairsId: string) => {
+      const room = rooms.find((r) => r.id === roomId);
+      const at = (room?.stairs ?? []).findIndex((s) => s.id === stairsId);
+      const flight = at >= 0 ? room!.stairs![at] : undefined;
+      setRooms((prev) =>
+        prev.map((r) =>
+          r.id === roomId
+            ? { ...r, stairs: (r.stairs ?? []).filter((s) => s.id !== stairsId) }
+            : r,
+        ),
+      );
+      if (!flight) return;
+      offerUndo("Removed the stairs", () =>
+        setRooms((prev) =>
+          prev.map((r) => {
+            if (r.id !== roomId) return r;
+            const list = [...(r.stairs ?? [])];
+            if (list.some((x) => x.id === flight.id)) return r;
+            list.splice(Math.min(at, list.length), 0, flight);
+            return { ...r, stairs: list };
+          }),
+        ),
+      );
+    },
+    [rooms, offerUndo],
+  );
 
   const addOpening = useCallback(
     (roomId: string, kind: "doors" | "windows") => {
@@ -1014,6 +1171,9 @@ export default function MeasureIntakeForm() {
 
   const removeOpening = useCallback(
     (roomId: string, kind: "doors" | "windows", openingId: string) => {
+      const room = rooms.find((r) => r.id === roomId);
+      const at = room?.[kind].findIndex((o) => o.id === openingId) ?? -1;
+      const opening = at >= 0 ? room![kind][at] : undefined;
       setRooms((prev) =>
         prev.map((r) => {
           if (r.id !== roomId) return r;
@@ -1021,8 +1181,20 @@ export default function MeasureIntakeForm() {
           return { ...r, [kind]: list };
         }),
       );
+      if (!opening) return;
+      offerUndo(kind === "doors" ? "Removed a door" : "Removed a window", () =>
+        setRooms((prev) =>
+          prev.map((r) => {
+            if (r.id !== roomId) return r;
+            if (r[kind].some((o) => o.id === opening.id)) return r;
+            const list = [...r[kind]];
+            list.splice(Math.min(at, list.length), 0, opening);
+            return { ...r, [kind]: list };
+          }),
+        ),
+      );
     },
-    [],
+    [rooms, offerUndo],
   );
 
   /**
@@ -1081,16 +1253,38 @@ export default function MeasureIntakeForm() {
     [],
   );
 
-  const removePhoto = useCallback((roomId: string, photoId: string) => {
-    setRooms((prev) =>
-      prev.map((r) => {
-        if (r.id !== roomId) return r;
-        const photo = r.photos.find((p) => p.id === photoId);
-        if (photo) URL.revokeObjectURL(photo.uri);
-        return { ...r, photos: r.photos.filter((p) => p.id !== photoId) };
-      }),
-    );
-  }, []);
+  const removePhoto = useCallback(
+    (roomId: string, photoId: string) => {
+      const room = rooms.find((r) => r.id === roomId);
+      const at = room?.photos.findIndex((p) => p.id === photoId) ?? -1;
+      const photo = at >= 0 ? room!.photos[at] : undefined;
+      setRooms((prev) =>
+        prev.map((r) =>
+          r.id === roomId
+            ? { ...r, photos: r.photos.filter((p) => p.id !== photoId) }
+            : r,
+        ),
+      );
+      if (!photo) return;
+      // Revocation deferred, so an undone delete gets the image back
+      // rather than a broken thumbnail.
+      offerUndo(
+        "Removed a photo",
+        () =>
+          setRooms((prev) =>
+            prev.map((r) => {
+              if (r.id !== roomId) return r;
+              if (r.photos.some((p) => p.id === photo.id)) return r;
+              const photos = [...r.photos];
+              photos.splice(Math.min(at, photos.length), 0, photo);
+              return { ...r, photos };
+            }),
+          ),
+        [photo.uri],
+      );
+    },
+    [rooms, offerUndo],
+  );
 
   /**
    * Per-wall photo helpers. Wall-tied photos let the architect tie a
@@ -1228,7 +1422,8 @@ export default function MeasureIntakeForm() {
       connections: connections as unknown as Array<Record<string, unknown>>,
       placements: placements as unknown as Record<string, unknown>,
     });
-    setLastSavedAt(Date.now());
+    // No setLastSavedAt here: the write has not happened yet. The
+    // saver's callback stamps it once it actually has.
   }, [
     defaultCeilingHeightM,
     proposalDescription,
@@ -1392,16 +1587,33 @@ export default function MeasureIntakeForm() {
     return () => clearInterval(t);
   }, [lastSavedAt]);
 
+  /**
+   * The saved-state line.
+   *
+   * Always says something. It used to render nothing until the first
+   * save, so the customer's first several minutes — filling in their
+   * name, naming rooms, typing the first wall lengths — happened with
+   * no indication that any of it was being kept. "Am I going to lose
+   * this if I close it?" is the question that stops people halfway,
+   * and answering it costs one line.
+   *
+   * Says what it means in plain terms rather than "Draft saved". A
+   * draft is our word for it. "You can close the app" is the thing the
+   * customer actually wants to know.
+   */
   const savedLabel = useMemo(() => {
-    if (!lastSavedAt) return null;
     void savedTick; // dependency: recompute as the tick advances
+    if (draftSaveOk === false) {
+      return "Couldn't save on this device — finish in one go if you can";
+    }
+    if (!lastSavedAt) return "Your answers save as you go";
     const mins = Math.floor((Date.now() - lastSavedAt) / 60_000);
-    if (mins < 1) return "Draft saved · just now";
-    if (mins === 1) return "Draft saved · 1 min ago";
-    if (mins < 60) return `Draft saved · ${mins} min ago`;
+    if (mins < 1) return "Saved — you can close the app and come back";
+    if (mins === 1) return "Saved 1 min ago — safe to close the app";
+    if (mins < 60) return `Saved ${mins} min ago — safe to close the app`;
     const hrs = Math.floor(mins / 60);
-    return `Draft saved · ${hrs} hr${hrs === 1 ? "" : "s"} ago`;
-  }, [lastSavedAt, savedTick]);
+    return `Saved ${hrs} hr${hrs === 1 ? "" : "s"} ago — safe to close the app`;
+  }, [lastSavedAt, savedTick, draftSaveOk]);
 
   /* ── Room pager ─────────────────────────────────────────────────
    * One room on screen at a time. The full list was a very long scroll
@@ -2092,7 +2304,7 @@ export default function MeasureIntakeForm() {
               arrow_back
             </Link>
             <div>
-              <p className="font-label text-[10px] font-bold uppercase tracking-widest text-primary">
+              <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">
                 TM Measure
               </p>
               <h1 className="font-headline text-lg font-semibold text-on-surface">
@@ -2100,7 +2312,7 @@ export default function MeasureIntakeForm() {
               </h1>
             </div>
           </div>
-          <span className="hidden items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3 py-1.5 text-[11px] font-semibold text-on-surface-variant sm:inline-flex">
+          <span className="hidden items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3 py-1.5 text-sm font-semibold text-on-surface-variant sm:inline-flex">
             <span
               className="material-symbols-outlined text-primary"
               style={{ fontSize: "14px" }}
@@ -2113,9 +2325,13 @@ export default function MeasureIntakeForm() {
           {savedLabel && (
             <span
               aria-live="polite"
-              className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-[11px] font-medium text-primary"
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold ${
+                draftSaveOk === false
+                  ? "bg-error/10 text-error"
+                  : "bg-primary/10 text-primary"
+              }`}
             >
-              <span aria-hidden>✓</span>
+              <span aria-hidden>{draftSaveOk === false ? "!" : "\u2713"}</span>
               {savedLabel}
             </span>
           )}
@@ -2123,6 +2339,15 @@ export default function MeasureIntakeForm() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 md:px-6">
+        {/* Text size, at the top of the first screen rather than buried
+            in a settings menu. Someone who needs it needs it before
+            they can comfortably read the menu that would have hidden
+            it. It stays put once set, so seeing it here once is the
+            whole cost. */}
+        <div className="mb-6 flex justify-end">
+          <TextSizeControl />
+        </div>
+
         <p className="mb-8 max-w-3xl text-sm leading-relaxed text-on-surface-variant">
           We&apos;ll walk you through each room —{" "}
           <strong className="font-semibold text-on-surface">
@@ -2223,7 +2448,7 @@ export default function MeasureIntakeForm() {
                       <span className="font-semibold text-on-surface">
                         {roomDisplayLabel(room, ri)}
                       </span>
-                      <span className="shrink-0 rounded-full bg-inverse-surface/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                      <span className="shrink-0 rounded-full bg-inverse-surface/10 px-2.5 py-1 text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                         #{ri + 1}
                       </span>
                     </button>
@@ -2250,7 +2475,7 @@ export default function MeasureIntakeForm() {
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/40 bg-primary/10 p-4 text-sm text-on-surface">
             <div>
               <p className="font-semibold text-primary">Resume your previous project?</p>
-              <p className="mt-1 text-xs text-on-surface-variant">
+              <p className="mt-1 text-sm text-on-surface-variant">
                 We saved your draft from {new Date(pendingDraft.savedAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })} on the <span className="font-semibold">{pendingDraft.step}</span> step. Photos aren&apos;t kept; you&apos;ll re-take any.
               </p>
             </div>
@@ -2258,14 +2483,14 @@ export default function MeasureIntakeForm() {
               <button
                 type="button"
                 onClick={applyPendingDraft}
-                className="rounded-full bg-primary px-4 py-2 text-xs font-bold uppercase tracking-widest text-on-primary"
+                className="rounded-full bg-primary px-4 py-2 text-sm font-bold uppercase tracking-widest text-on-primary"
               >
                 Resume
               </button>
               <button
                 type="button"
                 onClick={discardPendingDraft}
-                className="rounded-full border border-outline-variant/40 px-4 py-2 text-xs font-bold uppercase tracking-widest text-on-surface"
+                className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-bold uppercase tracking-widest text-on-surface"
               >
                 Start fresh
               </button>
@@ -2273,7 +2498,7 @@ export default function MeasureIntakeForm() {
           </div>
         )}
 
-        <ol className="mb-10 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
+        <ol className="mb-10 flex flex-wrap gap-2 text-sm font-semibold uppercase tracking-wider text-on-surface-variant">
           {([
             { key: "project", label: "Your details" },
             { key: "rooms", label: "Rooms" },
@@ -2303,7 +2528,7 @@ export default function MeasureIntakeForm() {
                   }`}
                 >
                   <span
-                    className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${
+                    className={`flex h-6 w-6 items-center justify-center rounded-full text-sm font-bold ${
                       active
                         ? "bg-on-primary/20 text-on-primary"
                         : done
@@ -2335,7 +2560,7 @@ export default function MeasureIntakeForm() {
             <h2 className="font-headline text-2xl text-on-surface">Project details</h2>
             <div className="grid gap-6 md:grid-cols-2">
               <div>
-                <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                <label className="font-label mb-2 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                   Your name *
                 </label>
                 <input
@@ -2344,11 +2569,11 @@ export default function MeasureIntakeForm() {
                   className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                 />
                 {issueFor("name") && (
-                  <p data-error-anchor className="mt-1 text-xs text-error">{issueFor("name")}</p>
+                  <p data-error-anchor className="mt-1 text-sm text-error">{issueFor("name")}</p>
                 )}
               </div>
               <div>
-                <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                <label className="font-label mb-2 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                   Email *
                 </label>
                 <input
@@ -2358,11 +2583,11 @@ export default function MeasureIntakeForm() {
                   className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                 />
                 {issueFor("email") && (
-                  <p data-error-anchor className="mt-1 text-xs text-error">{issueFor("email")}</p>
+                  <p data-error-anchor className="mt-1 text-sm text-error">{issueFor("email")}</p>
                 )}
               </div>
               <div className="md:col-span-2">
-                <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                <label className="font-label mb-2 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                   Project name *
                 </label>
                 <input
@@ -2372,11 +2597,11 @@ export default function MeasureIntakeForm() {
                   className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                 />
                 {issueFor("project") && (
-                  <p data-error-anchor className="mt-1 text-xs text-error">{issueFor("project")}</p>
+                  <p data-error-anchor className="mt-1 text-sm text-error">{issueFor("project")}</p>
                 )}
               </div>
               <div>
-                <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                <label className="font-label mb-2 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                   Ceiling height throughout (m)
                 </label>
                 <input
@@ -2386,14 +2611,14 @@ export default function MeasureIntakeForm() {
                   placeholder="e.g. 2.40"
                   className="w-full max-w-xs rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                 />
-                <p className="mt-1 text-[11px] text-on-surface-variant">
+                <p className="mt-1 text-sm text-on-surface-variant">
                   Optional. Most homes are the same throughout — enter it once
                   and we&apos;ll pre-fill every room. You can change any room
                   individually under Add detail.
                 </p>
               </div>
               <div>
-                <span className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                <span className="font-label mb-2 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                   Display units {unitLocked && <span className="ml-1 text-primary">· locked</span>}
                 </span>
                 <div className="flex gap-2">
@@ -2402,7 +2627,7 @@ export default function MeasureIntakeForm() {
                     onClick={() => !unitLocked && setUnit("metric")}
                     disabled={unitLocked}
                     aria-disabled={unitLocked}
-                    className={`rounded-lg px-4 py-2 text-xs font-semibold uppercase transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    className={`rounded-lg px-4 py-2 text-sm font-semibold uppercase transition disabled:cursor-not-allowed disabled:opacity-60 ${
                       unit === "metric"
                         ? "bg-primary text-on-primary"
                         : "bg-surface-container-high text-on-surface"
@@ -2415,7 +2640,7 @@ export default function MeasureIntakeForm() {
                     onClick={() => !unitLocked && setUnit("imperial")}
                     disabled={unitLocked}
                     aria-disabled={unitLocked}
-                    className={`rounded-lg px-4 py-2 text-xs font-semibold uppercase transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    className={`rounded-lg px-4 py-2 text-sm font-semibold uppercase transition disabled:cursor-not-allowed disabled:opacity-60 ${
                       unit === "imperial"
                         ? "bg-primary text-on-primary"
                         : "bg-surface-container-high text-on-surface"
@@ -2424,7 +2649,7 @@ export default function MeasureIntakeForm() {
                     Imperial primary
                   </button>
                 </div>
-                <p className="mt-2 text-xs text-on-surface-variant">
+                <p className="mt-2 text-sm text-on-surface-variant">
                   {unitLocked
                     ? "Units are locked for this project to prevent metric/imperial mix-ups mid-survey."
                     : "Pick once — units lock when you continue. Entries are stored in metres; the review step shows both."}
@@ -2432,19 +2657,19 @@ export default function MeasureIntakeForm() {
               </div>
               {SCAN_ENABLED && (
               <div>
-                <span className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                <span className="font-label mb-2 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                   Device capability
                 </span>
                 {arSupport === "unknown" && (
-                  <p className="text-xs text-on-surface-variant">Checking AR capability…</p>
+                  <p className="text-sm text-on-surface-variant">Checking AR capability…</p>
                 )}
                 {arSupport === "yes" && (
-                  <p className="rounded-md bg-primary/10 px-3 py-2 text-xs text-primary">
+                  <p className="rounded-md bg-primary/10 px-3 py-2 text-sm text-primary">
                     AR scan available — you&apos;ll get the option to LiDAR-scan each room.
                   </p>
                 )}
                 {arSupport === "no" && (
-                  <p className="rounded-md bg-surface-container-high px-3 py-2 text-xs text-on-surface-variant">
+                  <p className="rounded-md bg-surface-container-high px-3 py-2 text-sm text-on-surface-variant">
                     Manual / corner-tap mode only{arReason ? ` — ${arReason}` : "."} You&apos;ll still get accurate dimensions from photo taps.
                   </p>
                 )}
@@ -2492,7 +2717,7 @@ export default function MeasureIntakeForm() {
                       <li key={n} className="text-sm text-on-surface">
                         {s.message}
                         {s.where && (
-                          <span className="block text-xs text-on-surface-variant">
+                          <span className="block text-sm text-on-surface-variant">
                             {s.where}
                           </span>
                         )}
@@ -2517,7 +2742,7 @@ export default function MeasureIntakeForm() {
                 <button
                   type="button"
                   onClick={() => setScanApplied(null)}
-                  className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant hover:text-on-surface"
+                  className="shrink-0 text-sm font-bold uppercase tracking-widest text-on-surface-variant hover:text-on-surface"
                 >
                   Dismiss
                 </button>
@@ -2534,7 +2759,7 @@ export default function MeasureIntakeForm() {
                 <h2 className="font-headline text-lg text-on-surface">
                   Scan the whole property
                 </h2>
-                <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">
+                <p className="mt-1 text-sm leading-relaxed text-on-surface-variant">
                   Your phone has a LiDAR sensor. Walk through each room in turn
                   and it measures the walls, doors and windows for you — then
                   works out how the rooms fit together, so there&apos;s no floor
@@ -2544,7 +2769,7 @@ export default function MeasureIntakeForm() {
                   type="button"
                   onClick={() => void startHouseScan()}
                   disabled={houseScanning}
-                  className="mt-3 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-xs font-bold uppercase tracking-widest text-on-primary disabled:opacity-60"
+                  className="mt-3 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-bold uppercase tracking-widest text-on-primary disabled:opacity-60"
                 >
                   <span
                     className="material-symbols-outlined"
@@ -2556,7 +2781,7 @@ export default function MeasureIntakeForm() {
                   {houseScanning ? "Scanning…" : "Start property scan"}
                 </button>
                 {houseScanError && (
-                  <p className="mt-3 rounded-md bg-error/10 px-3 py-2 text-xs text-error">
+                  <p className="mt-3 rounded-md bg-error/10 px-3 py-2 text-sm text-error">
                     {houseScanError}
                   </p>
                 )}
@@ -2577,14 +2802,14 @@ export default function MeasureIntakeForm() {
                 <h2 className="font-headline text-lg text-on-surface">
                   Add your first room
                 </h2>
-                <p className="mx-auto mt-1 max-w-md text-xs text-on-surface-variant">
+                <p className="mx-auto mt-1 max-w-md text-sm text-on-surface-variant">
                   Start with whichever room you&apos;re standing in. You can add
                   the rest as you go.
                 </p>
                 <button
                   type="button"
                   onClick={addRoom}
-                  className="mt-4 rounded-full bg-primary px-6 py-2.5 text-xs font-bold uppercase tracking-widest text-on-primary"
+                  className="mt-4 rounded-full bg-primary px-6 py-2.5 text-sm font-bold uppercase tracking-widest text-on-primary"
                 >
                   + Add a room
                 </button>
@@ -2595,7 +2820,7 @@ export default function MeasureIntakeForm() {
             <div className="rounded-xl border-2 border-primary/40 bg-inverse-surface p-6 text-on-primary shadow-lg md:p-8">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="font-label text-[10px] font-bold uppercase tracking-[0.25em] text-primary">
+                  <p className="font-label text-sm font-bold uppercase tracking-[0.25em] text-primary">
                     Auto-scan
                   </p>
                   <h2 className="font-headline mt-1 text-xl text-[#f7f5ef] md:text-2xl">
@@ -2631,10 +2856,10 @@ export default function MeasureIntakeForm() {
               className="scroll-mt-4 rounded-xl border border-outline-variant/30 bg-surface-container-lowest p-4"
             >
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <p className="font-label text-[11px] font-bold uppercase tracking-widest text-primary">
+                <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">
                   Room {Math.min(activeRoomIndex + 1, rooms.length)} of {rooms.length}
                 </p>
-                <p className="text-[11px] text-on-surface-variant">
+                <p className="text-sm text-on-surface-variant">
                   {rooms[activeRoomIndex]?.name?.trim() || "Unnamed room"}
                 </p>
               </div>
@@ -2670,7 +2895,7 @@ export default function MeasureIntakeForm() {
                     onClick={() => setActiveRoomIndex((i) => Math.max(0, i - 1))}
                     disabled={activeRoomIndex === 0}
                     aria-label="Previous room"
-                    className="rounded-full border border-outline-variant/40 px-3 py-1.5 text-[11px] font-bold text-on-surface-variant disabled:opacity-40"
+                    className="rounded-full border border-outline-variant/40 px-3 py-1.5 text-sm font-bold text-on-surface-variant disabled:opacity-40"
                   >
                     ←
                   </button>
@@ -2698,7 +2923,7 @@ export default function MeasureIntakeForm() {
                     }
                     disabled={activeRoomIndex >= rooms.length - 1}
                     aria-label="Next room"
-                    className="rounded-full border border-outline-variant/40 px-3 py-1.5 text-[11px] font-bold text-on-surface-variant disabled:opacity-40"
+                    className="rounded-full border border-outline-variant/40 px-3 py-1.5 text-sm font-bold text-on-surface-variant disabled:opacity-40"
                   >
                     →
                   </button>
@@ -2756,7 +2981,7 @@ export default function MeasureIntakeForm() {
                     {/* Multi-storey selector — small inline dropdown so
                         the customer can flag which storey this room is
                         on. Stored as `placement.floor` (integer). */}
-                    <label className="inline-flex items-center gap-2 text-[11px] text-on-surface-variant">
+                    <label className="inline-flex items-center gap-2 text-sm text-on-surface-variant">
                       <span className="uppercase tracking-widest">On floor</span>
                       <select
                         value={placements[room.id]?.floor ?? 0}
@@ -2786,7 +3011,7 @@ export default function MeasureIntakeForm() {
                     <button
                       type="button"
                       onClick={() => setScanRoomId(room.id)}
-                      className="rounded-lg border border-primary bg-primary/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
+                      className="rounded-lg border border-primary bg-primary/10 px-4 py-2 text-sm font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
                     >
                       Auto-Scan this room
                     </button>
@@ -2799,7 +3024,7 @@ export default function MeasureIntakeForm() {
                       onClick={() => moveRoom(room.id, -1)}
                       disabled={ri === 0}
                       aria-label="Move room up"
-                      className="rounded-lg border border-outline-variant/40 px-2.5 py-1.5 text-xs text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-lg border border-outline-variant/40 px-2.5 py-1.5 text-sm text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       ↑
                     </button>
@@ -2808,14 +3033,14 @@ export default function MeasureIntakeForm() {
                       onClick={() => moveRoom(room.id, 1)}
                       disabled={ri === rooms.length - 1}
                       aria-label="Move room down"
-                      className="rounded-lg border border-outline-variant/40 px-2.5 py-1.5 text-xs text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-lg border border-outline-variant/40 px-2.5 py-1.5 text-sm text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       ↓
                     </button>
                     <button
                       type="button"
                       onClick={() => duplicateRoom(room.id)}
-                      className="rounded-lg border border-outline-variant/40 px-2.5 py-1.5 text-xs font-bold uppercase tracking-widest text-on-surface transition-colors hover:border-primary hover:text-primary"
+                      className="rounded-lg border border-outline-variant/40 px-2.5 py-1.5 text-sm font-bold uppercase tracking-widest text-on-surface transition-colors hover:border-primary hover:text-primary"
                     >
                       Duplicate
                     </button>
@@ -2823,7 +3048,7 @@ export default function MeasureIntakeForm() {
                       <button
                         type="button"
                         onClick={() => removeRoom(room.id)}
-                        className="text-xs font-bold uppercase tracking-widest text-error hover:underline"
+                        className="text-sm font-bold uppercase tracking-widest text-error hover:underline"
                       >
                         Remove room
                       </button>
@@ -2832,7 +3057,7 @@ export default function MeasureIntakeForm() {
                 </div>
 
                 <div className="mb-6">
-                  <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  <label className="font-label mb-2 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                     Room name *
                   </label>
                   <input
@@ -2844,7 +3069,7 @@ export default function MeasureIntakeForm() {
                     className="w-full max-w-md rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                   />
                   {issueFor(`room-${ri}-name`) && (
-                    <p data-error-anchor className="mt-1 text-xs text-error">
+                    <p data-error-anchor className="mt-1 text-sm text-error">
                       {issueFor(`room-${ri}-name`)}
                     </p>
                   )}
@@ -2855,7 +3080,7 @@ export default function MeasureIntakeForm() {
                     the notch dimensions when the customer flips to
                     L-shape. Custom polygon is a power-user option. */}
                 <div className="mb-6">
-                  <h3 className="font-label mb-2 text-xs font-bold uppercase tracking-widest text-primary">
+                  <h3 className="font-label mb-2 text-sm font-bold uppercase tracking-widest text-primary">
                     Room shape
                   </h3>
                   <div className="flex flex-wrap gap-2">
@@ -2864,7 +3089,7 @@ export default function MeasureIntakeForm() {
                         key={s}
                         type="button"
                         onClick={() => setShape(room.id, s)}
-                        className={`rounded-full px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest transition ${
+                        className={`rounded-full px-4 py-1.5 text-sm font-bold uppercase tracking-widest transition ${
                           (room.shape ?? "rectangle") === s
                             ? "bg-primary text-on-primary"
                             : "bg-surface-container-high text-on-surface"
@@ -2896,7 +3121,7 @@ export default function MeasureIntakeForm() {
                       }
                       className="mt-0.5 h-4 w-4 accent-[#b89650]"
                     />
-                    <span className="text-xs leading-relaxed text-on-surface-variant">
+                    <span className="text-sm leading-relaxed text-on-surface-variant">
                       <span className="font-semibold text-on-surface">
                         All corners are square (90°)
                       </span>
@@ -2934,7 +3159,7 @@ export default function MeasureIntakeForm() {
                     });
                     if (!off.length) return null;
                     return (
-                      <p className="mt-2 rounded-md bg-amber-100/60 px-3 py-2 text-xs leading-relaxed text-amber-900">
+                      <p className="mt-2 rounded-md bg-amber-100/60 px-3 py-2 text-sm leading-relaxed text-amber-900">
                         You&apos;ve said the corners are square, but walls{" "}
                         {off.map(([, , label]) => label).join(" and ")} don&apos;t
                         match. In a true rectangle opposite walls are equal —
@@ -2955,7 +3180,7 @@ export default function MeasureIntakeForm() {
                       Choosing L-shape now simply gives six walls to
                       measure, which is what the room has. */}
                   {room.shape === "l-shape" && (
-                    <p className="mt-3 text-[11px] leading-relaxed text-on-surface-variant">
+                    <p className="mt-3 text-sm leading-relaxed text-on-surface-variant">
                       Six walls to measure. Work round the room in order and
                       the lengths will come back to the start — the wall
                       lengths below are numbered to match.
@@ -2971,14 +3196,14 @@ export default function MeasureIntakeForm() {
 
                 <div className="mb-8">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="font-label text-xs font-bold uppercase tracking-widest text-primary">
+                    <h3 className="font-label text-sm font-bold uppercase tracking-widest text-primary">
                       Wall lengths
                     </h3>
                     {wallsEditorOpen(room, ri) && (
                       <button
                         type="button"
                         onClick={() => addWall(room.id)}
-                        className="text-xs font-bold uppercase tracking-widest text-primary hover:underline"
+                        className="text-sm font-bold uppercase tracking-widest text-primary hover:underline"
                       >
                         + Add wall segment
                       </button>
@@ -3023,7 +3248,7 @@ export default function MeasureIntakeForm() {
                             [room.id]: true,
                           }))
                         }
-                        className="mt-2 text-xs font-bold uppercase tracking-widest text-primary hover:underline"
+                        className="mt-2 text-sm font-bold uppercase tracking-widest text-primary hover:underline"
                       >
                         Check or edit the measurements
                       </button>
@@ -3034,13 +3259,13 @@ export default function MeasureIntakeForm() {
                   {isRectangle(room) &&
                     (!room.measuredByScan || measurementsOpen[room.id]) && (
                     <div className="mb-3 rounded-lg bg-surface-container-lowest p-4">
-                      <p className="mb-3 text-xs text-on-surface-variant">
+                      <p className="mb-3 text-sm text-on-surface-variant">
                         Just the two dimensions — we&apos;ll apply them to the
                         opposite walls for you.
                       </p>
                       <div className="flex flex-col gap-3 sm:flex-row">
                         <div className="flex-1">
-                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                          <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                             Width (m) *
                           </label>
                           <input
@@ -3057,13 +3282,13 @@ export default function MeasureIntakeForm() {
                               a rectangle. The customer was sent to the
                               right room and shown no reason. */}
                           {issueFor(`room-${ri}-wall-0`) && (
-                            <p data-error-anchor className="mt-1 text-xs text-error">
+                            <p data-error-anchor className="mt-1 text-sm text-error">
                               {issueFor(`room-${ri}-wall-0`)}
                             </p>
                           )}
                         </div>
                         <div className="flex-1">
-                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                          <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                             Length (m) *
                           </label>
                           <input
@@ -3076,7 +3301,7 @@ export default function MeasureIntakeForm() {
                             className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                           />
                           {issueFor(`room-${ri}-wall-1`) && (
-                            <p data-error-anchor className="mt-1 text-xs text-error">
+                            <p data-error-anchor className="mt-1 text-sm text-error">
                               {issueFor(`room-${ri}-wall-1`)}
                             </p>
                           )}
@@ -3090,7 +3315,7 @@ export default function MeasureIntakeForm() {
                             [room.id]: !wallsEditorOpen(room, ri),
                           }))
                         }
-                        className="mt-3 text-[11px] font-bold uppercase tracking-widest text-primary hover:underline"
+                        className="mt-3 text-sm font-bold uppercase tracking-widest text-primary hover:underline"
                       >
                         {wallsEditorOpen(room, ri)
                           ? "Hide individual walls"
@@ -3109,7 +3334,7 @@ export default function MeasureIntakeForm() {
                         className="flex flex-col gap-2 rounded-lg bg-surface-container-lowest p-4 sm:flex-row sm:items-end"
                       >
                         <div className="min-w-0 flex-1">
-                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                          <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                             Label
                           </label>
                           <input
@@ -3127,7 +3352,7 @@ export default function MeasureIntakeForm() {
                           />
                         </div>
                         <div className="w-full sm:w-40">
-                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                          <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                             Length (m)
                           </label>
                           <input
@@ -3144,8 +3369,9 @@ export default function MeasureIntakeForm() {
                             placeholder="0.00"
                             className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                           />
+                          <LengthHint value={w.lengthM} kind="wall" />
                           {issueFor(`room-${ri}-wall-${wi}`) && (
-                            <p data-error-anchor className="mt-1 text-xs text-error">
+                            <p data-error-anchor className="mt-1 text-sm text-error">
                               {issueFor(`room-${ri}-wall-${wi}`)}
                             </p>
                           )}
@@ -3198,7 +3424,7 @@ export default function MeasureIntakeForm() {
                                 <button
                                   type="button"
                                   onClick={() => removePhotoFromWall(room.id, w.id, p.id)}
-                                  className="absolute right-0.5 top-0.5 rounded bg-inverse-surface/80 px-1 text-[10px] text-surface"
+                                  className="absolute right-0.5 top-0.5 rounded bg-inverse-surface/80 px-1 text-sm text-surface"
                                   aria-label="Remove photo"
                                 >
                                   ✕
@@ -3213,10 +3439,10 @@ export default function MeasureIntakeForm() {
                 </div>
 
                 <div>
-                  <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  <label className="font-label mb-2 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                     Photos * — corners, openings, overall context
                   </label>
-                  <p className="mb-3 text-xs text-on-surface-variant">
+                  <p className="mb-3 text-sm text-on-surface-variant">
                     Required: at least one reference photo per room so the architect can audit the measurements against what's actually there (radiators, columns, molding, etc.).
                   </p>
                   {/* A real <input type="file"> the customer taps directly,
@@ -3226,7 +3452,7 @@ export default function MeasureIntakeForm() {
                       nothing ever arrives. Tapping the input itself always
                       works. Room photos are required, so this path has to
                       be dependable. */}
-                  <label className="mb-4 inline-flex cursor-pointer items-center gap-2 rounded-full border border-primary/60 px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary">
+                  <label className="mb-4 inline-flex cursor-pointer items-center gap-2 rounded-full border border-primary/60 px-4 py-2 text-sm font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary">
                     <span className="material-symbols-outlined" style={{ fontSize: "16px" }} aria-hidden>add_a_photo</span>
                     Take photo or upload
                     <input
@@ -3244,7 +3470,7 @@ export default function MeasureIntakeForm() {
                     />
                   </label>
                   {issueFor(`room-${ri}-photos`) && (
-                    <p data-error-anchor className="mb-3 text-xs text-error">
+                    <p data-error-anchor className="mb-3 text-sm text-error">
                       {issueFor(`room-${ri}-photos`)}
                     </p>
                   )}
@@ -3262,21 +3488,21 @@ export default function MeasureIntakeForm() {
                         <button
                           type="button"
                           onClick={() => removePhoto(room.id, p.id)}
-                          className="absolute right-1 top-1 rounded bg-inverse-surface/80 px-1 text-[10px] text-surface"
+                          className="absolute right-1 top-1 rounded bg-inverse-surface/80 px-1 text-sm text-surface"
                         >
                           ✕
                         </button>
-                        <p className="truncate p-1 text-[9px] text-on-surface-variant">
+                        <p className="truncate p-1 text-sm text-on-surface-variant">
                           {p.name}
                         </p>
                       </div>
                     ))}
                   </div>
                   <div className="mt-4 border-t border-outline-variant/20 pt-4">
-                    <label className="font-label mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    <label className="font-label mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                       Voice memo (optional)
                     </label>
-                    <p className="mb-1 text-xs text-on-surface-variant">
+                    <p className="mb-1 text-sm text-on-surface-variant">
                       Faster than typing. Note anything tricky — radiators,
                       chimney breasts, an awkward corner — and the architect
                       hears it in your own words.
@@ -3296,12 +3522,12 @@ export default function MeasureIntakeForm() {
                     aria-expanded={isDetailOpen(room.id, ri)}
                     className="flex w-full items-center justify-between gap-3 rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-left transition-colors hover:border-primary/60"
                   >
-                    <span className="font-label text-xs font-bold uppercase tracking-widest text-primary">
+                    <span className="font-label text-sm font-bold uppercase tracking-widest text-primary">
                       Doors &amp; windows
                     </span>
                     <span className="flex items-center gap-2">
                       {detailSummary(room) ? (
-                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-sm text-primary">
                           {detailSummary(room)}
                         </span>
                       ) : (
@@ -3312,12 +3538,12 @@ export default function MeasureIntakeForm() {
                              the place doors and windows live — people
                              finished a room without ever opening it and
                              submitted rooms with no openings at all. */
-                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-sm font-semibold text-primary">
                             None added yet
                           </span>
                         )
                       )}
-                      <span className="text-[11px] text-on-surface-variant">
+                      <span className="text-sm text-on-surface-variant">
                         {isDetailOpen(room.id, ri) ? "Hide" : "Ceiling, notes too"}
                       </span>
                       <span aria-hidden className="text-on-surface-variant">
@@ -3329,10 +3555,11 @@ export default function MeasureIntakeForm() {
                 {isDetailOpen(room.id, ri) && (
                   <>
                 <div className="mb-8">
-                  <label className="font-label mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  <label className="font-label mb-2 flex flex-wrap items-center gap-2 text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                     Ceiling height (m) *
-                    {usesDefaultCeiling(room) && (
-                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-primary">
+                    <LengthHint value={room.ceilingHeightM} kind="ceiling" />
+                  {usesDefaultCeiling(room) && (
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-sm font-bold uppercase tracking-widest text-primary">
                         Same as property
                       </span>
                     )}
@@ -3347,13 +3574,13 @@ export default function MeasureIntakeForm() {
                     className="w-full max-w-xs rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                   />
                   {usesDefaultCeiling(room) && (
-                    <p className="mt-1 text-[11px] text-on-surface-variant">
+                    <p className="mt-1 text-sm text-on-surface-variant">
                       Inherited from the property default — edit here if this
                       room differs.
                     </p>
                   )}
                   {issueFor(`room-${ri}-ceiling`) && (
-                    <p data-error-anchor className="mt-1 text-xs text-error">
+                    <p data-error-anchor className="mt-1 text-sm text-error">
                       {issueFor(`room-${ri}-ceiling`)}
                     </p>
                   )}
@@ -3362,19 +3589,19 @@ export default function MeasureIntakeForm() {
                 <div className="mb-8 grid gap-8 md:grid-cols-2">
                   <div>
                     <div className="mb-3 flex items-center justify-between">
-                      <h3 className="font-label text-xs font-bold uppercase tracking-widest text-primary">
+                      <h3 className="font-label text-sm font-bold uppercase tracking-widest text-primary">
                         Doors
                       </h3>
                       <button
                         type="button"
                         onClick={() => addOpening(room.id, "doors")}
-                        className="text-xs font-bold uppercase tracking-widest text-primary hover:underline"
+                        className="text-sm font-bold uppercase tracking-widest text-primary hover:underline"
                       >
                         + Add door
                       </button>
                     </div>
                     {room.doors.length === 0 && (
-                      <p className="text-xs text-on-surface-variant">
+                      <p className="text-sm text-on-surface-variant">
                         Optional — add each door opening width.
                       </p>
                     )}
@@ -3385,7 +3612,7 @@ export default function MeasureIntakeForm() {
                           className="flex flex-col gap-2 rounded-lg bg-surface-container-lowest p-4 sm:flex-row"
                         >
                           <div className="flex-1">
-                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                               Width (m)
                             </label>
                             <input
@@ -3401,14 +3628,15 @@ export default function MeasureIntakeForm() {
                               }}
                               className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             />
+                            <LengthHint value={d.widthM} kind="opening" />
                             {issueFor(`room-${ri}-door-${di}`) && (
-                              <p data-error-anchor className="mt-1 text-xs text-error">
+                              <p data-error-anchor className="mt-1 text-sm text-error">
                                 {issueFor(`room-${ri}-door-${di}`)}
                               </p>
                             )}
                           </div>
                           <div className="flex-1">
-                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                               On wall
                             </label>
                             <select
@@ -3478,7 +3706,7 @@ export default function MeasureIntakeForm() {
                             />
                           </div>
                           <div className="flex-[2]">
-                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                               Note (optional)
                             </label>
                             <input
@@ -3511,19 +3739,19 @@ export default function MeasureIntakeForm() {
 
                   <div>
                     <div className="mb-3 flex items-center justify-between">
-                      <h3 className="font-label text-xs font-bold uppercase tracking-widest text-primary">
+                      <h3 className="font-label text-sm font-bold uppercase tracking-widest text-primary">
                         Windows
                       </h3>
                       <button
                         type="button"
                         onClick={() => addOpening(room.id, "windows")}
-                        className="text-xs font-bold uppercase tracking-widest text-primary hover:underline"
+                        className="text-sm font-bold uppercase tracking-widest text-primary hover:underline"
                       >
                         + Add window
                       </button>
                     </div>
                     {room.windows.length === 0 && (
-                      <p className="text-xs text-on-surface-variant">
+                      <p className="text-sm text-on-surface-variant">
                         Optional — rough opening widths.
                       </p>
                     )}
@@ -3534,7 +3762,7 @@ export default function MeasureIntakeForm() {
                           className="flex flex-col gap-2 rounded-lg bg-surface-container-lowest p-4 sm:flex-row"
                         >
                           <div className="flex-1">
-                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                               Width (m)
                             </label>
                             <input
@@ -3550,14 +3778,15 @@ export default function MeasureIntakeForm() {
                               }}
                               className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             />
+                            <LengthHint value={w.widthM} kind="opening" />
                             {issueFor(`room-${ri}-window-${wi}`) && (
-                              <p data-error-anchor className="mt-1 text-xs text-error">
+                              <p data-error-anchor className="mt-1 text-sm text-error">
                                 {issueFor(`room-${ri}-window-${wi}`)}
                               </p>
                             )}
                           </div>
                           <div className="flex-1">
-                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                               On wall
                             </label>
                             <select
@@ -3627,7 +3856,7 @@ export default function MeasureIntakeForm() {
                             />
                           </div>
                           <div className="flex-[2]">
-                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                               Note (optional)
                             </label>
                             <input
@@ -3668,19 +3897,19 @@ export default function MeasureIntakeForm() {
                     design, and it was missing from every plan. */}
                 <div className="mb-6">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <label className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    <label className="font-label text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                       Stairs in this room
                     </label>
                     <button
                       type="button"
                       onClick={() => addStairs(room.id)}
-                      className="rounded-full border border-primary px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-primary"
+                      className="rounded-full border border-primary px-3 py-1.5 text-sm font-bold uppercase tracking-widest text-primary"
                     >
                       + Add stairs
                     </button>
                   </div>
                   {(room.stairs ?? []).length === 0 && (
-                    <p className="text-xs text-on-surface-variant">
+                    <p className="text-sm text-on-surface-variant">
                       Only if a flight starts, ends or passes through this room.
                     </p>
                   )}
@@ -3692,7 +3921,7 @@ export default function MeasureIntakeForm() {
                       >
                         <div className="flex flex-wrap gap-3">
                           <div className="min-w-[7rem] flex-1">
-                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                               Width (m) *
                             </label>
                             <input
@@ -3706,7 +3935,7 @@ export default function MeasureIntakeForm() {
                             />
                           </div>
                           <div className="min-w-[7rem] flex-1">
-                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                               Going
                             </label>
                             <select
@@ -3723,7 +3952,7 @@ export default function MeasureIntakeForm() {
                             </select>
                           </div>
                           <div className="min-w-[7rem] flex-1">
-                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                               Treads
                             </label>
                             <input
@@ -3737,7 +3966,7 @@ export default function MeasureIntakeForm() {
                             />
                           </div>
                           <div className="min-w-[8rem] flex-1">
-                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                               Runs along
                             </label>
                             <select
@@ -3810,7 +4039,7 @@ export default function MeasureIntakeForm() {
                         </div>
 
                         <div className="mt-3">
-                          <label className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                          <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                             Anything unusual (optional)
                           </label>
                           <input
@@ -3828,7 +4057,7 @@ export default function MeasureIntakeForm() {
                 </div>
 
                 <div className="mb-6">
-                  <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  <label className="font-label mb-2 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                     Irregular room — describe bays, angles, L-shape
                   </label>
                   <textarea
@@ -3843,7 +4072,7 @@ export default function MeasureIntakeForm() {
                 </div>
 
                 <div className="mb-6">
-                  <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                  <label className="font-label mb-2 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                     Notes for this room
                   </label>
                   <textarea
@@ -3864,7 +4093,7 @@ export default function MeasureIntakeForm() {
               <button
                 type="button"
                 onClick={() => setGuidedMode(true)}
-                className="w-full rounded-full border border-outline-variant/40 px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant"
+                className="w-full rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-bold uppercase tracking-widest text-on-surface-variant"
               >
                 Ask me one question at a time
               </button>
@@ -3876,7 +4105,7 @@ export default function MeasureIntakeForm() {
                 type="button"
                 onClick={() => setActiveRoomIndex((i) => Math.max(0, i - 1))}
                 disabled={activeRoomIndex === 0}
-                className="rounded-full border border-outline-variant/40 px-5 py-2.5 text-xs font-bold uppercase tracking-widest text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-full border border-outline-variant/40 px-5 py-2.5 text-sm font-bold uppercase tracking-widest text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
               >
                 ← Previous room
               </button>
@@ -3886,7 +4115,7 @@ export default function MeasureIntakeForm() {
                   setActiveRoomIndex((i) => Math.min(rooms.length - 1, i + 1))
                 }
                 disabled={activeRoomIndex >= rooms.length - 1}
-                className="rounded-full border border-outline-variant/40 px-5 py-2.5 text-xs font-bold uppercase tracking-widest text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-full border border-outline-variant/40 px-5 py-2.5 text-sm font-bold uppercase tracking-widest text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Next room →
               </button>
@@ -3927,7 +4156,7 @@ export default function MeasureIntakeForm() {
               </header>
 
               {rooms.length < 2 && (
-                <p className="rounded-lg bg-surface p-3 text-xs text-on-surface-variant">
+                <p className="rounded-lg bg-surface p-3 text-sm text-on-surface-variant">
                   Add a second room above, then come back here to link them.
                 </p>
               )}
@@ -3935,7 +4164,7 @@ export default function MeasureIntakeForm() {
               {rooms.length >= 2 && (
                 <div className="space-y-3">
                   {connections.length === 0 && (
-                    <p className="text-xs text-on-surface-variant">
+                    <p className="text-sm text-on-surface-variant">
                       No connections yet — tap{" "}
                       <span className="font-semibold">Add connection</span> below.
                     </p>
@@ -3955,7 +4184,7 @@ export default function MeasureIntakeForm() {
                         className="grid grid-cols-1 gap-3 rounded-lg border border-outline bg-surface p-4 md:grid-cols-12"
                       >
                         <label className="md:col-span-3">
-                          <span className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                          <span className="block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                             Room A
                           </span>
                           <select
@@ -3975,7 +4204,7 @@ export default function MeasureIntakeForm() {
                         </label>
 
                         <label className="md:col-span-3">
-                          <span className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                          <span className="block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                             Connection
                           </span>
                           <select
@@ -4021,7 +4250,7 @@ export default function MeasureIntakeForm() {
 
                         {c.kind !== "external" && (
                           <label className="md:col-span-3">
-                            <span className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            <span className="block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                               Room B
                             </span>
                             <select
@@ -4048,7 +4277,7 @@ export default function MeasureIntakeForm() {
 
                         {(c.kind === "door" || c.kind === "opening") && (
                           <label className="md:col-span-2">
-                            <span className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                            <span className="block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                               Width (m)
                             </span>
                             <input
@@ -4069,14 +4298,14 @@ export default function MeasureIntakeForm() {
                             type="button"
                             onClick={() => removeConnection(c.id)}
                             aria-label={`Remove connection ${idx + 1}`}
-                            className="rounded-lg border border-outline px-3 py-2 text-xs font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:bg-surface-container-low"
+                            className="rounded-lg border border-outline px-3 py-2 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:bg-surface-container-low"
                           >
                             ✕
                           </button>
                         </div>
 
                         <label className="md:col-span-12">
-                          <span className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                          <span className="block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                             Notes (optional)
                           </span>
                           <input
@@ -4096,7 +4325,7 @@ export default function MeasureIntakeForm() {
                   <button
                     type="button"
                     onClick={addConnection}
-                    className="w-full rounded-xl border border-dashed border-outline py-3 text-xs font-bold uppercase tracking-widest text-primary transition-colors hover:bg-surface-container-low"
+                    className="w-full rounded-xl border border-dashed border-outline py-3 text-sm font-bold uppercase tracking-widest text-primary transition-colors hover:bg-surface-container-low"
                   >
                     + Add connection
                   </button>
@@ -4113,7 +4342,7 @@ export default function MeasureIntakeForm() {
               <button
                 type="button"
                 onClick={() => setStep("project")}
-                className="inline-flex items-center gap-2 rounded-full border-2 border-outline bg-surface-container-low px-5 py-2.5 text-xs font-bold uppercase tracking-widest text-on-surface shadow-md transition-all hover:bg-surface-container active:scale-[0.94]"
+                className="inline-flex items-center gap-2 rounded-full border-2 border-outline bg-surface-container-low px-5 py-2.5 text-sm font-bold uppercase tracking-widest text-on-surface shadow-md transition-all hover:bg-surface-container active:scale-[0.94]"
               >
                 <span
                   className="material-symbols-outlined"
@@ -4167,18 +4396,18 @@ export default function MeasureIntakeForm() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                    <p className="font-label text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                       {side === "front" && "Front (street side)"}
                       {side === "back" && "Back (garden side)"}
                       {side === "left" && "Left (looking at the front)"}
                       {side === "right" && "Right (looking at the front)"}
                     </p>
-                    <p className="mt-1 text-xs text-on-surface-variant">
+                    <p className="mt-1 text-sm text-on-surface-variant">
                       {exteriorPhotos[side].length} photo
                       {exteriorPhotos[side].length === 1 ? "" : "s"}
                     </p>
                   </div>
-                  <label className="cursor-pointer rounded-full border border-primary/60 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary">
+                  <label className="cursor-pointer rounded-full border border-primary/60 px-3.5 py-1.5 text-sm font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary">
                     + Add photo
                     <input
                       type="file"
@@ -4207,7 +4436,7 @@ export default function MeasureIntakeForm() {
                         <button
                           type="button"
                           onClick={() => removeExteriorPhoto(side, p.id)}
-                          className="absolute right-0.5 top-0.5 rounded bg-inverse-surface/80 px-1 text-[10px] text-surface"
+                          className="absolute right-0.5 top-0.5 rounded bg-inverse-surface/80 px-1 text-sm text-surface"
                           aria-label="Remove photo"
                         >
                           ✕
@@ -4222,14 +4451,14 @@ export default function MeasureIntakeForm() {
               <button
                 type="button"
                 onClick={() => setStep("rooms")}
-                className="rounded-full border-2 border-outline-variant/40 px-5 py-2 text-xs font-bold uppercase tracking-widest text-on-surface transition-colors hover:border-primary/60 hover:bg-surface-container-low"
+                className="rounded-full border-2 border-outline-variant/40 px-5 py-2 text-sm font-bold uppercase tracking-widest text-on-surface transition-colors hover:border-primary/60 hover:bg-surface-container-low"
               >
                 ← Back
               </button>
               <button
                 type="button"
                 onClick={() => setStep("proposal")}
-                className="rounded-full bg-primary px-7 py-2 text-xs font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 transition-all hover:bg-surface-tint active:scale-[0.97]"
+                className="rounded-full bg-primary px-7 py-2 text-sm font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 transition-all hover:bg-surface-tint active:scale-[0.97]"
               >
                 Proposal →
               </button>
@@ -4249,7 +4478,7 @@ export default function MeasureIntakeForm() {
               </p>
             </header>
             <div>
-              <label className="font-label mb-2 block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+              <label className="font-label mb-2 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                 Description
               </label>
               <textarea
@@ -4262,10 +4491,10 @@ export default function MeasureIntakeForm() {
             </div>
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <label className="font-label block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                <label className="font-label block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                   Sketches / inspiration
                 </label>
-                <label className="cursor-pointer rounded-full border border-primary/60 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary">
+                <label className="cursor-pointer rounded-full border border-primary/60 px-3.5 py-1.5 text-sm font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary">
                   + Add image
                   <input
                     type="file"
@@ -4290,7 +4519,7 @@ export default function MeasureIntakeForm() {
                       <button
                         type="button"
                         onClick={() => removeProposalSketch(p.id)}
-                        className="absolute right-0.5 top-0.5 rounded bg-inverse-surface/80 px-1 text-[10px] text-surface"
+                        className="absolute right-0.5 top-0.5 rounded bg-inverse-surface/80 px-1 text-sm text-surface"
                         aria-label="Remove sketch"
                       >
                         ✕
@@ -4304,14 +4533,14 @@ export default function MeasureIntakeForm() {
               <button
                 type="button"
                 onClick={() => setStep("exterior")}
-                className="rounded-full border-2 border-outline-variant/40 px-5 py-2 text-xs font-bold uppercase tracking-widest text-on-surface transition-colors hover:border-primary/60 hover:bg-surface-container-low"
+                className="rounded-full border-2 border-outline-variant/40 px-5 py-2 text-sm font-bold uppercase tracking-widest text-on-surface transition-colors hover:border-primary/60 hover:bg-surface-container-low"
               >
                 ← Back
               </button>
               <button
                 type="button"
                 onClick={() => setStep("plan")}
-                className="rounded-full bg-primary px-7 py-2 text-xs font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 transition-all hover:bg-surface-tint active:scale-[0.97]"
+                className="rounded-full bg-primary px-7 py-2 text-sm font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 transition-all hover:bg-surface-tint active:scale-[0.97]"
               >
                 Floor plan →
               </button>
@@ -4372,7 +4601,7 @@ export default function MeasureIntakeForm() {
                 </span>
               </button>
             </div>
-            <p className="text-xs text-on-surface-variant">
+            <p className="text-sm text-on-surface-variant">
               The floor plan is optional — an empty layout still submits,
               but the architect will have to infer the arrangement from
               your room connections.
@@ -4439,21 +4668,21 @@ export default function MeasureIntakeForm() {
                             className="flex items-center justify-between rounded-lg bg-surface-container-lowest p-4 editorial-shadow"
                           >
                             <div>
-                              <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                              <p className="text-sm font-bold uppercase tracking-wider text-on-surface-variant">
                                 {w.label}
                               </p>
                               <p className="font-headline text-2xl text-on-surface">
                                 {dual.primary}
                               </p>
-                              <p className="text-xs text-on-surface-variant">
+                              <p className="text-sm text-on-surface-variant">
                                 {dual.secondary}
                               </p>
                             </div>
                             <span
                               className={
                                 wallIssue
-                                  ? "text-[10px] font-bold text-error"
-                                  : "text-[10px] font-bold text-emerald-700"
+                                  ? "text-sm font-bold text-error"
+                                  : "text-sm font-bold text-emerald-700"
                               }
                               title={wallIssue ?? undefined}
                             >
@@ -4468,13 +4697,13 @@ export default function MeasureIntakeForm() {
                         return (
                           <div className="flex items-center justify-between rounded-lg bg-surface-container-lowest p-4 editorial-shadow">
                             <div>
-                              <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                              <p className="text-sm font-bold uppercase tracking-wider text-on-surface-variant">
                                 Ceiling height
                               </p>
                               <p className="font-headline text-2xl text-on-surface">
                                 {dual.primary}
                               </p>
-                              <p className="text-xs text-on-surface-variant">
+                              <p className="text-sm text-on-surface-variant">
                                 {dual.secondary}
                               </p>
                             </div>
@@ -4544,7 +4773,7 @@ export default function MeasureIntakeForm() {
                           (side) =>
                             exteriorPhotos[side].length > 0 ? (
                               <div key={side}>
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                                <p className="text-sm font-bold uppercase tracking-wider text-on-surface-variant">
                                   {side}
                                 </p>
                                 <div className="mt-2 flex flex-wrap gap-2">
@@ -4605,12 +4834,12 @@ export default function MeasureIntakeForm() {
                 {lastSubmissionId && (
                   <div className="mt-4 rounded-md bg-surface-container-lowest p-3 text-sm text-on-surface">
                     <p>
-                      <span className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+                      <span className="font-label text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                         Submission ID
                       </span>{" "}
                       <span className="font-mono text-base text-primary">{lastSubmissionId}</span>
                     </p>
-                    <p className="mt-1 text-xs text-on-surface-variant">
+                    <p className="mt-1 text-sm text-on-surface-variant">
                       Keep this — you can check progress any time at{" "}
                       <Link href="/status" className="text-primary underline">
                         Project status
@@ -4688,7 +4917,7 @@ export default function MeasureIntakeForm() {
                     </p>
                   </div>
                 )}
-                <p className="text-xs text-on-surface-variant">
+                <p className="text-sm text-on-surface-variant">
                   Photo binaries are not uploaded yet — the JSON backup includes
                   filenames only. Attach images manually if your project needs
                   them.
@@ -4698,6 +4927,47 @@ export default function MeasureIntakeForm() {
           </div>
         )}
       </main>
+
+      {/* Undo bar.
+          Pinned to the bottom rather than placed where the deleted item
+          used to be, because the thing that was there has gone and the
+          layout has already closed over the gap — a message anchored to
+          a vanished row jumps somewhere unpredictable.
+
+          aria-live polite so a screen reader announces the deletion and
+          the way back, rather than the row silently disappearing.
+
+          pb-[env(safe-area-inset-bottom)] keeps it clear of the home
+          indicator on a notched iPhone, where a bar flush to the bottom
+          edge is half-covered and hard to tap. */}
+      {undoAction && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed inset-x-0 bottom-0 z-50 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+        >
+          <div className="mx-auto flex max-w-lg flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#1c1c1a] px-5 py-3 text-[#f7f5ef] shadow-2xl">
+            <span className="text-base font-semibold">{undoAction.label}</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={takeUndo}
+                className="rounded-full bg-[#e7c177] px-5 py-2 text-base font-bold text-[#1c1c1a]"
+              >
+                Undo
+              </button>
+              <button
+                type="button"
+                onClick={settleUndo}
+                aria-label="Dismiss"
+                className="rounded-full border border-[#f7f5ef]/30 px-4 py-2 text-base"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

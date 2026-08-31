@@ -106,7 +106,7 @@ export default function TutorialOverlay() {
           <button
             type="button"
             onClick={() => dismiss(true)}
-            className="text-xs font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary"
+            className="text-sm font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary"
           >
             Skip
           </button>
@@ -137,7 +137,7 @@ export default function TutorialOverlay() {
               <button
                 type="button"
                 onClick={() => setSlide((s) => Math.max(0, s - 1))}
-                className="rounded-full border border-outline-variant/40 px-4 py-2 text-xs font-bold uppercase tracking-widest text-on-surface"
+                className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-bold uppercase tracking-widest text-on-surface"
               >
                 Back
               </button>
@@ -145,7 +145,7 @@ export default function TutorialOverlay() {
             <button
               type="button"
               onClick={() => (isLast ? dismiss(true) : setSlide((s) => s + 1))}
-              className="rounded-full bg-primary px-5 py-2 text-xs font-bold uppercase tracking-widest text-on-primary"
+              className="rounded-full bg-primary px-5 py-2 text-sm font-bold uppercase tracking-widest text-on-primary"
             >
               {isLast ? "Got it" : "Next"}
             </button>

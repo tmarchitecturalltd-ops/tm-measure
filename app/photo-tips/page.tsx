@@ -175,7 +175,7 @@ export default function PhotoTipsPage() {
           <div className="flex items-center gap-3">
             <BrandMark size={36} />
             <div>
-              <p className="font-label text-[10px] font-bold uppercase tracking-[0.25em] text-primary">
+              <p className="font-label text-sm font-bold uppercase tracking-[0.25em] text-primary">
                 TM Designs Ltd
               </p>
               <h1 className="font-headline text-base font-semibold text-on-surface">
@@ -185,7 +185,7 @@ export default function PhotoTipsPage() {
           </div>
           <Link
             href="/"
-            className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary"
+            className="inline-flex items-center gap-1 text-sm font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary"
           >
             <span
               className="material-symbols-outlined"
@@ -211,7 +211,7 @@ export default function PhotoTipsPage() {
           }}
         >
           <div className="px-1 pt-3 pb-2">
-            <p className="font-label text-[10px] font-bold uppercase tracking-[0.25em] text-primary">
+            <p className="font-label text-sm font-bold uppercase tracking-[0.25em] text-primary">
               Take great room photos
             </p>
             <h2
@@ -254,7 +254,7 @@ export default function PhotoTipsPage() {
                     <SectionIcon tone={s.tone} />
                   </span>
                   <p
-                    className="font-label text-[10px] font-bold uppercase tracking-[0.25em]"
+                    className="font-label text-sm font-bold uppercase tracking-[0.25em]"
                     style={{ color: tone.ink }}
                   >
                     {s.eyebrow}
@@ -295,7 +295,7 @@ export default function PhotoTipsPage() {
         <section className="mt-10">
           <div className="rounded-2xl border border-primary/40 bg-primary/5 p-5 md:flex md:items-center md:justify-between md:p-6">
             <div>
-              <p className="font-label text-[10px] font-bold uppercase tracking-[0.25em] text-primary">
+              <p className="font-label text-sm font-bold uppercase tracking-[0.25em] text-primary">
                 Ready to start?
               </p>
               <p className="mt-1 max-w-prose text-sm leading-relaxed text-on-surface-variant md:text-base">
@@ -319,7 +319,7 @@ export default function PhotoTipsPage() {
           </div>
         </section>
 
-        <p className="mt-12 text-center text-[10px] uppercase tracking-widest text-on-surface-variant">
+        <p className="mt-12 text-center text-sm uppercase tracking-widest text-on-surface-variant">
           © {new Date().getFullYear()} TM Architectural Designs Ltd · UK wide
         </p>
       </main>

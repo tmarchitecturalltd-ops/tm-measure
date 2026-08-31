@@ -215,7 +215,7 @@ export default function ScanReviewScreen({
                 <h2 className="font-headline text-xl font-bold text-on-surface">
                   Detected Dimensions
                 </h2>
-                <span className="text-[11px] font-medium text-on-surface-variant tracking-wider uppercase">
+                <span className="text-sm font-medium text-on-surface-variant tracking-wider uppercase">
                   {pointsLabel}
                 </span>
               </div>
@@ -253,7 +253,7 @@ export default function ScanReviewScreen({
         <div className="mx-auto max-w-7xl px-6 py-5 flex flex-col md:flex-row gap-4 justify-between items-center">
           {jobReference ? (
             <div className="hidden md:block">
-              <p className="text-[10px] font-semibold tracking-[0.2em] uppercase text-on-surface-variant">
+              <p className="text-sm font-semibold tracking-[0.2em] uppercase text-on-surface-variant">
                 Job Reference
               </p>
               <p className="font-headline text-sm font-bold text-on-surface">
@@ -310,7 +310,7 @@ function MeasurementRow({
   return (
     <li className="bg-surface-container-lowest rounded-lg p-5 flex items-center justify-between gap-4 hover:bg-white transition-colors">
       <div className="min-w-0">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant mb-1.5 truncate">
+        <p className="text-sm font-semibold uppercase tracking-wider text-on-surface-variant mb-1.5 truncate">
           {measurement.label}
         </p>
         <p className="font-headline text-3xl font-bold leading-none text-on-surface">
@@ -322,20 +322,20 @@ function MeasurementRow({
           ) : null}
         </p>
         {secondary ? (
-          <p className="text-[11px] text-on-surface-variant mt-1">{secondary}</p>
+          <p className="text-sm text-on-surface-variant mt-1">{secondary}</p>
         ) : null}
       </div>
       <div className="text-right shrink-0">
         <div
           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${bg}`}
         >
-          <span className={`text-[10px] font-bold tracking-wider ${tone}`}>
+          <span className={`text-sm font-bold tracking-wider ${tone}`}>
             {label}
           </span>
           <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
         </div>
         {noteText ? (
-          <p className="text-[10px] text-on-surface-variant mt-1.5">
+          <p className="text-sm text-on-surface-variant mt-1.5">
             {noteText}
           </p>
         ) : null}
@@ -371,7 +371,7 @@ function PreviewPill({
       >
         {icon}
       </span>
-      <span className="text-xs font-semibold uppercase tracking-wider">
+      <span className="text-sm font-semibold uppercase tracking-wider">
         {label}
       </span>
     </button>
@@ -385,7 +385,7 @@ function PreviewFallback() {
         <span className="material-symbols-outlined text-3xl animate-pulse">
           view_in_ar
         </span>
-        <span className="text-xs uppercase tracking-wider">Rendering model…</span>
+        <span className="text-sm uppercase tracking-wider">Rendering model…</span>
       </div>
     </div>
   );

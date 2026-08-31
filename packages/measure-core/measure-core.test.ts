@@ -445,3 +445,71 @@ test("a room outline rotates about its anchor like the rectangle does", () => {
   assert.equal(span(turned, "x"), 2);
   assert.equal(span(turned, "z"), 4);
 });
+
+/* ── Draft saving ─────────────────────────────────────────────────
+ * saveDraft used to return void and swallow every failure, while the
+ * form displayed "Draft saved" unconditionally. The one situation
+ * where the message matters — storage unavailable — was the situation
+ * where it lied. These pin the honest return value.
+ */
+
+test("saveDraft reports success when the write lands", async () => {
+  const { saveDraft } = await import("../../lib/draftStorage.ts");
+  const store = new Map<string, string>();
+  const g = globalThis as unknown as { window?: unknown };
+  const had = "window" in g;
+  g.window = {
+    localStorage: {
+      setItem: (k: string, v: string) => store.set(k, v),
+      getItem: (k: string) => store.get(k) ?? null,
+      removeItem: (k: string) => store.delete(k),
+    },
+  };
+  try {
+    assert.equal(saveDraft(draftStub()), true);
+    assert.equal(store.size, 1);
+  } finally {
+    if (!had) delete g.window;
+  }
+});
+
+test("saveDraft reports failure when storage throws", async () => {
+  const { saveDraft } = await import("../../lib/draftStorage.ts");
+  const g = globalThis as unknown as { window?: unknown };
+  const had = "window" in g;
+  g.window = {
+    localStorage: {
+      // What a full quota, or Safari private browsing, actually does.
+      setItem: () => {
+        throw new Error("QuotaExceededError");
+      },
+      getItem: () => null,
+      removeItem: () => {},
+    },
+  };
+  try {
+    assert.equal(saveDraft(draftStub()), false);
+  } finally {
+    if (!had) delete g.window;
+  }
+});
+
+/** Smallest snapshot saveDraft will accept. */
+function draftStub() {
+  return {
+    step: "rooms",
+    customerName: "A",
+    email: "a@example.com",
+    projectName: "P",
+    projectType: "extension",
+    unit: "metric" as const,
+    unitLocked: true,
+    defaultCeilingHeightM: "2.4",
+    proposalDescription: "",
+    rooms: [{ id: "r1", name: "Hall", walls: [], photos: [], voiceMemos: [] }],
+    connections: [],
+    placements: {},
+  } as unknown as Parameters<
+    typeof import("../../lib/draftStorage.ts").saveDraft
+  >[0];
+}

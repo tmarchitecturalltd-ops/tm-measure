@@ -242,7 +242,7 @@ export default function AppHome() {
           <div className="flex items-center gap-3">
             <AppLogo size={36} className="text-primary" />
             <div>
-              <p className="font-label text-[10px] font-bold uppercase tracking-[0.25em] text-primary">
+              <p className="font-label text-sm font-bold uppercase tracking-[0.25em] text-primary">
                 TM Designs Ltd
               </p>
               <h1 className="font-headline text-base font-semibold text-on-surface">
@@ -254,7 +254,7 @@ export default function AppHome() {
             href="https://tmdesignsltd.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary"
+            className="text-sm font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary"
           >
             tmdesignsltd.com
           </a>
@@ -275,7 +275,7 @@ export default function AppHome() {
             padding: "8px 4px 0",
           }}
         >
-          <p className="font-label text-[10px] font-bold uppercase tracking-[0.25em] text-primary">
+          <p className="font-label text-sm font-bold uppercase tracking-[0.25em] text-primary">
             Self-measure your project
           </p>
           <h2
@@ -305,7 +305,7 @@ export default function AppHome() {
             <button
               type="button"
               onClick={() => setShowWelcome(true)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
+              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
             >
               <span
                 className="material-symbols-outlined text-primary"
@@ -318,7 +318,7 @@ export default function AppHome() {
             </button>
             <Link
               href="/photo-tips"
-              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
+              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
             >
               <span
                 className="material-symbols-outlined text-primary"
@@ -334,7 +334,7 @@ export default function AppHome() {
                 the deployed URL; no login (URL-secret only). */}
             <Link
               href="/architect"
-              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
+              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
             >
               <span
                 className="material-symbols-outlined text-primary"
@@ -347,7 +347,7 @@ export default function AppHome() {
             </Link>
             <Link
               href="/status"
-              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
+              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
             >
               <span
                 className="material-symbols-outlined text-primary"
@@ -360,7 +360,7 @@ export default function AppHome() {
             </Link>
             <Link
               href="/privacy"
-              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
+              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
             >
               <span
                 className="material-symbols-outlined text-primary"
@@ -391,7 +391,7 @@ export default function AppHome() {
                     : "No stored calibration to clear.",
                 );
               }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
+              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
               title="Wipes a stale calibration that may be making rooms read tiny or huge"
             >
               <span
@@ -431,7 +431,7 @@ export default function AppHome() {
                   <span className="block font-headline text-[15px] font-semibold leading-snug text-on-surface">
                     {t.title}
                   </span>
-                  <span className="mt-1 block text-xs leading-snug text-on-surface-variant">
+                  <span className="mt-1 block text-sm leading-snug text-on-surface-variant">
                     {t.blurb}
                   </span>
                 </span>
@@ -449,7 +449,7 @@ export default function AppHome() {
 
         {/* ── How it works ─────────────────────────────────────── */}
         <section className="mt-12">
-          <h3 className="font-label text-[10px] font-bold uppercase tracking-[0.25em] text-primary">
+          <h3 className="font-label text-sm font-bold uppercase tracking-[0.25em] text-primary">
             How it works
           </h3>
           <ol className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -478,7 +478,7 @@ export default function AppHome() {
               href="/measure"
               className="block rounded-2xl border border-primary/40 bg-primary/5 p-5 transition-colors hover:bg-primary/10"
             >
-              <p className="font-label text-[10px] font-bold uppercase tracking-[0.25em] text-primary">
+              <p className="font-label text-sm font-bold uppercase tracking-[0.25em] text-primary">
                 Continue where you left off
               </p>
               <p className="mt-2 text-sm font-medium text-on-surface">
@@ -489,7 +489,7 @@ export default function AppHome() {
                 {(draft.rooms?.length ?? 0) === 1 ? "" : "s"} · saved{" "}
                 {formatSavedAt(draft.savedAt)}
               </p>
-              <p className="mt-3 text-[11px] font-bold uppercase tracking-widest text-primary">
+              <p className="mt-3 text-sm font-bold uppercase tracking-widest text-primary">
                 Resume →
               </p>
             </Link>
@@ -499,11 +499,11 @@ export default function AppHome() {
         {/* ── Recent submissions ───────────────────────────────── */}
         <section className="mt-12">
           <div className="flex items-center justify-between">
-            <h3 className="font-label text-[10px] font-bold uppercase tracking-[0.25em] text-primary">
+            <h3 className="font-label text-sm font-bold uppercase tracking-[0.25em] text-primary">
               Recent submissions
             </h3>
             {recents.length > 0 && (
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-on-surface-variant">
+              <span className="text-sm font-semibold uppercase tracking-widest text-on-surface-variant">
                 {recents.length} on this device
               </span>
             )}
@@ -539,7 +539,7 @@ export default function AppHome() {
               </p>
               <Link
                 href="/measure"
-                className="mt-4 inline-flex items-center gap-2 rounded-full border border-primary/50 px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
+                className="mt-4 inline-flex items-center gap-2 rounded-full border border-primary/50 px-5 py-2 text-sm font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
               >
                 Start your first measurement
                 <span
@@ -562,7 +562,7 @@ export default function AppHome() {
                     <p className="truncate font-headline text-sm font-semibold text-on-surface">
                       {r.projectName || "(untitled project)"}
                     </p>
-                    <p className="mt-0.5 text-xs text-on-surface-variant">
+                    <p className="mt-0.5 text-sm text-on-surface-variant">
                       {projectTypeLabel(r.projectType)} ·{" "}
                       {r.roomCount} room{r.roomCount === 1 ? "" : "s"} ·{" "}
                       {formatRelative(r.submittedAt)}
@@ -587,12 +587,12 @@ export default function AppHome() {
         </section>
 
         {calib && process.env.NEXT_PUBLIC_ENABLE_SCAN === "1" && (
-          <p className="mt-8 text-center text-[10px] uppercase tracking-widest text-on-surface-variant">
+          <p className="mt-8 text-center text-sm uppercase tracking-widest text-on-surface-variant">
             Camera calibrated · <span className="font-mono text-primary">{Math.round(calib.focalPx)} px</span> ·{" "}
             {Math.max(1, Math.round((Date.now() - calib.savedAt) / 86400000))} d ago
           </p>
         )}
-        <p className="mt-12 text-center text-[10px] uppercase tracking-widest text-on-surface-variant">
+        <p className="mt-12 text-center text-sm uppercase tracking-widest text-on-surface-variant">
           © {year} TM Architectural Designs Ltd · UK wide
         </p>
       </main>
@@ -614,7 +614,7 @@ function Step({ n, title, text }: { n: number; title: string; text: string }) {
           {title}
         </p>
       </div>
-      <p className="mt-2.5 text-xs leading-relaxed text-on-surface-variant">
+      <p className="mt-2.5 text-sm leading-relaxed text-on-surface-variant">
         {text}
       </p>
     </li>
