@@ -821,3 +821,34 @@ test("a two-point polygon is not treated as a drawn room", () => {
     "an unfinished outline must not exempt the wall lengths",
   );
 });
+
+test("a scanned room can be submitted without a photograph", () => {
+  /*
+   * The photo rule blocked every LiDAR submission. Rooms from
+   * applyHouseScan start with `photos: []`, and the rule required one
+   * per room unconditionally -- so a customer could walk the whole
+   * property with the sensor, exactly as the feature is sold, and then
+   * be told to photograph every room before they could send it.
+   */
+  const scanned = planRoom("s", "Kitchen", 4, 3);
+  scanned.photos = [];
+  scanned.measuredByScan = true;
+
+  assert.deepEqual(
+    validateRoom(scanned, 0),
+    [],
+    "a scan is its own reference",
+  );
+});
+
+test("a typed room still needs a photograph", () => {
+  // The exemption is for scanned rooms only. On a typed room the photo
+  // is the sole means the architect has of auditing the numbers.
+  const typed = planRoom("t", "Kitchen", 4, 3);
+  typed.photos = [];
+
+  assert.equal(
+    validateRoom(typed, 0).filter((i) => i.path === "room-0-photos").length,
+    1,
+  );
+});

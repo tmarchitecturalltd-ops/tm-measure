@@ -2074,6 +2074,14 @@ export default function MeasureIntakeForm() {
       // the form rejecting values that are plainly correct.
       const ri = firstIssueRoomIndex(anomalies);
       if (ri !== null) setActiveRoomIndex(ri);
+      // Leave guided mode on the way back.
+      //
+      // The guided takeover covers the viewport and shows one question
+      // at a time, so it would hide the issue panel this branch just
+      // populated — the customer would be returned to the rooms step
+      // and shown no reason at all. The all-at-once view is where the
+      // flagged fields are anchored.
+      setGuidedMode(false);
       setStep("rooms");
       setSubmitStatus("error");
       // Name the actual problem and the room it belongs to.

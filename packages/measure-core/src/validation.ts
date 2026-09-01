@@ -104,10 +104,20 @@ export function validateRoom(room: RoomDraft, index: number): FieldIssue[] {
     const hit = validateOpening(w.widthM, `${p}-window-${wi}`, "window");
     if (hit) issues.push(hit);
   });
-  // Architectural workflow: every measured room must carry at least one
-  // reference photo so the architect can visually audit the dimensions
-  // without being on-site (radiators, columns, molding, etc.).
-  if (!room.photos || room.photos.length === 0) {
+  /*
+   * A reference photo, so the architect can audit the dimensions
+   * without being on site — radiators, columns, mouldings, the things
+   * a number does not carry.
+   *
+   * Not required on a scanned room. The scan already contains the
+   * geometry the photo exists to corroborate, and rooms created by
+   * applyHouseScan start with `photos: []` — so this rule made every
+   * LiDAR submission impossible. A customer could walk the whole
+   * property with the sensor, exactly as the feature is sold, and then
+   * be told to photograph every room before they could send it. The
+   * one workflow this was written to support was the one it blocked.
+   */
+  if (!room.measuredByScan && (!room.photos || room.photos.length === 0)) {
     issues.push({
       path: `${p}-photos`,
       message: "Add at least one reference photo of this room.",
