@@ -34,6 +34,7 @@ import GuidedScreen, { type MenuSection } from "@/components/measure/GuidedScree
 
 type StepId =
   | "name"
+  | "measured"
   | "shape"
   | "walls"
   | "ceiling"
@@ -69,6 +70,7 @@ type Props = {
 
 const LABELS: Record<StepId, string> = {
   name: "What's this room called?",
+  measured: "Here's what the scan measured",
   shape: "What shape is it?",
   walls: "How long are the walls?",
   ceiling: "How high is the ceiling?",
@@ -98,18 +100,35 @@ export default function GuidedRoomFlow({
   onGoToRoom,
   roomNames = [],
 }: Props) {
+  /**
+   * A scanned room is not asked to be measured again.
+   *
+   * The sensor has already produced the shape, every wall length, the
+   * ceiling height, and the doors and windows. Walking the customer
+   * through screens asking them to type those in is asking for work
+   * the app has just done, and inviting a worse answer than the one it
+   * already holds — a typed 3.5 replacing a measured 3.47.
+   *
+   * They still get a screen showing what was measured, because being
+   * shown numbers you cannot check is not much better than not being
+   * shown them. Stairs and photos stay: neither comes out of the scan.
+   */
+  const scanned = room.measuredByScan === true;
   const steps: StepId[] = useMemo(
-    () => [
-      "name",
-      "shape",
-      "walls",
-      "ceiling",
-      "doors",
-      "windows",
-      "stairs",
-      "photos",
-    ],
-    [],
+    () =>
+      scanned
+        ? ["name", "measured", "stairs", "photos"]
+        : [
+            "name",
+            "shape",
+            "walls",
+            "ceiling",
+            "doors",
+            "windows",
+            "stairs",
+            "photos",
+          ],
+    [scanned],
   );
   const [stepIndex, setStepIndex] = useState(0);
   /**
@@ -196,7 +215,11 @@ export default function GuidedRoomFlow({
       const first = issues[0];
       const target = stepForPath(first.path);
       setFinishIssue(first.message);
-      if (target) setStepIndex(steps.indexOf(target));
+      // indexOf returns -1 for a step this room does not have — a
+      // scanned room has no walls or ceiling screen. Jumping to -1
+      // would blank the flow, so stay put and just say what is wrong.
+      const at = target ? steps.indexOf(target) : -1;
+      if (at >= 0) setStepIndex(at);
       return;
     }
     setFinishIssue(null);
@@ -413,6 +436,67 @@ export default function GuidedRoomFlow({
         </div>
       )}
 
+      {step === "measured" && (
+        <div className="space-y-4">
+          <p className="text-sm text-on-surface-variant">
+            Nothing to type — the scan measured all of this. Have a quick
+            look and carry on.
+          </p>
+          <dl className="divide-y divide-outline-variant/30 rounded-xl border border-outline-variant/30 bg-surface-container-lowest">
+            {room.walls
+              .filter((w) => w.lengthM.trim())
+              .map((w, i) => (
+                <div key={w.id} className="flex justify-between px-4 py-3">
+                  <dt className="text-base text-on-surface-variant">
+                    {w.label || `Wall ${i + 1}`}
+                  </dt>
+                  <dd className="text-base font-semibold text-on-surface">
+                    {w.lengthM} m
+                  </dd>
+                </div>
+              ))}
+            {room.ceilingHeightM.trim() && (
+              <div className="flex justify-between px-4 py-3">
+                <dt className="text-base text-on-surface-variant">Ceiling</dt>
+                <dd className="text-base font-semibold text-on-surface">
+                  {room.ceilingHeightM} m
+                </dd>
+              </div>
+            )}
+            <div className="flex justify-between px-4 py-3">
+              <dt className="text-base text-on-surface-variant">
+                Doors and windows
+              </dt>
+              <dd className="text-base font-semibold text-on-surface">
+                {room.doors.length} / {room.windows.length}
+              </dd>
+            </div>
+            {(room.floorPolygonM?.length ?? 0) >= 3 && (
+              <div className="flex justify-between px-4 py-3">
+                <dt className="text-base text-on-surface-variant">Shape</dt>
+                <dd className="text-base font-semibold text-on-surface">
+                  {room.floorPolygonM!.length} corners
+                </dd>
+              </div>
+            )}
+          </dl>
+
+          {/* An escape hatch, not an invitation.
+              The sensor is more reliable than a person typing, so the
+              default is to accept it. But a scan can get a room wrong,
+              and a customer who can see it is wrong and has no way to
+              say so will either submit something they know is false or
+              give up. */}
+          <button
+            type="button"
+            onClick={onExitGuided}
+            className="w-full justify-start rounded-xl border border-outline-variant/40 px-5 py-3 text-left text-sm font-semibold text-on-surface-variant"
+          >
+            Something looks wrong — let me edit it
+          </button>
+        </div>
+      )}
+
       {step === "shape" && (
         <div className="flex flex-wrap gap-2">
           {(["rectangle", "l-shape", "custom"] as const).map((s) => (
@@ -456,6 +540,13 @@ export default function GuidedRoomFlow({
               way to record a bay, a chimney breast, or a corner cut
               off at an angle. Both write to the same room, so nobody
               has to choose correctly at the start. */}
+          {/* Hidden on scanned rooms. Neither option applies: the
+              geometry is already captured, and offering to re-enter it
+              only invites a worse answer over a better one. Scanned
+              rooms do not reach this step at all now, but the guard
+              stays so a future change to the step list cannot quietly
+              reintroduce the choice. */}
+          {!scanned && (
           <div
             role="radiogroup"
             aria-label="How would you like to enter this room?"
@@ -486,8 +577,9 @@ export default function GuidedRoomFlow({
               </button>
             ))}
           </div>
+          )}
 
-          {wallMode === "draw" && (
+          {!scanned && wallMode === "draw" && (
             <div className="rounded-xl border border-outline-variant/30 p-3">
               <p className="mb-2 text-sm text-on-surface-variant">
                 Tap each corner in order, then close the shape. Drag any
@@ -497,7 +589,7 @@ export default function GuidedRoomFlow({
             </div>
           )}
 
-          {wallMode === "type" && (
+          {(scanned || wallMode === "type") && (
           <>
           {/* Honest about what is needed.
               This used to say "one is enough to carry on", which was
