@@ -29,6 +29,7 @@ import { roomBoundingBox } from "./src/floorplan.ts";
 import { buildFloorPlanDxf, roomCornersM } from "./src/dxf.ts";
 import { buildWalls, buildDetailedPlanDxf, roomOutlineM } from "./src/dxfPlan.ts";
 import { fixtureFootprintM } from "./src/types.ts";
+import { validateRoom } from "./src/validation.ts";
 import type { RoomDraft } from "./src/types.ts";
 import {
   normalizeConnections,
@@ -754,4 +755,69 @@ test("a fixture is transformed into world space with its room", () => {
   assert.equal(Math.max(...xs), -150);
   assert.equal(Math.min(...ys), -1200);
   assert.equal(Math.max(...ys), -800);
+});
+
+/* ── Finishing a room ─────────────────────────────────────────────
+ * The Finish button did nothing on a drawn room, permanently and
+ * without a word: validateRoom demanded a typed length for every wall,
+ * and drawing the outline never fills those fields. The customer had
+ * traced the room, been told it counted, and then hit a dead button.
+ */
+
+test("a drawn room does not also need its wall lengths typed", () => {
+  const drawn = planRoom("d", "Lounge", 4, 3);
+  // What tracing produces: a polygon, and empty wall fields.
+  drawn.walls = drawn.walls.map((w) => ({ ...w, lengthM: "" }));
+  drawn.floorPolygonM = [
+    { x: 0, z: 0 },
+    { x: 4, z: 0 },
+    { x: 4, z: 3 },
+    { x: 0, z: 3 },
+  ];
+  drawn.photos = [{ id: "p", uri: "blob:x", name: "x.jpg" }];
+
+  const issues = validateRoom(drawn, 0);
+  assert.deepEqual(
+    issues.filter((i) => i.path.includes("-wall-")),
+    [],
+    "the polygon already carries every length",
+  );
+  assert.deepEqual(issues, [], "nothing else should block either");
+});
+
+test("a typed room still needs all its wall lengths", () => {
+  // The exemption is for drawn rooms specifically. Without a polygon,
+  // a blank wall is still a missing measurement and the architect
+  // cannot draw from it.
+  const typed = planRoom("t", "Lounge", 4, 3);
+  typed.walls = typed.walls.map((w, i) =>
+    i === 2 ? { ...w, lengthM: "" } : w,
+  );
+  typed.photos = [{ id: "p", uri: "blob:x", name: "x.jpg" }];
+
+  const issues = validateRoom(typed, 0);
+  assert.equal(
+    issues.filter((i) => i.path === "room-0-wall-2").length,
+    1,
+    "the blank wall should be flagged",
+  );
+});
+
+test("a two-point polygon is not treated as a drawn room", () => {
+  // Two points is a line, not a floor. Accepting it would exempt the
+  // room from wall checks and produce a submission with no dimensions
+  // at all -- worse than the bug being fixed.
+  const half = planRoom("h", "Lounge", 4, 3);
+  half.walls = half.walls.map((w) => ({ ...w, lengthM: "" }));
+  half.floorPolygonM = [
+    { x: 0, z: 0 },
+    { x: 4, z: 0 },
+  ];
+  half.photos = [{ id: "p", uri: "blob:x", name: "x.jpg" }];
+
+  const issues = validateRoom(half, 0);
+  assert.ok(
+    issues.some((i) => i.path.includes("-wall-")),
+    "an unfinished outline must not exempt the wall lengths",
+  );
 });

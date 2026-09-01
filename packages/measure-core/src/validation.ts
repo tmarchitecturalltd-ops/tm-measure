@@ -1,4 +1,10 @@
-import { parseMeters } from "./parse";
+// Extension required. This is a runtime import, and Node's ESM
+// resolver will not guess it -- so this module could not be loaded by
+// node:test at all, which is the unglamorous reason the validator was
+// the one part of measure-core with no tests. The type-only imports
+// elsewhere get away with it because they are erased before Node ever
+// sees them.
+import { parseMeters } from "./parse.ts";
 import type { RoomDraft } from "./types";
 
 export const LIMITS = {
@@ -67,10 +73,27 @@ export function validateRoom(room: RoomDraft, index: number): FieldIssue[] {
   const issues: FieldIssue[] = [];
   if (!room.name.trim())
     issues.push({ path: `${p}-name`, message: "Name this room." });
-  room.walls.forEach((w, wi) => {
-    const hit = validateWallLength(w.lengthM, `${p}-wall-${wi}`);
-    if (hit) issues.push(hit);
-  });
+
+  /*
+   * A traced outline replaces the typed lengths.
+   *
+   * Every wall length was required unconditionally, including on rooms
+   * the customer had drawn rather than typed — where by definition no
+   * wall field is filled in. So drawing a room produced a survey that
+   * could never be submitted, and the failure was silent: the Finish
+   * button simply did nothing.
+   *
+   * The polygon carries every length implicitly, so demanding them
+   * again is asking for the same information twice and then refusing
+   * to proceed without it.
+   */
+  const drawn = (room.floorPolygonM?.length ?? 0) >= 3;
+  if (!drawn) {
+    room.walls.forEach((w, wi) => {
+      const hit = validateWallLength(w.lengthM, `${p}-wall-${wi}`);
+      if (hit) issues.push(hit);
+    });
+  }
   const c = validateCeiling(room.ceilingHeightM, `${p}-ceiling`);
   if (c) issues.push(c);
   room.doors.forEach((d, di) => {

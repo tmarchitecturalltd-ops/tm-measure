@@ -25,6 +25,7 @@
 
 import { useMemo, useState } from "react";
 import type { Opening, RoomDraft, RoomShape } from "@tm-designs/measure-core";
+import { validateRoom } from "@tm-designs/measure-core";
 import WallPositionPicker from "@/components/measure/WallPositionPicker";
 import VoiceRecorder from "@/components/measure/VoiceRecorder";
 import LengthHint from "@/components/measure/LengthHint";
@@ -120,6 +121,18 @@ export default function GuidedRoomFlow({
     room.floorPolygonM?.length ? "draw" : "type",
   );
   const [menuOpen, setMenuOpen] = useState(false);
+  /**
+   * A problem found when Finish was pressed, rather than while typing.
+   *
+   * Finish used to run the whole-project validator and, if anything
+   * failed, return without a word — so the button was simply dead. On a
+   * drawn room it was dead permanently, because the validator wanted
+   * typed wall lengths that drawing never produces. A button that does
+   * nothing is the worst possible response: the customer cannot tell
+   * whether the app is broken, slow, or waiting for something.
+   */
+  const [finishIssue, setFinishIssue] = useState<string | null>(null);
+
 
   const step = steps[stepIndex];
   const isLast = stepIndex === steps.length - 1;
@@ -155,6 +168,40 @@ export default function GuidedRoomFlow({
     return null;
   };
   const block = blocked();
+
+  /** Which step a validation path belongs to, so we can go there. */
+  const stepForPath = (path: string): StepId | null => {
+    if (path.endsWith("-name")) return "name";
+    if (/-wall-\d+$/.test(path)) return "walls";
+    if (path.endsWith("-ceiling")) return "ceiling";
+    if (/-door-\d+$/.test(path)) return "doors";
+    if (/-window-\d+$/.test(path)) return "windows";
+    if (path.endsWith("-photos")) return "photos";
+    return null;
+  };
+
+  /**
+   * Finish this room.
+   *
+   * Checks this room only, and on a failure takes the customer to the
+   * question that needs answering rather than refusing at the door.
+   * Photo issues are excluded to match the rest of the flow, which
+   * treats a missing photo as a nudge and not a barrier.
+   */
+  const finishRoom = () => {
+    const issues = validateRoom(room, roomIndex).filter(
+      (i) => !i.path.endsWith("-photos"),
+    );
+    if (issues.length) {
+      const first = issues[0];
+      const target = stepForPath(first.path);
+      setFinishIssue(first.message);
+      if (target) setStepIndex(steps.indexOf(target));
+      return;
+    }
+    setFinishIssue(null);
+    onDone();
+  };
 
   const openingStep = (kind: "doors" | "windows") => {
     const list = kind === "doors" ? room.doors : room.windows;
@@ -340,14 +387,15 @@ export default function GuidedRoomFlow({
       backDisabled={stepIndex === 0}
       onNext={() => {
         if (block) return;
-        if (isLast) onDone();
+        setFinishIssue(null);
+        if (isLast) finishRoom();
         else setStepIndex((i) => i + 1);
       }}
       nextDisabled={!!block}
       nextLabel={
         isLast ? (roomIndex + 1 < totalRooms ? "Next room" : "Finish") : "Next"
       }
-      blockMessage={block}
+      blockMessage={block ?? finishIssue}
     >
 
       {step === "name" && (
@@ -451,9 +499,14 @@ export default function GuidedRoomFlow({
 
           {wallMode === "type" && (
           <>
+          {/* Honest about what is needed.
+              This used to say "one is enough to carry on", which was
+              true of the Next button and not of the Finish button —
+              the survey needs every wall of a typed room, so the
+              customer was told one thing and stopped by another. */}
           <p className="text-sm text-on-surface-variant">
-            Work round the room in order. Skip any you can&apos;t reach — one
-            is enough to carry on.
+            Work round the room in order. You can move on with some blank
+            and come back — we&apos;ll ask again before you finish the room.
           </p>
           {room.walls.map((w, i) => (
             <div key={w.id}>

@@ -5029,7 +5029,19 @@ export default function MeasureIntakeForm() {
             }
             const v = nonBlockingIssues(rooms);
             setIssues(v);
-            if (v.length) return;
+            if (v.length) {
+              // Something is wrong in a room other than this one —
+              // GuidedRoomFlow has already cleared its own. The guided
+              // screen shows one room at a time and cannot point at a
+              // problem elsewhere, so drop to the all-at-once view
+              // where every flagged field is visible and anchored.
+              // Silently refusing here is what made the Finish button
+              // look broken.
+              setGuidedMode(false);
+              const ri = firstIssueRoomIndex(v);
+              if (ri !== null) setActiveRoomIndex(ri);
+              return;
+            }
             setStep("exterior");
           }}
           onExitGuided={() => setGuidedMode(false)}
