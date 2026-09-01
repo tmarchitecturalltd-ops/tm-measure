@@ -2754,7 +2754,7 @@ export default function MeasureIntakeForm() {
           </section>
         )}
 
-        {step === "rooms" && (
+        {step === "rooms" && !guidedActive && (
           <div className="space-y-10">
             {/* Why we sent you back here.
                 submitError was only rendered on the review step, but a
@@ -2991,63 +2991,11 @@ export default function MeasureIntakeForm() {
               )}
             </div>
 
-            {/* Not while a resume prompt is up.
-                Guided mode covers the whole viewport, and the "Resume
-                your previous project?" banner sits above it in the
-                normal flow — so the customer would be answering
-                questions on a blank project with their saved one
-                waiting invisibly behind. */}
-            {guidedMode && !pendingDraft && rooms[activeRoomIndex] && (
-              <GuidedRoomFlow
-                key={rooms[activeRoomIndex].id}
-                room={rooms[activeRoomIndex]}
-                roomIndex={activeRoomIndex}
-                totalRooms={rooms.length}
-                onPatch={(patch) => setRoom(rooms[activeRoomIndex].id, patch)}
-                onSetShape={(shape) => setShape(rooms[activeRoomIndex].id, shape)}
-                onAddOpening={(kind) => addOpening(rooms[activeRoomIndex].id, kind)}
-                onRemoveOpening={(kind, id) =>
-                  removeOpening(rooms[activeRoomIndex].id, kind, id)
-                }
-                onAddStairs={() => addStairs(rooms[activeRoomIndex].id)}
-                onRemoveStairs={(id) => removeStairs(rooms[activeRoomIndex].id, id)}
-                onSetStairs={(id, patch) =>
-                  setStairs(rooms[activeRoomIndex].id, id, patch)
-                }
-                onPhotos={(files) => attachPhotos(rooms[activeRoomIndex].id, files)}
-                onDone={() => {
-                  // Last room finished: check the whole set before
-                  // leaving the step, exactly as the manual Continue
-                  // button does, so guided mode cannot smuggle an
-                  // incomplete survey past the same validation.
-                  if (activeRoomIndex < rooms.length - 1) {
-                    setActiveRoomIndex((i) => i + 1);
-                    return;
-                  }
-                  const v = nonBlockingIssues(rooms);
-                  setIssues(v);
-                  if (v.length) return;
-                  setStep("exterior");
-                }}
-                onExitGuided={() => setGuidedMode(false)}
-                issueFor={(suffix) => issueFor(`room-${activeRoomIndex}-${suffix}`)}
-                // Scanning is offered only where the sensor exists.
-                // Passing the handler regardless would put two dead
-                // entries in the menu on every non-Pro device.
-                onScanRoom={
-                  arSupport === "yes"
-                    ? () => setScanRoomId(rooms[activeRoomIndex].id)
-                    : undefined
-                }
-                onScanHouse={
-                  arSupport === "yes" ? () => void startHouseScan() : undefined
-                }
-                onGoToRoom={setActiveRoomIndex}
-                roomNames={rooms.map((r) => r.name)}
-              />
-            )}
 
-            {(!guidedMode || pendingDraft) && rooms.map((room, ri) => ri !== activeRoomIndex ? null : (
+            {/* The whole rooms step is already gated on !guidedActive,
+                so reaching here means the all-at-once view is what was
+                asked for. */}
+            {rooms.map((room, ri) => ri !== activeRoomIndex ? null : (
               <section
                 key={room.id}
                 className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 md:p-8"
@@ -5007,6 +4955,72 @@ export default function MeasureIntakeForm() {
           </div>
         )}
       </main>
+
+      {/* The guided takeover, rendered as a sibling of <main> rather
+          than inside the rooms step.
+          It was nested in the step it replaces, which meant the rest of
+          that step — the connections section, the pager, the step
+          nav — stayed in the document underneath it and showed below
+          the takeover's bottom edge. Covering content with a fixed
+          overlay only works if the overlay is genuinely the full
+          viewport in every browser; not rendering the content at all
+          works everywhere. */}
+      {/* guidedActive, not guidedMode: now that this sits outside the
+          step blocks, only the step check keeps it off the exterior,
+          plan and review screens. It also stands down while the
+          "Resume your previous project?" banner is up, since a
+          full-viewport takeover would hide that banner and the
+          customer would answer questions on a blank project with their
+          saved one waiting invisibly behind it. */}
+      {guidedActive && rooms[activeRoomIndex] && (
+        <GuidedRoomFlow
+          key={rooms[activeRoomIndex].id}
+          room={rooms[activeRoomIndex]}
+          roomIndex={activeRoomIndex}
+          totalRooms={rooms.length}
+          onPatch={(patch) => setRoom(rooms[activeRoomIndex].id, patch)}
+          onSetShape={(shape) => setShape(rooms[activeRoomIndex].id, shape)}
+          onAddOpening={(kind) => addOpening(rooms[activeRoomIndex].id, kind)}
+          onRemoveOpening={(kind, id) =>
+            removeOpening(rooms[activeRoomIndex].id, kind, id)
+          }
+          onAddStairs={() => addStairs(rooms[activeRoomIndex].id)}
+          onRemoveStairs={(id) => removeStairs(rooms[activeRoomIndex].id, id)}
+          onSetStairs={(id, patch) =>
+            setStairs(rooms[activeRoomIndex].id, id, patch)
+          }
+          onPhotos={(files) => attachPhotos(rooms[activeRoomIndex].id, files)}
+          onDone={() => {
+            // Last room finished: check the whole set before
+            // leaving the step, exactly as the manual Continue
+            // button does, so guided mode cannot smuggle an
+            // incomplete survey past the same validation.
+            if (activeRoomIndex < rooms.length - 1) {
+              setActiveRoomIndex((i) => i + 1);
+              return;
+            }
+            const v = nonBlockingIssues(rooms);
+            setIssues(v);
+            if (v.length) return;
+            setStep("exterior");
+          }}
+          onExitGuided={() => setGuidedMode(false)}
+          issueFor={(suffix) => issueFor(`room-${activeRoomIndex}-${suffix}`)}
+          // Scanning is offered only where the sensor exists.
+          // Passing the handler regardless would put two dead
+          // entries in the menu on every non-Pro device.
+          onScanRoom={
+            arSupport === "yes"
+        ? () => setScanRoomId(rooms[activeRoomIndex].id)
+        : undefined
+          }
+          onScanHouse={
+            arSupport === "yes" ? () => void startHouseScan() : undefined
+          }
+          onGoToRoom={setActiveRoomIndex}
+          roomNames={rooms.map((r) => r.name)}
+        />
+      )}
 
       {/* Undo bar.
           Pinned to the bottom rather than placed where the deleted item
