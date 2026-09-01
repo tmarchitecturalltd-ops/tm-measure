@@ -39,9 +39,10 @@ export const metadata: Metadata = {
  * landscape-rotation fault reappears, fix the rotation handler — do
  * not take zoom away again.
  *
- * The in-app text size control (globals.css / TextSizeControl) is the
- * belt to this braces. It does not depend on WKWebView behaving, and
- * it survives being run as a website.
+ * An in-app text size control was tried alongside this and removed on
+ * feedback -- it took up the top of the first screen to duplicate
+ * something the phone already does system-wide. Pinch-zoom is the path
+ * now, so do not lock it again without providing another one.
  *
  * The 16px minimum on inputs in globals.css stays. That solves a
  * different problem — iOS auto-zooming on focus of a small field — and
@@ -100,22 +101,6 @@ export default function RootLayout({
         />
         <meta name="referrer" content="strict-origin-when-cross-origin" />
 
-        {/* Apply the saved text size before first paint.
-            Without this the app renders at the default size and then
-            jumps once React hydrates, which is precisely the moment a
-            customer who set "Largest" is looking at it and concluding
-            the setting didn't stick. Runs inline and synchronously so
-            there is no frame at the wrong size. Wrapped in try/catch
-            because localStorage throws in private browsing and a
-            blocked storage read must not stop the page rendering. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html:
-              "try{var s=localStorage.getItem('tm-measure:text-size:v1');" +
-              "if(s==='large'||s==='larger')" +
-              "document.documentElement.setAttribute('data-text-size',s);}catch(e){}",
-          }}
-        />
 
         {/* Favicon = same brand mark as the marketing site. We point
             at the SVG version of the app icon so the browser renders

@@ -55,7 +55,6 @@ import VoiceRecorder from "@/components/measure/VoiceRecorder";
 import WallPositionPicker from "@/components/measure/WallPositionPicker";
 import GuidedRoomFlow from "@/components/measure/GuidedRoomFlow";
 import LengthHint from "@/components/measure/LengthHint";
-import TextSizeControl from "@/components/measure/TextSizeControl";
 import {
   RoomPlan,
   type RoomPlanScanResult,
@@ -2392,15 +2391,6 @@ export default function MeasureIntakeForm() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 md:px-6">
-        {/* Text size, at the top of the first screen rather than buried
-            in a settings menu. Someone who needs it needs it before
-            they can comfortably read the menu that would have hidden
-            it. It stays put once set, so seeing it here once is the
-            whole cost. */}
-        <div className="mb-6 flex justify-end">
-          <TextSizeControl />
-        </div>
-
         <p className="mb-8 max-w-3xl text-sm leading-relaxed text-on-surface-variant">
           We&apos;ll walk you through each room —{" "}
           <strong className="font-semibold text-on-surface">
@@ -2984,7 +2974,13 @@ export default function MeasureIntakeForm() {
               )}
             </div>
 
-            {guidedMode && rooms[activeRoomIndex] && (
+            {/* Not while a resume prompt is up.
+                Guided mode covers the whole viewport, and the "Resume
+                your previous project?" banner sits above it in the
+                normal flow — so the customer would be answering
+                questions on a blank project with their saved one
+                waiting invisibly behind. */}
+            {guidedMode && !pendingDraft && rooms[activeRoomIndex] && (
               <GuidedRoomFlow
                 key={rooms[activeRoomIndex].id}
                 room={rooms[activeRoomIndex]}
@@ -3018,10 +3014,23 @@ export default function MeasureIntakeForm() {
                 }}
                 onExitGuided={() => setGuidedMode(false)}
                 issueFor={(suffix) => issueFor(`room-${activeRoomIndex}-${suffix}`)}
+                // Scanning is offered only where the sensor exists.
+                // Passing the handler regardless would put two dead
+                // entries in the menu on every non-Pro device.
+                onScanRoom={
+                  arSupport === "yes"
+                    ? () => setScanRoomId(rooms[activeRoomIndex].id)
+                    : undefined
+                }
+                onScanHouse={
+                  arSupport === "yes" ? () => void startHouseScan() : undefined
+                }
+                onGoToRoom={setActiveRoomIndex}
+                roomNames={rooms.map((r) => r.name)}
               />
             )}
 
-            {!guidedMode && rooms.map((room, ri) => ri !== activeRoomIndex ? null : (
+            {(!guidedMode || pendingDraft) && rooms.map((room, ri) => ri !== activeRoomIndex ? null : (
               <section
                 key={room.id}
                 className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 md:p-8"

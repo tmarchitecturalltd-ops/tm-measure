@@ -2,37 +2,6 @@
 @import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=block");
 @import "tailwindcss";
 
-/*
- * In-app text size.
- *
- * Everything in this app is sized in rem via Tailwind, so moving the
- * root font-size moves the whole interface together — text, padding,
- * and tap targets stay in proportion instead of text growing until it
- * overflows the button around it.
- *
- * This exists because pinch-zoom in a WKWebView cannot be relied on:
- * it was disabled outright for a whole release after it misbehaved,
- * and while it is back now (with a ceiling), a control that lives in
- * the app and cannot be broken by the web view is the one that should
- * carry the weight.
- *
- * The scale is applied to html and read from a data attribute so the
- * value survives in localStorage and is applied before paint, rather
- * than the text visibly jumping a size after hydration.
- *
- * Capped at 1.35. Beyond that the floor plan canvas and the wall
- * position slider stop being usable on a narrow phone, and an
- * unusable large control is not an accessibility win.
- */
-html {
-  font-size: 16px;
-}
-html[data-text-size="large"] {
-  font-size: 18.5px;
-}
-html[data-text-size="larger"] {
-  font-size: 21.5px;
-}
 
 /*
  * Minimum tap target.
