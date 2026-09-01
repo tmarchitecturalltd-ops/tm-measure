@@ -642,7 +642,24 @@ export default function MeasureIntakeForm() {
         id,
         name: sr.name?.trim() || `Room ${i + 1}`,
         walls,
-        ceilingHeightM: sr.heightM ? sr.heightM.toFixed(2) : "",
+        /*
+         * Ceiling height, with a fallback.
+         *
+         * RoomPlan does not always report a height — a room it could
+         * not see the full height of comes back without one — and this
+         * left the field empty. An empty ceiling height fails
+         * validateCeiling, so those rooms could not be submitted, and
+         * the customer had no idea which of the numbers the sensor
+         * produced was the problem.
+         *
+         * Falling back to the property-wide default is what the manual
+         * path already does for every new room. It is an assumption
+         * either way; at least this one is stated once by the customer
+         * rather than left blank and then complained about.
+         */
+        ceilingHeightM: sr.heightM
+          ? sr.heightM.toFixed(2)
+          : defaultCeilingHeightM.trim(),
         doors: (sr.doors ?? []).map((d) => ({
           id: newId(),
           widthM: d.widthM.toFixed(2),
@@ -702,7 +719,7 @@ export default function MeasureIntakeForm() {
     // autosave effect has queued the new snapshot; flushing
     // synchronously would write the state as it was before the scan.
     setTimeout(() => draftSaver.current.flush(), 0);
-  }, []);
+  }, [defaultCeilingHeightM]);
 
   /**
    * Run a whole-property scan and fold the result into the form.
