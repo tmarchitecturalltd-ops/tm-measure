@@ -4629,6 +4629,7 @@ export default function MeasureIntakeForm() {
                 rooms={rooms}
                 placements={placements}
                 onPlacementChange={updatePlacement}
+                onRoomChange={setRoom}
               />
             </section>
 

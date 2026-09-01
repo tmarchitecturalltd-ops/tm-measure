@@ -125,6 +125,102 @@ export type RoomStairs = {
 
 export type RoomShape = "rectangle" | "l-shape" | "custom";
 
+/**
+ * A fixed thing in a room: sanitaryware, kitchen units, radiators.
+ *
+ * These were captured nowhere at all. A bathroom arrived as a box with
+ * a door and a window, and the only record that it contained a toilet
+ * was whichever photograph happened to include one — so their
+ * positions reached the drawing as somebody's recollection, if at all.
+ * For a bathroom or kitchen the fixture layout is most of the design
+ * constraint, which makes it an odd thing to have been leaving out.
+ *
+ * Position is the fixture's CENTRE in room-local metres, on the same
+ * axes as `floorPolygonM`: x rightwards, z downwards from the room's
+ * top-left corner. Storing the centre rather than a corner means
+ * rotation is about the middle of the object, which is what dragging a
+ * rotate handle looks like it should do.
+ */
+export type FixtureKind =
+  | "toilet"
+  | "basin"
+  | "bath"
+  | "shower"
+  | "sink"
+  | "cooker"
+  | "fridge"
+  | "radiator"
+  | "cupboard";
+
+export type RoomFixture = {
+  id: string;
+  kind: FixtureKind;
+  /** Centre of the fixture, room-local metres. */
+  positionM: { x: number; z: number };
+  /** Cardinal rotation. Which way it faces. */
+  rotationDeg: RoomRotationDeg;
+  /**
+   * Overrides for the standard size, in metres.
+   *
+   * Absent means "the usual size for this thing" (see FIXTURE_SIZES_M).
+   * Present means the customer measured it and it is not standard —
+   * a distinction worth keeping, because a 1.7 m bath assumed and a
+   * 1.7 m bath measured are different facts to the person drawing it.
+   */
+  widthM?: string;
+  depthM?: string;
+  notes?: string;
+};
+
+/**
+ * Real-world footprints in metres, width x depth, facing "up" at
+ * rotation 0 — that is, the side you approach is the +z side.
+ *
+ * These are ordinary UK domestic sizes. They exist so a fixture drawn
+ * on the plan is to scale rather than an icon of arbitrary size: a
+ * plan where the bath is the same size as the toilet tells the
+ * customer nothing about whether the layout works.
+ */
+export const FIXTURE_SIZES_M: Record<
+  FixtureKind,
+  { widthM: number; depthM: number; label: string }
+> = {
+  toilet: { widthM: 0.4, depthM: 0.7, label: "Toilet" },
+  basin: { widthM: 0.55, depthM: 0.42, label: "Basin" },
+  bath: { widthM: 1.7, depthM: 0.7, label: "Bath" },
+  shower: { widthM: 0.9, depthM: 0.9, label: "Shower" },
+  sink: { widthM: 0.6, depthM: 0.6, label: "Sink" },
+  cooker: { widthM: 0.6, depthM: 0.6, label: "Cooker" },
+  fridge: { widthM: 0.6, depthM: 0.65, label: "Fridge" },
+  radiator: { widthM: 1.0, depthM: 0.1, label: "Radiator" },
+  cupboard: { widthM: 0.6, depthM: 0.6, label: "Cupboard" },
+};
+
+/**
+ * The footprint of a fixture as placed, in room-local metres.
+ *
+ * Returns the axis-aligned box after rotation, which for cardinal
+ * rotations just means swapping width and depth at 90 and 270. Kept
+ * here rather than in the editor so the plan, the DXF and any future
+ * consumer agree on how big the thing is — three components each doing
+ * their own version of this is how a bath ends up a different size in
+ * the drawing than it was on screen.
+ */
+export function fixtureFootprintM(f: RoomFixture): {
+  widthM: number;
+  depthM: number;
+} {
+  const std = FIXTURE_SIZES_M[f.kind];
+  const w = Number.parseFloat(f.widthM ?? "");
+  const d = Number.parseFloat(f.depthM ?? "");
+  const widthM = Number.isFinite(w) && w > 0 ? w : std.widthM;
+  const depthM = Number.isFinite(d) && d > 0 ? d : std.depthM;
+  const turned = f.rotationDeg === 90 || f.rotationDeg === 270;
+  return turned
+    ? { widthM: depthM, depthM: widthM }
+    : { widthM, depthM };
+}
+
 export type RoomDraft = {
   id: string;
   name: string;
@@ -152,6 +248,8 @@ export type RoomDraft = {
   voiceMemos?: RoomAudio[];
   /** Stairs within this room. Absent on rooms without any. */
   stairs?: RoomStairs[];
+  /** Toilets, baths, kitchen units and so on. Absent on rooms without. */
+  fixtures?: RoomFixture[];
   /**
    * True when these dimensions came from a scan rather than being typed.
    *

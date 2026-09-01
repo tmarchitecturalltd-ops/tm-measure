@@ -32,7 +32,14 @@
  * looks entirely normal until something is built from it.
  */
 
-import type { Opening, RoomDraft, RoomRotationDeg, RoomStairs } from "./types";
+import type {
+  Opening,
+  RoomDraft,
+  RoomFixture,
+  RoomRotationDeg,
+  RoomStairs,
+} from "./types";
+import { FIXTURE_SIZES_M, fixtureFootprintM } from "./types.ts";
 import { roomFootprint } from "./floorplan.ts";
 import { roomCornersM, sanitiseDxfText } from "./dxf.ts";
 
@@ -46,6 +53,7 @@ export const LAYER = {
   doors: "TM-DOORS",
   windows: "TM-WINDOWS",
   stairs: "TM-STAIRS",
+  fixtures: "TM-FIXTURES",
   labels: "TM-LABELS",
   title: "TM-TITLE",
 } as const;
@@ -321,6 +329,7 @@ export function buildDetailedPlanDxf(
         [LAYER.doors, 1],
         [LAYER.windows, 5],
         [LAYER.stairs, 3],
+        [LAYER.fixtures, 4],
         [LAYER.labels, 2],
         [LAYER.title, 7],
       ]
@@ -456,6 +465,10 @@ export function buildDetailedPlanDxf(
 
     if (detailed) {
       for (const s of room.stairs ?? []) drawStairs(out, room, s, corners);
+      // Fixtures on every plan, detailed or not? No — the plain outline
+      // export exists to be a clean shell, and sanitaryware in it would
+      // defeat that. Detailed only.
+      for (const f of room.fixtures ?? []) drawFixture(out, entry, f);
     }
   }
 
@@ -473,6 +486,75 @@ export function buildDetailedPlanDxf(
  * domestic flight in the UK and, being visibly a guess in the notes,
  * better than omitting the stairs entirely.
  */
+/**
+ * Room-local metres → world metres, using the same convention as
+ * `roomOutlineM`.
+ *
+ * Factored out rather than repeated because a fixture that used a
+ * different rotation convention from the room outline would look
+ * correct on an unrotated plan and drift into the wall on every
+ * rotated one — which is exactly the sort of fault that reaches CAD
+ * before anyone notices.
+ */
+function localToWorld(entry: PlanRoomInput, p: Pt): Pt {
+  const { anchor, rotationDeg } = entry;
+  const rot = ((rotationDeg % 360) + 360) % 360;
+  switch (rot) {
+    case 90:
+      return { x: anchor.x - p.z, z: anchor.z + p.x };
+    case 180:
+      return { x: anchor.x - p.x, z: anchor.z - p.z };
+    case 270:
+      return { x: anchor.x + p.z, z: anchor.z - p.x };
+    default:
+      return { x: anchor.x + p.x, z: anchor.z + p.z };
+  }
+}
+
+/**
+ * Draw one fixture: its footprint, plus enough of a glyph to tell a
+ * toilet from a basin at a glance.
+ *
+ * Kept crude on purpose. These are customer-placed to the nearest
+ * quarter metre by finger, so a photorealistic sanitaryware block
+ * would imply a precision the input does not have. A labelled box of
+ * the right size in the right place is honest and is what the
+ * draughtsman actually needs.
+ */
+function drawFixture(
+  out: string[],
+  entry: PlanRoomInput,
+  f: RoomFixture,
+): void {
+  const { widthM, depthM } = fixtureFootprintM(f);
+  const c = f.positionM;
+  const hw = widthM / 2;
+  const hd = depthM / 2;
+
+  const corners: Pt[] = [
+    { x: c.x - hw, z: c.z - hd },
+    { x: c.x + hw, z: c.z - hd },
+    { x: c.x + hw, z: c.z + hd },
+    { x: c.x - hw, z: c.z + hd },
+  ].map((p) => localToWorld(entry, p));
+
+  for (let i = 0; i < corners.length; i++) {
+    out.push(
+      line(LAYER.fixtures, corners[i], corners[(i + 1) % corners.length]),
+    );
+  }
+
+  // A bath and a shower get a diagonal so they read as basins-you-
+  // stand-in rather than cupboards; a toilet gets its cistern edge.
+  if (f.kind === "bath" || f.kind === "shower") {
+    out.push(line(LAYER.fixtures, corners[0], corners[2]));
+  }
+
+  const label = FIXTURE_SIZES_M[f.kind].label;
+  const h = Math.max(80, Math.min(200, (Math.min(widthM, depthM) * MM) / 4));
+  out.push(text(LAYER.fixtures, localToWorld(entry, c), h, label));
+}
+
 function drawStairs(
   out: string[],
   room: RoomDraft,

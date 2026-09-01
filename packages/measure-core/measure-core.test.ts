@@ -28,6 +28,7 @@ import {
 import { roomBoundingBox } from "./src/floorplan.ts";
 import { buildFloorPlanDxf, roomCornersM } from "./src/dxf.ts";
 import { buildWalls, buildDetailedPlanDxf, roomOutlineM } from "./src/dxfPlan.ts";
+import { fixtureFootprintM } from "./src/types.ts";
 import type { RoomDraft } from "./src/types.ts";
 import {
   normalizeConnections,
@@ -592,4 +593,165 @@ test("a scanned room survives the draft round trip intact", async () => {
   } finally {
     if (!had) delete g.window;
   }
+});
+
+/* ── Fixtures ─────────────────────────────────────────────────────
+ * Toilets, baths and kitchen units were captured nowhere at all, so a
+ * bathroom reached the draughtsman as a box with a door in it. These
+ * pin the two things that fail silently: the footprint after rotation,
+ * and whether a placed fixture actually survives into the DXF at the
+ * right place.
+ */
+
+test("a fixture's footprint swaps width and depth when turned", () => {
+  const bath = (rotationDeg: 0 | 90 | 180 | 270) =>
+    fixtureFootprintM({
+      id: "f1",
+      kind: "bath",
+      positionM: { x: 1, z: 1 },
+      rotationDeg,
+    });
+  // A standard bath is 1.70 x 0.70.
+  assert.deepEqual(bath(0), { widthM: 1.7, depthM: 0.7 });
+  assert.deepEqual(bath(180), { widthM: 1.7, depthM: 0.7 });
+  // Turned, it occupies the other way round. A footprint that ignored
+  // rotation would fit on the plan at 0 degrees and overlap the wall
+  // at 90, which is the case a customer is most likely to want.
+  assert.deepEqual(bath(90), { widthM: 0.7, depthM: 1.7 });
+  assert.deepEqual(bath(270), { widthM: 0.7, depthM: 1.7 });
+});
+
+test("a measured size overrides the standard one", () => {
+  // The distinction matters: an assumed 1.7 m bath and a measured
+  // 1.7 m bath are different facts to whoever draws from this.
+  const f = fixtureFootprintM({
+    id: "f1",
+    kind: "bath",
+    positionM: { x: 0, z: 0 },
+    rotationDeg: 0,
+    widthM: "1.5",
+    depthM: "0.75",
+  });
+  assert.deepEqual(f, { widthM: 1.5, depthM: 0.75 });
+
+  // Junk in the override falls back rather than producing a zero-sized
+  // fixture that vanishes from the drawing without comment.
+  const junk = fixtureFootprintM({
+    id: "f2",
+    kind: "toilet",
+    positionM: { x: 0, z: 0 },
+    rotationDeg: 0,
+    widthM: "",
+    depthM: "abc",
+  });
+  assert.deepEqual(junk, { widthM: 0.4, depthM: 0.7 });
+});
+
+/**
+ * Pull every LINE on a layer back out of the DXF as endpoint pairs, in
+ * millimetres.
+ *
+ * Asserting on `dxf.includes("800.00")` looked like it tested the
+ * geometry and did not: the fixture's text label carries coordinates
+ * too, so a version that drew the rectangle in room-local metres --
+ * the exact bug this is here to catch -- still produced a string
+ * containing the right numbers and the test passed. Verified by
+ * reintroducing that bug; it went green. Reading the actual entities
+ * is the only version of this test that fails when it should.
+ */
+function dxfLinesOnLayer(
+  dxf: string,
+  layer: string,
+): { x1: number; y1: number; x2: number; y2: number }[] {
+  const out: { x1: number; y1: number; x2: number; y2: number }[] = [];
+  const lines = dxf.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim() !== "LINE") continue;
+    // Group codes follow as alternating code/value pairs.
+    const get = (code: string): number | null => {
+      for (let j = i; j < Math.min(i + 24, lines.length); j++) {
+        if (lines[j].trim() === code) return Number.parseFloat(lines[j + 1]);
+      }
+      return null;
+    };
+    let onLayer = false;
+    for (let j = i; j < Math.min(i + 24, lines.length); j++) {
+      if (lines[j].trim() === "8" && lines[j + 1].trim() === layer) {
+        onLayer = true;
+        break;
+      }
+    }
+    if (!onLayer) continue;
+    const x1 = get("10"), y1 = get("20"), x2 = get("11"), y2 = get("21");
+    if (x1 === null || y1 === null || x2 === null || y2 === null) continue;
+    out.push({ x1, y1, x2, y2 });
+  }
+  return out;
+}
+
+const bathroomWith = (
+  fixtures: RoomDraft["fixtures"],
+  rotationDeg: 0 | 90 = 0,
+) => {
+  const room = planRoom("b", "Bathroom", 3, 2);
+  room.fixtures = fixtures;
+  return buildDetailedPlanDxf([
+    { room, anchor: { x: 0, z: 0 }, rotationDeg },
+  ]);
+};
+
+test("a placed fixture reaches the DXF on its own layer, at the right size", () => {
+  const dxf = bathroomWith([
+    {
+      id: "f1",
+      kind: "toilet",
+      // 1.0 m right, 0.5 m down from the room's top-left corner.
+      positionM: { x: 1, z: 0.5 },
+      rotationDeg: 0,
+    },
+  ]);
+
+  assert.ok(dxf.includes("TM-FIXTURES"), "fixtures layer should exist");
+  assert.ok(dxf.includes("Toilet"), "fixture should be labelled");
+
+  const segs = dxfLinesOnLayer(dxf, "TM-FIXTURES");
+  assert.equal(segs.length, 4, "a toilet is a four-sided box");
+
+  // A 0.40 x 0.70 toilet centred at (1.00, 0.50) spans x 0.80..1.20 and
+  // z 0.15..0.85 — in CAD millimetres with z negated, x 800..1200 and
+  // y -150..-850.
+  const xs = segs.flatMap((s) => [s.x1, s.x2]);
+  const ys = segs.flatMap((s) => [s.y1, s.y2]);
+  assert.equal(Math.min(...xs), 800);
+  assert.equal(Math.max(...xs), 1200);
+  assert.equal(Math.min(...ys), -850);
+  assert.equal(Math.max(...ys), -150);
+});
+
+test("a fixture is transformed into world space with its room", () => {
+  const fixtures: RoomDraft["fixtures"] = [
+    {
+      id: "f1",
+      kind: "toilet",
+      positionM: { x: 1, z: 0.5 },
+      rotationDeg: 0,
+    },
+  ];
+  const turned = dxfLinesOnLayer(bathroomWith(fixtures, 90), "TM-FIXTURES");
+  assert.equal(turned.length, 4);
+
+  // At 90 degrees the room's local +x runs along world +z and local +z
+  // runs along world -x, so local (1.00, 0.50) becomes world
+  // (-0.50, 1.00). The box spans world x -0.85..-0.15, z 0.80..1.20,
+  // i.e. mm x -850..-150 and y -800..-1200.
+  //
+  // A version that wrote room-local metres straight into the drawing
+  // would put this box at x 800..1200 — correct on an unrotated plan,
+  // and outside the building on this one.
+  const xs = turned.flatMap((s) => [s.x1, s.x2]);
+  const ys = turned.flatMap((s) => [s.y1, s.y2]);
+  assert.equal(Math.min(...xs), -850);
+  assert.equal(Math.max(...xs), -150);
+  assert.equal(Math.min(...ys), -1200);
+  assert.equal(Math.max(...ys), -800);
 });
