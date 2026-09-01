@@ -23,13 +23,13 @@
  * round a house cannot be left with no route forward.
  */
 
-import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type { Opening, RoomDraft, RoomShape } from "@tm-designs/measure-core";
 import WallPositionPicker from "@/components/measure/WallPositionPicker";
 import VoiceRecorder from "@/components/measure/VoiceRecorder";
 import LengthHint from "@/components/measure/LengthHint";
 import CustomShapeEditor from "@/components/measure/CustomShapeEditor";
+import GuidedScreen, { type MenuSection } from "@/components/measure/GuidedScreen";
 
 type StepId =
   | "name"
@@ -120,30 +120,7 @@ export default function GuidedRoomFlow({
     room.floorPolygonM?.length ? "draw" : "type",
   );
   const [menuOpen, setMenuOpen] = useState(false);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  /*
-   * Freeze the page behind.
-   *
-   * This is a full-screen takeover, and without locking the body the
-   * page underneath still scrolls when a drag starts on a non-
-   * scrollable part of the question -- so the customer returns from
-   * guided mode to find the form somewhere they did not leave it.
-   */
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
-
-  // Reset the scroll on every step. Without it, moving from a long step
-  // to a short one leaves the new question scrolled out of view — the
-  // exact problem this layout exists to fix.
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0 });
-  }, [stepIndex, roomIndex]);
   const step = steps[stepIndex];
   const isLast = stepIndex === steps.length - 1;
 
@@ -295,174 +272,83 @@ export default function GuidedRoomFlow({
     );
   };
 
+  const menuSections: MenuSection[] = [
+    ...(onScanRoom || onScanHouse
+      ? [
+          {
+            items: [
+              ...(onScanRoom
+                ? [
+                    {
+                      label: "Measure this room automatically",
+                      onClick: onScanRoom,
+                    },
+                  ]
+                : []),
+              ...(onScanHouse
+                ? [
+                    {
+                      label: "Scan the whole property",
+                      onClick: onScanHouse,
+                    },
+                  ]
+                : []),
+            ],
+          },
+        ]
+      : []),
+    {
+      heading: "Jump to a step",
+      items: steps.map((sid, i) => ({
+        label: LABELS[sid],
+        onClick: () => setStepIndex(i),
+        active: i === stepIndex,
+      })),
+    },
+    ...(roomNames.length > 1 && onGoToRoom
+      ? [
+          {
+            heading: "Jump to a room",
+            items: roomNames.map((n, i) => ({
+              label: `${i + 1}. ${n.trim() || "Unnamed room"}`,
+              onClick: () => {
+                onGoToRoom(i);
+                setStepIndex(0);
+              },
+              active: i === roomIndex,
+            })),
+          },
+        ]
+      : []),
+    {
+      items: [
+        { label: "Show everything on one page", onClick: onExitGuided },
+      ],
+    },
+  ];
+
   return (
-    /*
-     * The question owns the screen.
-     *
-     * Previously this was a card sitting below the app header, the
-     * progress pills, the intro paragraph and the room pager — so on a
-     * phone the actual question was below the fold and every step began
-     * by scrolling down to find out what was being asked. A one-
-     * question-at-a-time flow whose question you have to go looking for
-     * is not really one question at a time.
-     *
-     * So: fixed to the viewport, everything else gone. Two controls in
-     * the corners — a way home on the left, everything else behind a
-     * menu on the right — and the question centred between them with
-     * its answer and the Next button directly underneath.
-     *
-     * min-h-0 + overflow-y-auto on the middle band is what keeps the
-     * corners and the Next button pinned while a long step (six walls,
-     * several windows) scrolls internally.
-     */
-    <div className="fixed inset-0 z-[45] flex flex-col" style={{ backgroundColor: "#fcf9f5" }}>
-      {/* ── Corners ─────────────────────────────────────────────── */}
-      <div
-        className="flex shrink-0 items-center justify-between px-3 py-2"
-        style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
-      >
-        <Link
-          href="/"
-          aria-label="Back to the home screen"
-          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-bold text-on-surface-variant hover:text-primary"
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: "20px" }} aria-hidden>
-            home
-          </span>
-          Self measure
-        </Link>
-
-        <button
-          type="button"
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-label="Menu"
-          aria-expanded={menuOpen}
-          className="rounded-full px-3 py-2 text-on-surface-variant hover:text-primary"
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: "26px" }} aria-hidden>
-            menu
-          </span>
-        </button>
-      </div>
-
-      {/* Progress. Kept — a guided flow with no visible end is just an
-          interrogation — but reduced to a hairline so it frames the
-          question rather than competing with it. */}
-      <div className="h-1 shrink-0 bg-outline-variant/25">
-        <div
-          className="h-full bg-primary transition-all"
-          style={{ width: `${((stepIndex + 1) / steps.length) * 100}%` }}
-        />
-      </div>
-
-      {/* ── Menu ────────────────────────────────────────────────── */}
-      {menuOpen && (
-        <>
-          {/* Tap-anywhere-else to close. A menu on a phone that can only
-              be dismissed by finding its own button again is a trap. */}
-          <button
-            type="button"
-            aria-label="Close menu"
-            onClick={() => setMenuOpen(false)}
-            className="fixed inset-0 z-40 bg-black/20"
-          />
-          <div className="absolute right-3 top-14 z-50 w-72 overflow-hidden rounded-2xl border border-outline-variant/40 bg-surface-container-lowest shadow-2xl">
-            {onScanRoom && (
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onScanRoom();
-                }}
-                className="w-full justify-start px-5 py-3 text-left text-base font-semibold text-on-surface"
-              >
-                Measure this room automatically
-              </button>
-            )}
-            {onScanHouse && (
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onScanHouse();
-                }}
-                className="w-full justify-start px-5 py-3 text-left text-base font-semibold text-on-surface"
-              >
-                Scan the whole property
-              </button>
-            )}
-
-            <div className="border-t border-outline-variant/30 px-5 pb-1 pt-3 text-sm font-bold uppercase tracking-widest text-on-surface-variant">
-              Jump to a step
-            </div>
-            {steps.map((sid, i) => (
-              <button
-                key={sid}
-                type="button"
-                onClick={() => {
-                  setStepIndex(i);
-                  setMenuOpen(false);
-                }}
-                className={`w-full justify-start px-5 py-2.5 text-left text-base ${
-                  i === stepIndex
-                    ? "font-bold text-primary"
-                    : "text-on-surface"
-                }`}
-              >
-                {LABELS[sid]}
-              </button>
-            ))}
-
-            {roomNames.length > 1 && onGoToRoom && (
-              <>
-                <div className="border-t border-outline-variant/30 px-5 pb-1 pt-3 text-sm font-bold uppercase tracking-widest text-on-surface-variant">
-                  Jump to a room
-                </div>
-                {roomNames.map((n, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => {
-                      onGoToRoom(i);
-                      setStepIndex(0);
-                      setMenuOpen(false);
-                    }}
-                    className={`w-full justify-start px-5 py-2.5 text-left text-base ${
-                      i === roomIndex ? "font-bold text-primary" : "text-on-surface"
-                    }`}
-                  >
-                    {i + 1}. {n.trim() || "Unnamed room"}
-                  </button>
-                ))}
-              </>
-            )}
-
-            <button
-              type="button"
-              onClick={() => {
-                setMenuOpen(false);
-                onExitGuided();
-              }}
-              className="w-full justify-start border-t border-outline-variant/30 px-5 py-3 text-left text-base font-semibold text-on-surface-variant"
-            >
-              Show everything on one page
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* ── The question ────────────────────────────────────────── */}
-      <div
-        ref={scrollRef}
-        className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-5 py-4"
-      >
-        <div className="mx-auto w-full max-w-xl">
-          <p className="font-label mb-2 text-sm font-bold uppercase tracking-widest text-primary">
-            Room {roomIndex + 1} of {totalRooms}
-          </p>
-          <h2 className="font-headline mb-5 text-3xl leading-tight text-on-surface">
-            {LABELS[step]}
-          </h2>
+    <GuidedScreen
+      eyebrow={`Room ${roomIndex + 1} of ${totalRooms}`}
+      title={LABELS[step]}
+      progress={(stepIndex + 1) / steps.length}
+      menuOpen={menuOpen}
+      onMenuOpenChange={setMenuOpen}
+      menuSections={menuSections}
+      scrollKey={`${roomIndex}-${stepIndex}`}
+      onBack={() => setStepIndex((i) => Math.max(0, i - 1))}
+      backDisabled={stepIndex === 0}
+      onNext={() => {
+        if (block) return;
+        if (isLast) onDone();
+        else setStepIndex((i) => i + 1);
+      }}
+      nextDisabled={!!block}
+      nextLabel={
+        isLast ? (roomIndex + 1 < totalRooms ? "Next room" : "Finish") : "Next"
+      }
+      blockMessage={block}
+    >
 
       {step === "name" && (
         <div>
@@ -738,45 +624,6 @@ export default function GuidedRoomFlow({
         </div>
       )}
 
-          {block && (
-            <p className="mt-4 rounded-md bg-amber-100/60 px-3 py-2 text-sm text-amber-900">
-              {block}
-            </p>
-          )}
-
-          {/* Directly under the question, not pinned to the bottom of
-              the screen. On a step with one input there would be a
-              stretch of empty space between the answer and the button,
-              and the customer has to look away from what they just
-              typed to find what to press. */}
-          <div className="mt-7 flex items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
-              disabled={stepIndex === 0}
-              className="rounded-full border border-outline px-6 py-3 text-sm font-bold uppercase tracking-widest disabled:opacity-40"
-            >
-              Back
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (block) return;
-                if (isLast) onDone();
-                else setStepIndex((i) => i + 1);
-              }}
-              disabled={!!block}
-              className="rounded-full bg-primary px-8 py-3 text-sm font-bold uppercase tracking-widest text-on-primary disabled:opacity-40"
-            >
-              {isLast
-                ? roomIndex + 1 < totalRooms
-                  ? "Next room"
-                  : "Finish"
-                : "Next"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    </GuidedScreen>
   );
 }

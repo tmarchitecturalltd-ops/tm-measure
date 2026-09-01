@@ -54,6 +54,7 @@ import CustomShapeEditor from "@/components/measure/CustomShapeEditor";
 import VoiceRecorder from "@/components/measure/VoiceRecorder";
 import WallPositionPicker from "@/components/measure/WallPositionPicker";
 import GuidedRoomFlow from "@/components/measure/GuidedRoomFlow";
+import GuidedProjectFlow from "@/components/measure/GuidedProjectFlow";
 import LengthHint from "@/components/measure/LengthHint";
 import {
   RoomPlan,
@@ -2350,14 +2351,18 @@ export default function MeasureIntakeForm() {
    * question, which was the point of the takeover.
    */
   const guidedActive = guidedMode && !pendingDraft && step === "rooms";
+  /** Same, for the project step. */
+  const guidedProjectActive = guidedMode && !pendingDraft && step === "project";
+  /** Either takeover on screen — the app header stands down for both. */
+  const anyTakeover = guidedActive || guidedProjectActive;
 
   // Clears the fixed header only. The status-bar inset is handled once
   // on the body in globals.css — adding it here as well would push the
   // content down by twice the inset.
   return (
-    <div className={`min-h-screen bg-surface pb-28 ${guidedActive ? "pt-0" : "pt-24"}`}>
+    <div className={`min-h-screen bg-surface pb-28 ${anyTakeover ? "pt-0" : "pt-24"}`}>
       <TutorialOverlay />
-      {!guidedActive && (
+      {!anyTakeover && (
       <header
         className="fixed left-0 right-0 top-0 z-40 border-b border-outline-variant/20 bg-surface/90 backdrop-blur-xl"
         style={{ paddingTop: "env(safe-area-inset-top)" }}
@@ -2615,7 +2620,7 @@ export default function MeasureIntakeForm() {
           })}
         </ol>
 
-        {step === "project" && (
+        {step === "project" && !guidedProjectActive && (
           <section className="space-y-6 tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 md:p-8">
             <h2 className="font-headline text-2xl text-on-surface">Project details</h2>
             <div className="grid gap-6 md:grid-cols-2">
@@ -4965,6 +4970,29 @@ export default function MeasureIntakeForm() {
           overlay only works if the overlay is genuinely the full
           viewport in every browser; not rendering the content at all
           works everywhere. */}
+      {guidedProjectActive && (
+        <GuidedProjectFlow
+          customerName={customerName}
+          onCustomerName={setCustomerName}
+          email={email}
+          onEmail={setEmail}
+          projectName={projectName}
+          onProjectName={setProjectName}
+          projectType={projectType}
+          onProjectType={setProjectType}
+          defaultCeilingHeightM={defaultCeilingHeightM}
+          onDefaultCeilingHeightM={setDefaultCeilingHeightM}
+          unit={unit}
+          onUnit={setUnit}
+          unitLocked={unitLocked}
+          // Same handler the one-page version used, so guided mode
+          // cannot get past validation the other route enforces.
+          onDone={goRooms}
+          onExitGuided={() => setGuidedMode(false)}
+          issueFor={issueFor}
+        />
+      )}
+
       {/* guidedActive, not guidedMode: now that this sits outside the
           step blocks, only the step check keeps it off the exterior,
           plan and review screens. It also stands down while the

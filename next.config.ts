@@ -21,6 +21,14 @@ const nextConfig: NextConfig = {
     // rather than listing sixteen separate patterns.
     "172.*.*.*",
   ],
+  /*
+   * Hide the Next.js dev badge.
+   *
+   * It is dev-only and never ships, but it sits bottom-right over the
+   * guided screens, and when the person reviewing a layout on a phone
+   * asks about "the N logo" it has already cost more than it is worth.
+   */
+  devIndicators: false,
   transpilePackages: [
     "@tm-designs/measure-core",
     "@tm-designs/capacitor-roomplan",
