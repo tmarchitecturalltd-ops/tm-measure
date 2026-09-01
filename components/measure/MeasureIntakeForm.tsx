@@ -2336,12 +2336,28 @@ export default function MeasureIntakeForm() {
     )}&body=${body}`;
   };
 
+  /**
+   * Is the guided takeover currently on screen?
+   *
+   * It covers the viewport, so the app header underneath it is not
+   * merely redundant — it was rendering *over* the flow (header z-40,
+   * flow z-30), which put the app title and the saved-state chip on top
+   * of the guided screen and hid the menu button completely. Reported
+   * as "can't see the burger options".
+   *
+   * Raising the flow above the header fixes the stacking; not drawing
+   * the header at all is what makes the screen actually be about the
+   * question, which was the point of the takeover.
+   */
+  const guidedActive = guidedMode && !pendingDraft && step === "rooms";
+
   // Clears the fixed header only. The status-bar inset is handled once
   // on the body in globals.css — adding it here as well would push the
   // content down by twice the inset.
   return (
-    <div className="min-h-screen bg-surface pb-28 pt-24">
+    <div className={`min-h-screen bg-surface pb-28 ${guidedActive ? "pt-0" : "pt-24"}`}>
       <TutorialOverlay />
+      {!guidedActive && (
       <header
         className="fixed left-0 right-0 top-0 z-40 border-b border-outline-variant/20 bg-surface/90 backdrop-blur-xl"
         style={{ paddingTop: "env(safe-area-inset-top)" }}
@@ -2389,6 +2405,7 @@ export default function MeasureIntakeForm() {
           )}
         </div>
       </header>
+      )}
 
       <main className="mx-auto max-w-5xl px-4 md:px-6">
         <p className="mb-8 max-w-3xl text-sm leading-relaxed text-on-surface-variant">
@@ -5007,7 +5024,7 @@ export default function MeasureIntakeForm() {
         <div
           role="status"
           aria-live="polite"
-          className="fixed inset-x-0 bottom-0 z-50 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+          className="fixed inset-x-0 bottom-0 z-[60] px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
         >
           <div className="mx-auto flex max-w-lg flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#1c1c1a] px-5 py-3 text-[#f7f5ef] shadow-2xl">
             <span className="text-base font-semibold">{undoAction.label}</span>

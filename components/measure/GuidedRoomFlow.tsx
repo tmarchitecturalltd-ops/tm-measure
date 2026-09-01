@@ -122,6 +122,22 @@ export default function GuidedRoomFlow({
   const [menuOpen, setMenuOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  /*
+   * Freeze the page behind.
+   *
+   * This is a full-screen takeover, and without locking the body the
+   * page underneath still scrolls when a drag starts on a non-
+   * scrollable part of the question -- so the customer returns from
+   * guided mode to find the form somewhere they did not leave it.
+   */
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   // Reset the scroll on every step. Without it, moving from a long step
   // to a short one leaves the new question scrolled out of view — the
   // exact problem this layout exists to fix.
@@ -299,7 +315,7 @@ export default function GuidedRoomFlow({
      * corners and the Next button pinned while a long step (six walls,
      * several windows) scrolls internally.
      */
-    <section className="fixed inset-0 z-30 flex flex-col bg-surface">
+    <div className="fixed inset-0 z-[45] flex flex-col" style={{ backgroundColor: "#fcf9f5" }}>
       {/* ── Corners ─────────────────────────────────────────────── */}
       <div
         className="flex shrink-0 items-center justify-between px-3 py-2"
@@ -761,6 +777,6 @@ export default function GuidedRoomFlow({
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
