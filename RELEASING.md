@@ -24,6 +24,43 @@ git push
 
 That is all this step is. Everything else is triggered by it.
 
+**Do not skip it and go straight to Codemagic.** Codemagic builds what
+is on GitHub, not what is on this computer. Build 43 was started
+without a push and silently built a commit three days old — it looked
+like a normal build, produced a normal IPA, and did not contain any of
+the work it was started for.
+
+To be sure, paste this before you build:
+
+```
+git status -sb
+```
+
+If the first line ends with `[ahead 2]` or similar, there are commits
+here that GitHub has not got. Push them.
+
+---
+
+## 1b. Bump the version number
+
+**Every submission to Apple needs a version number higher than the last
+approved one.** Reusing one fails at the very end of the build, after
+fifteen minutes, with `Invalid Pre-Release Train` and
+`CFBundleShortVersionString must contain a higher version`.
+
+Once 1.1 is approved, 1.1 is closed forever — even for TestFlight.
+
+Two files, and they must agree:
+
+1. `ios/App/App.xcodeproj/project.pbxproj` — `MARKETING_VERSION`, in
+   **two** places. Change both.
+2. `android/app/build.gradle` — `versionName`
+
+The build *number* is handled automatically from the Codemagic counter;
+this is the version *name* only.
+
+Then commit and push before building.
+
 ---
 
 ## 2. Deploy the backend (Apps Script)
@@ -74,7 +111,7 @@ must be 1.1.
 1. **App Store Connect → TM Measure → Distribution**
 2. Left sidebar, next to **iOS App**, click the blue **+**
 3. Enter the version number — it must match `MARKETING_VERSION` in the
-   Xcode project. Currently **1.1**
+   Xcode project. Currently **1.2**
 4. Fill in **What's New in This Version**
 
 ### 3c. Attach the build
