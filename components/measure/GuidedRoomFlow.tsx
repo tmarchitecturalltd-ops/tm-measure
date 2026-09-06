@@ -152,9 +152,16 @@ export default function GuidedRoomFlow({
    * the app has just done, and inviting a worse answer than the one it
    * already holds — a typed 3.5 replacing a measured 3.47.
    *
-   * They still get a screen showing what was measured, because being
-   * shown numbers you cannot check is not much better than not being
-   * shown them. Stairs and photos stay: neither comes out of the scan.
+   * There was a screen after the scan listing every wall length, on
+   * the reasoning that numbers you are never shown are barely better
+   * than numbers you were asked to invent. Removed on review: it
+   * arrived at the moment the customer had just been told the phone
+   * had done the work, and asked them to read a table confirming it.
+   * The figures are still on the review screen before anything is
+   * sent, which is the point at which checking them is a decision
+   * rather than an interruption.
+   *
+   * Stairs and photos stay: neither comes out of a scan.
    */
   const scanned = room.measuredByScan === true;
 
@@ -182,7 +189,7 @@ export default function GuidedRoomFlow({
       mustScan
         ? ["name", "scan"]
         : scanned
-        ? ["name", "measured", "stairs", "photos"]
+        ? ["name", "stairs", "photos"]
         : [
             "name",
             "shape",
