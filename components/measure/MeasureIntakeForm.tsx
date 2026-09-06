@@ -1725,6 +1725,19 @@ export default function MeasureIntakeForm() {
   const issueFor = (path: string) => issues.find((i) => i.path === path)?.message;
 
   /**
+   * Will the submission carry a CAD drawing?
+   *
+   * Mirrors buildDxfAttachment's own condition — at least one room with
+   * a position on the plan. Kept as a plain check rather than calling
+   * that function, because generating two full DXF files on every
+   * render of the review screen to answer a yes/no question would be
+   * an odd way to spend a phone's battery.
+   */
+  const dxfWillBeAttached = rooms.some(
+    (r) => placements[r.id]?.positionM != null,
+  );
+
+  /**
    * Every outstanding issue, labelled with the room it belongs to and
    * which page of the pager that is.
    *
@@ -5067,6 +5080,7 @@ export default function MeasureIntakeForm() {
                     type="button"
                     onClick={submitToBackend}
                     disabled={submitStatus === "submitting"}
+                    data-submit
                     className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 transition-all hover:bg-surface-tint active:scale-[0.97] disabled:opacity-60"
                   >
                     {submitStatus === "submitting"
@@ -5083,6 +5097,35 @@ export default function MeasureIntakeForm() {
                       )}
                   </button>
                 </div>
+                {/* No CAD drawing, said out loud.
+                    buildDxfAttachment returns null when no room has a
+                    position on the floor plan, and the email template
+                    then omits the CAD block entirely — so the
+                    submission arrives looking complete and the one
+                    thing the draughtsman actually needs is quietly
+                    absent. Nobody was told, at either end. */}
+                {!dxfWillBeAttached && (
+                  <div className="mt-2 rounded-xl border border-[#b89650]/50 bg-primary/10 p-4">
+                    <p className="text-sm font-semibold text-on-surface">
+                      No CAD drawing will be included
+                    </p>
+                    <p className="mt-1 text-sm text-on-surface-variant">
+                      The drawing is built from where the rooms sit on the
+                      floor plan, and none of them have been placed yet. Go
+                      back to the floor plan step and they will lay
+                      themselves out — you can send without it, but we
+                      won&apos;t have a plan to draw from.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setStep("plan")}
+                      className="mt-3 rounded-full border border-primary px-5 py-2 text-sm font-bold uppercase tracking-widest text-primary"
+                    >
+                      Open the floor plan
+                    </button>
+                  </div>
+                )}
+
                 {submitStatus === "error" && submitError && (
                   <div role="alert" aria-live="assertive" className="mt-2 rounded-xl border border-error/40 bg-error/10 p-4">
                     <p className="text-sm font-semibold text-error">
