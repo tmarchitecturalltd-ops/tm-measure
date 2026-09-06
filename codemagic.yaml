@@ -49,6 +49,40 @@ workflows:
       cocoapods: default
       node: 22
     scripts:
+      # Fail early and loudly on a missing runtime flag.
+      #
+      # NEXT_PUBLIC_ENABLE_SCAN=1 gates the entire scan feature. It
+      # lived only in .env.local, which CI never reads, and build 1024
+      # shipped to the store with the app's headline feature silently
+      # absent. Nothing failed; the build was green and the app was
+      # simply missing a third of itself, and it cost two rounds of
+      # testing to notice a second time.
+      #
+      # A green build that produces the wrong app is worse than a red
+      # one. This makes the misconfiguration impossible to ship quietly.
+      - name: Check runtime flags are set
+        script: |
+          missing=0
+          for v in NEXT_PUBLIC_MEASURE_SUBMIT_URL NEXT_PUBLIC_ENABLE_SCAN; do
+            if [ -z "$(eval echo \$$v)" ]; then
+              echo "MISSING: $v is not set."
+              missing=1
+            else
+              echo "OK: $v is set."
+            fi
+          done
+          if [ "$NEXT_PUBLIC_ENABLE_SCAN" != "1" ]; then
+            echo "MISSING: NEXT_PUBLIC_ENABLE_SCAN must be exactly 1 to"
+            echo "         include the scan feature. Set it in the"
+            echo "         'app_runtime' environment group."
+            missing=1
+          fi
+          if [ "$missing" = "1" ]; then
+            echo ""
+            echo "Add the missing values to the 'app_runtime' group:"
+            echo "  Codemagic > tm-measure > Settings > Environment variables"
+            exit 1
+          fi
       - name: Install JS dependencies
         script: npm ci
       - name: Build Next.js (Capacitor mode)
@@ -127,6 +161,40 @@ workflows:
       java: 21
       node: 22
     scripts:
+      # Fail early and loudly on a missing runtime flag.
+      #
+      # NEXT_PUBLIC_ENABLE_SCAN=1 gates the entire scan feature. It
+      # lived only in .env.local, which CI never reads, and build 1024
+      # shipped to the store with the app's headline feature silently
+      # absent. Nothing failed; the build was green and the app was
+      # simply missing a third of itself, and it cost two rounds of
+      # testing to notice a second time.
+      #
+      # A green build that produces the wrong app is worse than a red
+      # one. This makes the misconfiguration impossible to ship quietly.
+      - name: Check runtime flags are set
+        script: |
+          missing=0
+          for v in NEXT_PUBLIC_MEASURE_SUBMIT_URL NEXT_PUBLIC_ENABLE_SCAN; do
+            if [ -z "$(eval echo \$$v)" ]; then
+              echo "MISSING: $v is not set."
+              missing=1
+            else
+              echo "OK: $v is set."
+            fi
+          done
+          if [ "$NEXT_PUBLIC_ENABLE_SCAN" != "1" ]; then
+            echo "MISSING: NEXT_PUBLIC_ENABLE_SCAN must be exactly 1 to"
+            echo "         include the scan feature. Set it in the"
+            echo "         'app_runtime' environment group."
+            missing=1
+          fi
+          if [ "$missing" = "1" ]; then
+            echo ""
+            echo "Add the missing values to the 'app_runtime' group:"
+            echo "  Codemagic > tm-measure > Settings > Environment variables"
+            exit 1
+          fi
       - name: Install JS dependencies
         script: npm ci
       - name: Build Next.js (Capacitor mode)
