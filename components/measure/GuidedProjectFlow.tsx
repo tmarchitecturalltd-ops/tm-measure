@@ -72,6 +72,11 @@ type Props = {
   unitLocked: boolean;
   /** Runs the same validation the one-page version ran. */
   onDone: () => void;
+  /**
+   * Kept for the validation path, which still drops to the one-page
+   * view to point at a problem this flow cannot show. It is no longer
+   * offered as a choice.
+   */
   onExitGuided: () => void;
   issueFor: (path: string) => string | undefined;
   /**
@@ -99,7 +104,6 @@ export default function GuidedProjectFlow({
   onUnit,
   unitLocked,
   onDone,
-  onExitGuided,
   issueFor,
   onBackFromFirst,
 }: Props) {
@@ -160,9 +164,6 @@ export default function GuidedProjectFlow({
         active: i === stepIndex,
       })),
     },
-    {
-      items: [{ label: "Show everything on one page", onClick: onExitGuided }],
-    },
   ];
 
   return (
@@ -204,7 +205,6 @@ export default function GuidedProjectFlow({
             placeholder="e.g. Harry McCulloch"
             autoComplete="name"
             className={input}
-            autoFocus
           />
           {issueFor("name") && (
             <p data-error-anchor className="mt-2 text-sm text-error">

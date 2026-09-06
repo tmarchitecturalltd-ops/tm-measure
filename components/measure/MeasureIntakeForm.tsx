@@ -4437,15 +4437,6 @@ export default function MeasureIntakeForm() {
               </section>
             ))}
 
-            {!guidedMode && (
-              <button
-                type="button"
-                onClick={() => setGuidedMode(true)}
-                className="w-full rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-bold uppercase tracking-widest text-on-surface-variant"
-              >
-                Ask me one question at a time
-              </button>
-            )}
 
             {/* Pager navigation */}
             <div className="flex items-center justify-between gap-3">
@@ -5431,6 +5422,9 @@ export default function MeasureIntakeForm() {
           // Same handler the one-page version used, so guided mode
           // cannot get past validation the other route enforces.
           onDone={goRooms}
+          // No longer offered as a choice; kept because the
+          // validation path still needs a way to show a problem the
+          // guided screens cannot.
           onExitGuided={() => setGuidedMode(false)}
           issueFor={issueFor}
           // Home rather than a dead button on the very first screen.

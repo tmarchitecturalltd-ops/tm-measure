@@ -469,7 +469,6 @@ export default function GuidedRoomFlow({
           label: "Done with the rooms — carry on",
           onClick: () => finishRoom(),
         },
-        { label: "Show everything on one page", onClick: onExitGuided },
       ],
     },
   ];
@@ -696,6 +695,35 @@ export default function GuidedRoomFlow({
 
       {step === "walls" && (
         <div className="space-y-3">
+          {/* Scanning offered here, not only in the menu.
+              "Where is the auto scan option?" has now been asked three
+              times, which is the answer: a feature reachable only from
+              a hamburger is a feature most people never find. This is
+              the screen where measuring is the question, so it belongs
+              on it. */}
+          {onScanRoom && (
+            <button
+              type="button"
+              onClick={onScanRoom}
+              style={{ minHeight: 56 }}
+              className="mb-1 flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-sm font-bold uppercase tracking-widest text-on-primary"
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: "20px" }}
+                aria-hidden
+              >
+                {scanIsLidar ? "view_in_ar" : "photo_camera"}
+              </span>
+              {scanIsLidar ? "Measure with the sensor" : "Measure with the camera"}
+            </button>
+          )}
+          {onScanRoom && (
+            <p className="pb-1 text-center text-sm text-on-surface-variant">
+              or enter the lengths yourself
+            </p>
+          )}
+
           {/* Type or draw.
               Typing six numbers describes a shape the customer can see
               and we cannot, and for anything other than a plain
