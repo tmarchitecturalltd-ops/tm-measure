@@ -81,3 +81,64 @@ export function estimateAreaFromWalls(scan: ScanResult): number | undefined {
   if (!Number.isFinite(w.valueM) || !Number.isFinite(l.valueM)) return undefined;
   return Number((w.valueM * l.valueM).toFixed(2));
 }
+
+/**
+ * Is a scanned floor outline good enough to draw from?
+ *
+ * RoomPlan's floor polygon is not always the tidy room outline the
+ * bounding metrics suggest. A scan that saw the floor at a glancing
+ * angle, or one interrupted part-way, can return a sliver — a few
+ * near-collinear points hugging one wall — while `widthM` and
+ * `lengthM` remain sensible, because those come from the walls rather
+ * than the floor.
+ *
+ * Drawn straight, that produces a room labelled "4.34 x 3.33 m" and
+ * rendered as a thin spike, which is what Charlie saw. The numbers were
+ * right and the shape was nonsense, and the shape is what a person
+ * looks at.
+ *
+ * So the polygon has to earn its place. It must:
+ *   - have at least three points;
+ *   - span roughly the width and length the walls reported;
+ *   - enclose a decent fraction of its own bounding box.
+ *
+ * Anything else falls back to the rectangle, which is less informative
+ * and never absurd. Tolerances are loose because a genuine L-shape
+ * fails a strict version of all three.
+ */
+export function scanPolygonIsUsable(
+  polygon: { x: number; z: number }[] | undefined,
+  widthM: number,
+  lengthM: number,
+): boolean {
+  if (!polygon || polygon.length < 3) return false;
+  if (!(widthM > 0) || !(lengthM > 0)) return false;
+
+  const xs = polygon.map((p) => p.x);
+  const zs = polygon.map((p) => p.z);
+  const spanX = Math.max(...xs) - Math.min(...xs);
+  const spanZ = Math.max(...zs) - Math.min(...zs);
+  if (!(spanX > 0) || !(spanZ > 0)) return false;
+
+  // The outline's bounding box should resemble the reported footprint.
+  // Either orientation, since the polygon is axis-aligned in the shared
+  // frame while width/length come from the room's own longest wall.
+  const expected = [
+    [widthM, lengthM],
+    [lengthM, widthM],
+  ];
+  const near = (a: number, b: number) => Math.abs(a - b) <= Math.max(0.5, b * 0.25);
+  const boxMatches = expected.some(([w, l]) => near(spanX, w) && near(spanZ, l));
+  if (!boxMatches) return false;
+
+  // Shoelace area against the bounding box. A sliver fills almost none
+  // of its box; an L-shape, the worst honest case, still fills half.
+  let twiceArea = 0;
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % polygon.length];
+    twiceArea += a.x * b.z - b.x * a.z;
+  }
+  const fill = Math.abs(twiceArea) / 2 / (spanX * spanZ);
+  return fill >= 0.45;
+}

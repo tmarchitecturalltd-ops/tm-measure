@@ -30,6 +30,7 @@ import { buildFloorPlanDxf, roomCornersM } from "./src/dxf.ts";
 import { buildWalls, buildDetailedPlanDxf, roomOutlineM } from "./src/dxfPlan.ts";
 import { fixtureFootprintM } from "./src/types.ts";
 import { validateRoom } from "./src/validation.ts";
+import { scanPolygonIsUsable } from "./src/scan.ts";
 import type { RoomDraft } from "./src/types.ts";
 import {
   normalizeConnections,
@@ -851,4 +852,63 @@ test("a typed room still needs a photograph", () => {
     validateRoom(typed, 0).filter((i) => i.path === "room-0-photos").length,
     1,
   );
+});
+
+/* ── Scanned outlines ─────────────────────────────────────────────
+ * A room came back labelled "4.34 x 3.33 m" and drawn as a thin
+ * spike. The width and length are derived from the walls and were
+ * fine; the floor polygon was not, and the polygon is what gets drawn.
+ */
+
+test("a sane rectangular outline is usable", () => {
+  const poly = [
+    { x: 0, z: 0 },
+    { x: 4.34, z: 0 },
+    { x: 4.34, z: 3.33 },
+    { x: 0, z: 3.33 },
+  ];
+  assert.equal(scanPolygonIsUsable(poly, 4.34, 3.33), true);
+});
+
+test("an L-shape is usable — it is the whole point of keeping polygons", () => {
+  // 4 x 3 with a 1.5 x 1 bite out of one corner: 10.5 of a 12 m² box.
+  const poly = [
+    { x: 0, z: 0 },
+    { x: 4, z: 0 },
+    { x: 4, z: 2 },
+    { x: 2.5, z: 2 },
+    { x: 2.5, z: 3 },
+    { x: 0, z: 3 },
+  ];
+  assert.equal(scanPolygonIsUsable(poly, 4, 3), true);
+});
+
+test("a sliver is rejected even when the reported size is right", () => {
+  // What a glancing or interrupted scan produces: a few near-collinear
+  // points hugging one wall. Spans nothing like 4.34 x 3.33.
+  const sliver = [
+    { x: 0, z: 0 },
+    { x: 0.18, z: 0 },
+    { x: 0.18, z: 2.5 },
+    { x: 0, z: 2.5 },
+  ];
+  assert.equal(scanPolygonIsUsable(sliver, 4.34, 3.33), false);
+});
+
+test("a hollow outline that fills too little of its box is rejected", () => {
+  // Right bounding box, wrong shape — a thin Z spanning the room.
+  const zig = [
+    { x: 0, z: 0 },
+    { x: 4, z: 0 },
+    { x: 4, z: 0.2 },
+    { x: 0.2, z: 0.2 },
+    { x: 0.2, z: 3 },
+    { x: 0, z: 3 },
+  ];
+  assert.equal(scanPolygonIsUsable(zig, 4, 3), false);
+});
+
+test("fewer than three points is never usable", () => {
+  assert.equal(scanPolygonIsUsable([{ x: 0, z: 0 }, { x: 4, z: 0 }], 4, 3), false);
+  assert.equal(scanPolygonIsUsable(undefined, 4, 3), false);
 });

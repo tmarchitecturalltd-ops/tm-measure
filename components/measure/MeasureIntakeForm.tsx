@@ -23,6 +23,7 @@ import {
 } from "@/lib/recentSubmissions";
 import {
   parseMeters,
+  scanPolygonIsUsable,
   formatLengthDual,
   validateProject,
   scanOverallConfidence,
@@ -693,7 +694,11 @@ export default function MeasureIntakeForm() {
         irregularNotes: "",
         notes: stamp,
         photos: [],
-        shape: useDetailed ? "custom" : "rectangle",
+        shape:
+          !sr.rectangular &&
+          scanPolygonIsUsable(sr.floorPolygonM, sr.widthM, sr.lengthM)
+            ? "custom"
+            : "rectangle",
         measuredByScan: true,
         // The real outline, translated from the shared frame into the
         // room's own coordinates — floorPolygonM is defined relative to
@@ -705,8 +710,14 @@ export default function MeasureIntakeForm() {
         // a four-corner polygon for a plain rectangular room adds a
         // second source of truth for the same shape, and the two would
         // eventually disagree.
+        // Guarded by scanPolygonIsUsable: RoomPlan's floor outline is
+        // not always the tidy shape its bounding metrics imply, and a
+        // sliver drawn faithfully is worse than a rectangle drawn
+        // approximately.
         floorPolygonM:
-          !sr.rectangular && (sr.floorPolygonM?.length ?? 0) >= 3 && sr.originM
+          !sr.rectangular &&
+          sr.originM &&
+          scanPolygonIsUsable(sr.floorPolygonM, sr.widthM, sr.lengthM)
             ? sr.floorPolygonM!.map((p) => ({
                 x: Number((p.x - sr.originM!.x).toFixed(3)),
                 z: Number((p.z - sr.originM!.z).toFixed(3)),
@@ -816,18 +827,39 @@ export default function MeasureIntakeForm() {
                     widthM: w.widthM.toFixed(2),
                     note: "Detected by scan",
                   })),
-                  shape: useDetailed ? "custom" : "rectangle",
+                  // "custom" only when a polygon is actually kept —
+                  // a custom-shaped room with no polygon falls through
+                  // to a rectangle anyway, but says otherwise on screen.
+                  shape:
+                    !sr.rectangular &&
+                    scanPolygonIsUsable(sr.floorPolygonM, sr.widthM, sr.lengthM)
+                      ? "custom"
+                      : "rectangle",
                   measuredByScan: true,
-                  // A single-room scan reports its outline in the room's
-                  // own frame already — there is no shared property
-                  // origin to subtract, unlike the merged house scan.
+                  /*
+                   * Outline, translated to the room's own corner.
+                   *
+                   * This previously kept the raw points on the belief
+                   * that a single-room scan reports them room-locally.
+                   * It does not: CaptureSerializer is shared, and it
+                   * emits the polygon in the capture's world frame with
+                   * originM as its minimum corner — the same as the
+                   * house scan. So the outline was drawn at ARKit world
+                   * coordinates, far from the room's anchor, which is
+                   * half of why a scanned room came out as a spike.
+                   *
+                   * Only kept when it survives scanPolygonIsUsable; a
+                   * rough floor polygon is worse than the rectangle.
+                   */
                   floorPolygonM:
-                    !sr.rectangular && (sr.floorPolygonM?.length ?? 0) >= 3
+                    !sr.rectangular &&
+                    sr.originM &&
+                    scanPolygonIsUsable(sr.floorPolygonM, sr.widthM, sr.lengthM)
                       ? sr.floorPolygonM!.map((pt) => ({
-                          x: Number(pt.x.toFixed(3)),
-                          z: Number(pt.z.toFixed(3)),
+                          x: Number((pt.x - sr.originM!.x).toFixed(3)),
+                          z: Number((pt.z - sr.originM!.z).toFixed(3)),
                         }))
-                      : r.floorPolygonM,
+                      : undefined,
                 },
           ),
         );
