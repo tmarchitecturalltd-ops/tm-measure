@@ -65,6 +65,16 @@ type Props = {
   onScanHouse?: () => void;
   /** Jump straight to another room. */
   onGoToRoom?: (index: number) => void;
+  /**
+   * Add a room and move to it.
+   *
+   * There was no way to do this from the guided flow at all: finishing
+   * the last room went straight to the exterior photos, so anyone who
+   * had measured the kitchen and wanted the lounge next had to leave
+   * the flow to find the button. A survey of a house that cannot add
+   * the second room is not much of a survey.
+   */
+  onAddRoom?: () => void;
   /** Room names, for the jump list in the menu. */
   roomNames?: string[];
   /**
@@ -108,6 +118,7 @@ export default function GuidedRoomFlow({
   onScanHouse,
   onGoToRoom,
   roomNames = [],
+  onAddRoom,
   scanRequired = false,
   scanFailed = false,
 }: Props) {
@@ -243,7 +254,7 @@ export default function GuidedRoomFlow({
    * Photo issues are excluded to match the rest of the flow, which
    * treats a missing photo as a nudge and not a barrier.
    */
-  const finishRoom = () => {
+  const finishRoom = (andThen?: () => void) => {
     const issues = validateRoom(room, roomIndex).filter(
       (i) => !i.path.endsWith("-photos"),
     );
@@ -259,7 +270,7 @@ export default function GuidedRoomFlow({
       return;
     }
     setFinishIssue(null);
-    onDone();
+    (andThen ?? onDone)();
   };
 
   const openingStep = (kind: "doors" | "windows") => {
@@ -428,6 +439,13 @@ export default function GuidedRoomFlow({
       : []),
     {
       items: [
+        ...(onAddRoom
+          ? [{ label: "Add another room", onClick: () => finishRoom(onAddRoom) }]
+          : []),
+        {
+          label: "Done with the rooms — carry on",
+          onClick: () => finishRoom(),
+        },
         { label: "Show everything on one page", onClick: onExitGuided },
       ],
     },
@@ -447,12 +465,29 @@ export default function GuidedRoomFlow({
       onNext={() => {
         if (block) return;
         setFinishIssue(null);
-        if (isLast) finishRoom();
-        else setStepIndex((i) => i + 1);
+        if (!isLast) {
+          setStepIndex((i) => i + 1);
+          return;
+        }
+        // Last question of the last room: check this room, then add the
+        // next one. Finishing the whole survey is a separate, deliberate
+        // choice in the menu — most people have another room to do, and
+        // the button under their thumb should be the likely one.
+        if (roomIndex + 1 >= totalRooms && onAddRoom) {
+          finishRoom(onAddRoom);
+          return;
+        }
+        finishRoom();
       }}
       nextDisabled={!!block}
       nextLabel={
-        isLast ? (roomIndex + 1 < totalRooms ? "Next room" : "Finish") : "Next"
+        isLast
+          ? roomIndex + 1 < totalRooms
+            ? "Next room"
+            : onAddRoom
+              ? "Add another room"
+              : "Finish"
+          : "Next"
       }
       blockMessage={block ?? finishIssue}
     >
@@ -606,19 +641,26 @@ export default function GuidedRoomFlow({
                   : "border-outline-variant/40"
               }`}
             >
-              <span className="block text-sm font-bold text-on-surface">
-                {s === "rectangle"
-                  ? "Four straight walls"
-                  : s === "l-shape"
-                    ? "L-shaped"
-                    : "Something else"}
-              </span>
-              <span className="mt-0.5 block text-sm text-on-surface-variant">
-                {s === "rectangle"
-                  ? "The usual — a simple box"
-                  : s === "l-shape"
-                    ? "Six walls, with a corner taken out"
-                    : "Draw the outline yourself"}
+              {/* One wrapper, two lines. Two sibling spans in a button
+                  are at the mercy of whatever display the button has —
+                  they were laid out in a row by a global rule and the
+                  two lines ran together. A single block child cannot be
+                  rearranged by its parent's flex direction. */}
+              <span className="block">
+                <span className="block text-base font-bold text-on-surface">
+                  {s === "rectangle"
+                    ? "Four straight walls"
+                    : s === "l-shape"
+                      ? "L-shaped"
+                      : "Something else"}
+                </span>
+                <span className="mt-1 block text-sm text-on-surface-variant">
+                  {s === "rectangle"
+                    ? "The usual — a simple box"
+                    : s === "l-shape"
+                      ? "Six walls, with a corner taken out"
+                      : "Draw the outline yourself"}
+                </span>
               </span>
             </button>
           ))}

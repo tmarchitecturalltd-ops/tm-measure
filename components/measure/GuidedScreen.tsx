@@ -123,7 +123,7 @@ export default function GuidedScreen({
       {/* ── Corners ───────────────────────────────────────────────── */}
       <div
         className="flex shrink-0 items-center justify-between px-3 py-2"
-        style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
+        style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.5rem)" }}
       >
         <Link
           href="/"
@@ -140,21 +140,34 @@ export default function GuidedScreen({
           Self measure
         </Link>
 
-        <button
-          type="button"
-          onClick={() => onMenuOpenChange(!menuOpen)}
-          aria-label="Menu"
-          aria-expanded={menuOpen}
-          className="rounded-full px-3 py-2 text-on-surface-variant hover:text-primary"
-        >
-          <span
-            className="material-symbols-outlined"
-            style={{ fontSize: "26px" }}
-            aria-hidden
+        {/* Only drawn when there is a menu behind it.
+            The resume screen passes no sections, so its hamburger did
+            nothing at all when tapped — the same dead-control problem as
+            the old Finish button, in the corner of the very first
+            screen a returning customer sees. A control that cannot do
+            anything should not be there. */}
+        {menuSections.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => onMenuOpenChange(!menuOpen)}
+            aria-label="Menu"
+            aria-expanded={menuOpen}
+            // Generous padding: this sits right under the status bar,
+            // where the top few pixels of a tap can be taken by the
+            // system rather than the page.
+            className="inline-flex items-center justify-center rounded-full px-4 py-3 text-on-surface-variant hover:text-primary"
           >
-            menu
-          </span>
-        </button>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "28px" }}
+              aria-hidden
+            >
+              menu
+            </span>
+          </button>
+        ) : (
+          <span aria-hidden />
+        )}
       </div>
 
       {/* Progress. A guided flow with no visible end is an

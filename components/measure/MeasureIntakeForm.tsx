@@ -5502,6 +5502,13 @@ export default function MeasureIntakeForm() {
           }
           onGoToRoom={setActiveRoomIndex}
           roomNames={rooms.map((r) => r.name)}
+          // Add a room and land on it. Without this the guided flow
+          // could measure the first room and then only ever move on to
+          // the exterior photos — there was no way to reach room two.
+          onAddRoom={() => {
+            addRoom();
+            setActiveRoomIndex(rooms.length);
+          }}
           // On a LiDAR phone the sensor measures; the typed fields are
           // not offered unless a scan has actually failed.
           scanRequired={arSupport === "yes"}

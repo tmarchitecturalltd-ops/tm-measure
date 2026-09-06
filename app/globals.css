@@ -33,13 +33,21 @@ label:has(> input[type="checkbox"]):not(.tm-target-auto) {
   min-height: 44px;
 }
 
-button:not(.tm-target-auto),
-[role="button"]:not(.tm-target-auto),
-[role="radio"]:not(.tm-target-auto) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
+/*
+ * No global display change.
+ *
+ * This block used to set `display: inline-flex` on every button, to
+ * centre a label inside a box that min-height had made taller. It also
+ * turned every button with more than one child into a flex ROW — so
+ * "L-shaped" and "Six walls, with a corner taken out", written as two
+ * block spans, rendered side by side with no space between them.
+ * Reported as exactly that, and it was doing the same quietly to every
+ * other two-line button in the app.
+ *
+ * Buttons that need their content centred say so themselves with
+ * Tailwind's own flex utilities, which is where that decision belongs.
+ * A blanket rule cannot know how many children it is rearranging.
+ */
 
 /* Icon-only controls need width as well — a 44px-tall, 20px-wide
    target is still a 20px-wide target. */
