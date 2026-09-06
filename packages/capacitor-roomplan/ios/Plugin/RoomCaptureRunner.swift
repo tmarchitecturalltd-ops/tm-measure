@@ -235,41 +235,41 @@ private class CaptureModalViewController: UIViewController {
         ])
         self.cancelButton = cancel
 
-        // Done (bottom centre).
+        // Done, top-right.
         //
-        // The one control the whole feature depends on, and it was
-        // missing: RoomCaptureView does not supply it, so the session
-        // could only ever be stopped by Cancel, which throws the scan
-        // away. The customer was left walking round a room with no way
-        // to say "that's the room done".
+        // RoomCaptureView does not supply this button — Apple's own
+        // sample adds one — and without it the session could only be
+        // stopped by Cancel, which throws the scan away.
         //
-        // Bottom centre and large, because it is pressed one-handed
-        // while holding a phone up at arm's length.
+        // It started bottom-centre, which turned out to be exactly
+        // where RoomCaptureView draws its live 3D model of the room, so
+        // the button and the model sat on top of each other. The
+        // corners are the only part of this screen Apple leaves alone,
+        // and Cancel-left / Done-right is the iOS convention for a
+        // modal, so it is where a hand looks without being told.
         let done = UIButton(type: .system)
         done.setTitle("Done", for: .normal)
         done.setTitleColor(.black, for: .normal)
-        done.titleLabel?.font = .systemFont(ofSize: 18, weight: .bold)
+        done.titleLabel?.font = .systemFont(ofSize: 17, weight: .bold)
         done.backgroundColor = .white
-        done.layer.cornerRadius = 28
+        done.layer.cornerRadius = 22
         done.layer.cornerCurve = .continuous
+        done.contentEdgeInsets = UIEdgeInsets(top: 10, left: 22, bottom: 10, right: 22)
         done.translatesAutoresizingMaskIntoConstraints = false
         done.addTarget(self, action: #selector(onDone), for: .touchUpInside)
         view.addSubview(done)
         NSLayoutConstraint.activate([
-            done.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            done.bottomAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -28),
-            done.widthAnchor.constraint(greaterThanOrEqualToConstant: 200),
-            done.heightAnchor.constraint(equalToConstant: 56),
+            done.topAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            done.trailingAnchor.constraint(
+                equalTo: view.trailingAnchor, constant: -16),
+            done.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
         ])
         self.doneButton = done
 
-        // Processing takes a few seconds and Apple shows nothing during
-        // it. Without a word here the app looks frozen at exactly the
-        // moment the customer is waiting to find out whether their walk
-        // round the room counted.
+        // Status under the top bar, for the same reason: the middle
+        // and bottom of this screen belong to Apple's model preview.
         let status = UILabel()
-        status.text = ""
         status.textColor = .white
         status.font = .systemFont(ofSize: 15, weight: .semibold)
         status.textAlignment = .center
@@ -280,7 +280,7 @@ private class CaptureModalViewController: UIViewController {
         view.addSubview(status)
         NSLayoutConstraint.activate([
             status.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            status.bottomAnchor.constraint(equalTo: done.topAnchor, constant: -14),
+            status.topAnchor.constraint(equalTo: done.bottomAnchor, constant: 12),
             status.leadingAnchor.constraint(
                 greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
         ])
@@ -295,7 +295,7 @@ private class CaptureModalViewController: UIViewController {
         // would race the result that is on its way.
         doneButton?.isEnabled = false
         doneButton?.alpha = 0.5
-        doneButton?.setTitle("Finishing…", for: .normal)
+        doneButton?.setTitle("…", for: .normal)
         cancelButton?.isEnabled = false
         cancelButton?.alpha = 0.5
         statusLabel?.text = "Working out the measurements…"

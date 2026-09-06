@@ -299,44 +299,55 @@ private class HouseCaptureModalViewController: UIViewController {
         cancel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(cancel)
 
+        // Cancel left, room name centred, Done right — the iOS modal
+        // convention. Cancel was on the right, which is where Done now
+        // is; leaving it there would have put the destructive control
+        // under the thumb aiming for the safe one.
+        cancel.contentEdgeInsets = UIEdgeInsets(top: 12, left: 16, bottom: 12, right: 16)
         NSLayoutConstraint.activate([
-            label.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-            label.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            cancel.centerYAnchor.constraint(equalTo: label.centerYAnchor),
-            cancel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            cancel.topAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            cancel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
+            cancel.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: cancel.centerYAnchor),
         ])
+        label.shadowColor = UIColor(white: 0.0, alpha: 0.7)
+        label.shadowOffset = CGSize(width: 0, height: 1)
         self.cancelButton = cancel
 
-        // "Done with this room" — the control that was missing.
+        // Done, top-right.
         //
-        // Ending a room is what leads to the "Scan another room /
-        // Finish" prompt, so without this button the customer could
-        // neither add a second room nor get off the camera screen with
-        // anything kept. Named for what it does rather than just
-        // "Done", because on a multi-room scan "Done" reads as "done
-        // with the whole house".
+        // It was bottom-centre, which is where RoomCaptureView draws
+        // its live 3D model of the room being scanned — so the button
+        // and the model sat on top of each other and the customer
+        // could see neither properly. The corners are the only part of
+        // this screen Apple does not use.
+        //
+        // Cancel left, Done right is also the iOS convention for a
+        // modal, so it is where a hand goes looking without being told.
         let done = UIButton(type: .system)
-        done.setTitle("Done with this room", for: .normal)
+        done.setTitle("Done", for: .normal)
         done.setTitleColor(.black, for: .normal)
-        done.titleLabel?.font = .systemFont(ofSize: 18, weight: .bold)
+        done.titleLabel?.font = .systemFont(ofSize: 17, weight: .bold)
         done.backgroundColor = .white
-        done.layer.cornerRadius = 28
+        done.layer.cornerRadius = 22
         done.layer.cornerCurve = .continuous
+        done.contentEdgeInsets = UIEdgeInsets(top: 10, left: 22, bottom: 10, right: 22)
         done.translatesAutoresizingMaskIntoConstraints = false
         done.addTarget(self, action: #selector(doneTapped), for: .touchUpInside)
         view.addSubview(done)
         NSLayoutConstraint.activate([
-            done.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            done.bottomAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -28),
-            done.widthAnchor.constraint(greaterThanOrEqualToConstant: 240),
-            done.heightAnchor.constraint(equalToConstant: 56),
+            done.topAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            done.trailingAnchor.constraint(
+                equalTo: view.trailingAnchor, constant: -16),
+            done.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
         ])
         self.doneButton = done
 
-        // Processing takes several seconds with no indication from
-        // Apple. Silence there reads as a hang, at the exact moment the
-        // customer is waiting to learn whether the room counted.
+        // Status under the top bar, for the same reason: the middle
+        // and bottom of this screen belong to Apple's model preview.
         let status = UILabel()
         status.textColor = .white
         status.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -348,7 +359,7 @@ private class HouseCaptureModalViewController: UIViewController {
         view.addSubview(status)
         NSLayoutConstraint.activate([
             status.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            status.bottomAnchor.constraint(equalTo: done.topAnchor, constant: -14),
+            status.topAnchor.constraint(equalTo: done.bottomAnchor, constant: 12),
             status.leadingAnchor.constraint(
                 greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
         ])
@@ -367,7 +378,7 @@ private class HouseCaptureModalViewController: UIViewController {
         isFinishing = true
         doneButton?.isEnabled = false
         doneButton?.alpha = 0.5
-        doneButton?.setTitle("Finishing…", for: .normal)
+        doneButton?.setTitle("…", for: .normal)
         cancelButton?.isEnabled = false
         cancelButton?.alpha = 0.5
         statusLabel?.text = "Working out the measurements…"

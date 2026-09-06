@@ -752,6 +752,21 @@ export default function MeasureIntakeForm() {
     setPlacements((prev) => ({ ...prev, ...nextPlacements }));
     setActiveRoomIndex(0);
 
+    /*
+     * Land in the guided flow, on the rooms step.
+     *
+     * A finished scan used to return the customer to wherever they
+     * started it, which was the one-page form — so after walking the
+     * whole house with the sensor they arrived at a wall of collapsed
+     * sections and measurement fields they had just been spared. What
+     * a scanned room needs is four screens: its name, what was
+     * measured, stairs, a photo and a voice note. That flow exists;
+     * the scan simply was not taking anyone to it.
+     */
+    setForcedAllView(false);
+    setGuidedMode(true);
+    setStep("rooms");
+
     // Write it out now rather than waiting for the debounce.
     //
     // A scan is minutes of walking round a house and cannot be
@@ -881,6 +896,9 @@ export default function MeasureIntakeForm() {
 
         // Landed: the escape hatch is no longer needed for this room.
         setScanAttempts(0);
+        // And the guided flow is where a scanned room is reviewed.
+        setForcedAllView(false);
+        setGuidedMode(true);
 
         // A scan is minutes of walking, and it lands as the app returns
         // from the native capture view — the moment iOS is most likely
