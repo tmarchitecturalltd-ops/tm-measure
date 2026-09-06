@@ -154,7 +154,17 @@ export default function AppHome() {
     setYear(new Date().getFullYear());
     setDraft(loadDraft());
     try {
-      setShowWelcome(window.localStorage.getItem(WELCOME_SEEN_KEY) !== "1");
+      /*
+       * Once per app launch, not once per device.
+       *
+       * It used to be a localStorage flag set forever on first
+       * dismissal, so the welcome was seen once and never again — and
+       * it replaced the home screen rather than sitting over it.
+       * sessionStorage clears on a cold start, which is exactly "when
+       * you open the app", and a returning customer gets a two-second
+       * reminder of what this is for rather than nothing.
+       */
+      setShowWelcome(window.sessionStorage.getItem(WELCOME_SEEN_KEY) !== "1");
     } catch {
       // Private mode / storage disabled — show the home screen rather
       // than trapping the user on the welcome mat every launch.
@@ -177,17 +187,16 @@ export default function AppHome() {
 
   const dismissWelcome = () => {
     try {
-      window.localStorage.setItem(WELCOME_SEEN_KEY, "1");
+      window.sessionStorage.setItem(WELCOME_SEEN_KEY, "1");
     } catch {
       /* noop — dismissal still applies for this session */
     }
     setShowWelcome(false);
   };
 
-  // Hold the first paint until we know which screen to show, avoiding a
-  // flash of the home screen for brand-new installs.
+  // Hold the first paint until we know whether the welcome is due, so
+  // it does not flash in and straight back out during hydration.
   if (showWelcome === null) return null;
-  if (showWelcome) return <WelcomeScreen onGetStarted={dismissWelcome} />;
 
   return (
     <div className="min-h-screen bg-surface pb-20">
@@ -195,6 +204,10 @@ export default function AppHome() {
           Logo mark + wordmark on the left, tiny outbound link on the
           right. The hairline gold rule under the header echoes the
           brand colour without being shouty. */}
+      {/* Over the home screen rather than instead of it, so the tiles
+          are already there behind and dismissing lands on them. */}
+      {showWelcome && <WelcomeScreen onGetStarted={dismissWelcome} />}
+
       <header className="sticky top-0 z-40 border-b border-primary/25 bg-surface/90 shadow-[0_1px_0_rgba(184,150,80,0.08),0_8px_24px_-18px_rgba(28,28,26,0.25)] backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-3">

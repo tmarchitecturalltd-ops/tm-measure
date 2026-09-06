@@ -140,34 +140,14 @@ export default function GuidedScreen({
           Self measure
         </Link>
 
-        {/* Only drawn when there is a menu behind it.
-            The resume screen passes no sections, so its hamburger did
-            nothing at all when tapped — the same dead-control problem as
-            the old Finish button, in the corner of the very first
-            screen a returning customer sees. A control that cannot do
-            anything should not be there. */}
-        {menuSections.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => onMenuOpenChange(!menuOpen)}
-            aria-label="Menu"
-            aria-expanded={menuOpen}
-            // Generous padding: this sits right under the status bar,
-            // where the top few pixels of a tap can be taken by the
-            // system rather than the page.
-            className="inline-flex items-center justify-center rounded-full px-4 py-3 text-on-surface-variant hover:text-primary"
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: "28px" }}
-              aria-hidden
-            >
-              menu
-            </span>
-          </button>
-        ) : (
-          <span aria-hidden />
-        )}
+        {/* The menu has moved to the bottom bar.
+            Navigation split between a hamburger in the top-right corner
+            and the buttons at the bottom meant the customer had to
+            reach for two different parts of the screen depending on
+            what they wanted, and the top corner is the hardest place on
+            a phone to reach one-handed. Everything that navigates is
+            now in one row along the bottom. */}
+        <span aria-hidden />
       </div>
 
       {/* Progress. A guided flow with no visible end is an
@@ -191,7 +171,13 @@ export default function GuidedScreen({
             onClick={() => onMenuOpenChange(false)}
             className="fixed inset-0 z-40 bg-black/20"
           />
-          <div className="absolute right-3 top-14 z-50 max-h-[75vh] w-72 overflow-y-auto rounded-2xl border border-outline-variant/40 bg-surface-container-lowest shadow-2xl">
+          {/* Anchored to the bottom-left, above the bar it opens from.
+              A menu that appears at the opposite end of the screen from
+              the button that opened it makes the customer hunt for it. */}
+          <div
+            className="absolute bottom-24 left-3 right-3 z-50 max-h-[60vh] overflow-y-auto rounded-2xl border border-outline-variant/40 bg-surface-container-lowest shadow-2xl sm:right-auto sm:w-80"
+            style={{ marginBottom: "env(safe-area-inset-bottom)" }}
+          >
             {menuSections.map((sec, si) => (
               <div key={si}>
                 {sec.heading && (
@@ -249,6 +235,11 @@ export default function GuidedScreen({
           without overlaying anything — see BottomActionBar for why this
           is a flex child rather than a fixed bar. */}
       <BottomActionBar
+        onMenu={
+          menuSections.length > 0
+            ? () => onMenuOpenChange(!menuOpen)
+            : undefined
+        }
         backLabel={backLabelOverride}
         onBack={onBack}
         backDisabled={backDisabled || !onBack}

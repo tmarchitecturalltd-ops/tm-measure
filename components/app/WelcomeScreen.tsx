@@ -46,7 +46,16 @@ const BEATS: {
 
 export default function WelcomeScreen({ onGetStarted }: { onGetStarted: () => void }) {
   return (
-    <div className="flex min-h-dvh flex-col bg-surface px-6 py-10">
+    /* Fixed, so this can sit over the home screen as a welcome rather
+       than replacing it. Opaque and full-viewport, with the safe-area
+       insets it needs now that it is no longer inside the page flow. */
+    <div
+      className="fixed inset-0 z-[120] flex flex-col overflow-y-auto bg-surface px-6"
+      style={{
+        paddingTop: "calc(env(safe-area-inset-top) + 1.5rem)",
+        paddingBottom: "calc(env(safe-area-inset-bottom) + 1.5rem)",
+      }}
+    >
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
         {/* Brand lockup */}
         <div className="flex flex-col items-center pt-6 text-center">

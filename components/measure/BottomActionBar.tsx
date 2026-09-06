@@ -36,6 +36,13 @@
 import type { ReactNode } from "react";
 
 type Props = {
+  /**
+   * Opens the screen's menu. When present it sits at the left of the
+   * bar, so navigation lives in one place at the bottom of the screen
+   * rather than split between a hamburger in the top corner and the
+   * buttons down here.
+   */
+  onMenu?: () => void;
   /** Secondary action, left. Omit to hide it entirely. */
   backLabel?: string;
   onBack?: () => void;
@@ -54,6 +61,7 @@ type Props = {
 };
 
 export default function BottomActionBar({
+  onMenu,
   backLabel = "Back",
   onBack,
   backDisabled,
@@ -68,7 +76,24 @@ export default function BottomActionBar({
       style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
     >
       {message && <div className="mx-auto mb-3 max-w-xl">{message}</div>}
-      <div className="mx-auto flex max-w-xl items-center gap-3">
+      <div className="mx-auto flex max-w-xl items-center gap-2">
+        {onMenu && (
+          <button
+            type="button"
+            onClick={onMenu}
+            aria-label="Menu"
+            style={{ minHeight: 56, minWidth: 56 }}
+            className="flex shrink-0 items-center justify-center rounded-full border-2 border-outline text-on-surface"
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "26px" }}
+              aria-hidden
+            >
+              menu
+            </span>
+          </button>
+        )}
         {onBack && (
           <button
             type="button"
