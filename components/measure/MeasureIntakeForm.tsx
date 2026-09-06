@@ -1611,6 +1611,21 @@ export default function MeasureIntakeForm() {
     });
   }, []);
 
+  /**
+   * On to the rooms — flagging what is missing, not refusing.
+   *
+   * This used to return silently when a detail was blank, which made
+   * Continue a dead button: the same fault as the old Finish button and
+   * the missing Done button. Worse, the guided flow's "Skip for now"
+   * called straight into it, so a control labelled Skip did nothing at
+   * all.
+   *
+   * The three details are still required — submitToBackend enforces
+   * them and sends the customer back here — but they are required by
+   * the submission rather than by walking round a house. Someone in a
+   * doorway who cannot remember which email they used should be able to
+   * start measuring and come back.
+   */
   const goRooms = () => {
     const v: FieldIssue[] = [];
     if (!customerName.trim()) v.push({ path: "name", message: "Enter your name." });
@@ -1618,8 +1633,8 @@ export default function MeasureIntakeForm() {
       v.push({ path: "email", message: "Enter a valid email." });
     if (!projectName.trim())
       v.push({ path: "project", message: "Name your project." });
+    // Recorded so the fields show as outstanding, then we carry on.
     setIssues(v);
-    if (v.length) return;
     // Lock the unit once the project is committed so subsequent room/plan
     // steps can't accidentally swap metric ↔ imperial mid-survey.
     setUnitLocked(true);
@@ -2303,6 +2318,40 @@ export default function MeasureIntakeForm() {
     // reference photos, and unnamed rooms. If anything fires we surface
     // it via the in-form issue panel rather than the submit-error banner,
     // and we send the user back to the rooms step to fix it.
+    /*
+     * Your details, checked here rather than at the door.
+     *
+     * The project step lets a customer skip past name, email and
+     * project name so they can get on with measuring — the survey is
+     * the hard part and being stopped at the front door over a field
+     * they can fill in later loses the whole thing. But a submission
+     * without an email cannot be answered and one without a name
+     * cannot be put on a drawing, so this is where they become
+     * required, at the point the information is actually needed.
+     */
+    const missingDetails =
+      !customerName.trim()
+        ? { field: "your name", message: "We need a name to put on the drawing." }
+        : !email.trim()
+          ? {
+              field: "your email",
+              message: "We need an email address to send your quote to.",
+            }
+          : !projectName.trim()
+            ? {
+                field: "the project name",
+                message: "Give the project a name so we can both refer to it.",
+              }
+            : null;
+    if (missingDetails) {
+      setStep("project");
+      setSubmitStatus("error");
+      setSubmitError(
+        `${missingDetails.message} You skipped ${missingDetails.field} earlier — we've taken you back to it.`,
+      );
+      return;
+    }
+
     const anomalies = validateProject(rooms);
     if (anomalies.length) {
       setIssues(anomalies);
@@ -2629,6 +2678,7 @@ export default function MeasureIntakeForm() {
    * through.
    */
   const anyTakeover =
+    !!pendingDraft ||
     guidedActive ||
     guidedProjectActive ||
     guidedExtrasActive ||
@@ -2828,32 +2878,6 @@ export default function MeasureIntakeForm() {
             to amend earlier inputs without losing later progress.
             "review" can only be jumped to from later steps because
             the validator runs on entry to review anyway. */}
-        {pendingDraft && (
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/40 bg-primary/10 p-4 text-sm text-on-surface">
-            <div>
-              <p className="font-semibold text-primary">Resume your previous project?</p>
-              <p className="mt-1 text-sm text-on-surface-variant">
-                We saved your draft from {new Date(pendingDraft.savedAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })} on the <span className="font-semibold">{pendingDraft.step}</span> step. Photos aren&apos;t kept; you&apos;ll re-take any.
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={applyPendingDraft}
-                className="rounded-full bg-primary px-4 py-2 text-sm font-bold uppercase tracking-widest text-on-primary"
-              >
-                Resume
-              </button>
-              <button
-                type="button"
-                onClick={discardPendingDraft}
-                className="rounded-full border border-outline-variant/40 px-4 py-2 text-sm font-bold uppercase tracking-widest text-on-surface"
-              >
-                Start fresh
-              </button>
-            </div>
-          </div>
-        )}
 
         <ol className="mb-10 flex flex-wrap gap-2 text-sm font-semibold uppercase tracking-wider text-on-surface-variant">
           {([
@@ -5330,6 +5354,50 @@ export default function MeasureIntakeForm() {
           overlay only works if the overlay is genuinely the full
           viewport in every browser; not rendering the content at all
           works everywhere. */}
+      {/* The resume prompt, on its own screen.
+          It was a banner at the top of the first page, and because a
+          full-viewport guided screen would have covered it, guided mode
+          stood down while it was up. So anyone with a saved draft — that
+          is, anyone returning — met the old one-page form instead of the
+          guided flow, and had to scroll a long page to find anything.
+          Reported as "this version does not have step by step". Giving
+          the question its own screen removes the conflict rather than
+          working around it. */}
+      {pendingDraft && (
+        <GuidedScreen
+          eyebrow="Welcome back"
+          title="Pick up where you left off?"
+          progress={0}
+          menuOpen={false}
+          onMenuOpenChange={() => {}}
+          menuSections={[]}
+          scrollKey="resume"
+          onBack={discardPendingDraft}
+          backLabelOverride="Start fresh"
+          onNext={applyPendingDraft}
+          nextLabel="Resume"
+        >
+          <p className="text-base leading-relaxed text-on-surface-variant">
+            We saved your project from{" "}
+            <span className="font-semibold text-on-surface">
+              {new Date(pendingDraft.savedAt).toLocaleString("en-GB", {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </span>
+            , on the{" "}
+            <span className="font-semibold text-on-surface">
+              {pendingDraft.step}
+            </span>{" "}
+            step.
+          </p>
+          <p className="mt-3 text-base leading-relaxed text-on-surface-variant">
+            Measurements and notes are all still there. Photos aren&apos;t
+            kept, so you&apos;ll re-take any you had added.
+          </p>
+        </GuidedScreen>
+      )}
+
       {guidedExtrasActive && (
         <GuidedExtrasFlow
           photosBySide={exteriorPhotos}

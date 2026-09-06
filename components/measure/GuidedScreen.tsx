@@ -64,6 +64,8 @@ type Props = {
   scrollKey: string | number;
   onBack?: () => void;
   backDisabled?: boolean;
+  /** Overrides "Back" — e.g. "Start fresh" on the resume prompt. */
+  backLabelOverride?: string;
   onNext: () => void;
   nextLabel: string;
   nextDisabled?: boolean;
@@ -82,6 +84,7 @@ export default function GuidedScreen({
   scrollKey,
   onBack,
   backDisabled,
+  backLabelOverride,
   onNext,
   nextLabel,
   nextDisabled,
@@ -233,6 +236,7 @@ export default function GuidedScreen({
           without overlaying anything — see BottomActionBar for why this
           is a flex child rather than a fixed bar. */}
       <BottomActionBar
+        backLabel={backLabelOverride}
         onBack={onBack}
         backDisabled={backDisabled || !onBack}
         onNext={onNext}

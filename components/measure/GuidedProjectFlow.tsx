@@ -110,20 +110,33 @@ export default function GuidedProjectFlow({
    * or can be worked out later; blocking on them would be stopping
    * someone from starting over a detail we can ask about afterwards.
    */
+  /**
+   * Nothing here blocks.
+   *
+   * Name, email and project name are all genuinely required, but they
+   * are required by the *submission*, not by walking round a house. A
+   * customer standing in a doorway who cannot remember which email
+   * they used should be able to get on with measuring and come back to
+   * it — the survey is the hard part, and stopping them at the front
+   * door over a field they can fill in later loses the whole thing.
+   *
+   * submitToBackend enforces all three before anything is sent, and
+   * sends the customer back here with the reason. That is the right
+   * place for it: at the point where the information is actually
+   * needed, rather than the point where it is most annoying to ask.
+   *
+   * Email format is still checked as you type, because a typo caught
+   * now is caught by the person who knows the answer.
+   */
   const blocked = (): string | null => {
-    if (step === "name" && !customerName.trim()) {
-      return "We need a name to put on the drawing.";
-    }
-    if (step === "email") {
-      if (!email.trim()) return "We'll send your quote here.";
+    if (
+      step === "email" &&
+      email.trim() &&
       // Deliberately loose. Rejecting an unusual but valid address is a
       // worse failure than accepting a typo we can follow up on.
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-        return "That doesn't look like an email address.";
-      }
-    }
-    if (step === "project" && !projectName.trim()) {
-      return "Give the project a name so you can find it later.";
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+    ) {
+      return "That doesn't look like an email address.";
     }
     return null;
   };
@@ -160,7 +173,16 @@ export default function GuidedProjectFlow({
         else setStepIndex((i) => i + 1);
       }}
       nextDisabled={!!block}
-      nextLabel={isLast ? "Start measuring" : "Next"}
+      nextLabel={
+        isLast
+          ? "Start measuring"
+          : (step === "name" && !customerName.trim()) ||
+              (step === "email" && !email.trim()) ||
+              (step === "project" && !projectName.trim()) ||
+              (step === "type" && !projectType)
+            ? "Skip for now"
+            : "Next"
+      }
       blockMessage={block}
     >
       {step === "name" && (
