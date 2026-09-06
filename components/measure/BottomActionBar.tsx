@@ -79,7 +79,11 @@ export default function BottomActionBar({
       style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
     >
       {message && <div className="mx-auto mb-3 max-w-xl">{message}</div>}
-      <div className="mx-auto flex max-w-xl items-center gap-2">
+      {/* gap-3 and equal flex-1 basis on all three children: the row is
+          divided into thirds with the same air between each. Steps was
+          shrink-0 and Next was flex-[2], which pinched Steps into a
+          sliver between two much wider buttons. */}
+      <div className="mx-auto flex max-w-xl items-stretch gap-3">
         {onBack && (
           <button
             type="button"
@@ -96,7 +100,7 @@ export default function BottomActionBar({
             type="button"
             onClick={onMenu}
             style={{ minHeight: 56 }}
-            className="flex shrink-0 flex-col items-center justify-center rounded-full border-2 border-outline px-3 text-on-surface"
+            className="flex min-w-0 flex-1 flex-col items-center justify-center rounded-full border-2 border-outline px-3 text-on-surface"
           >
             <span
               className="material-symbols-outlined"
@@ -115,15 +119,17 @@ export default function BottomActionBar({
           onClick={onNext}
           disabled={nextDisabled}
           style={{ minHeight: 56 }}
-          // Two-thirds of the width when there is a Back button. The
-          // primary action should be the obvious one to hit, and the
-          // larger target is also the one under the thumb's natural
-          // resting arc on a right-handed grip.
+          // Equal width with the other two. Next used to be twice the
+          // width, which squeezed Steps into a sliver between them —
+          // three controls at one size read as one row of choices,
+          // where three at different sizes read as clutter. Next stays
+          // the obvious one to hit through colour and fill rather than
+          // size.
           // min-w-0 and tighter tracking because there are three
           // controls in this row now: on a 375px screen the old
           // padding and letter-spacing pushed a two-word label off the
           // end of its own button.
-          className="min-w-0 flex-[2] rounded-full bg-primary px-4 text-sm font-bold uppercase leading-tight tracking-wide text-on-primary shadow-lg shadow-primary/25 transition-all active:scale-[0.98] disabled:opacity-40 disabled:shadow-none"
+          className="min-w-0 flex-1 rounded-full bg-primary px-3 text-sm font-bold uppercase leading-tight tracking-wide text-on-primary shadow-lg shadow-primary/25 transition-all active:scale-[0.98] disabled:opacity-40 disabled:shadow-none"
         >
           {nextLabel}
         </button>

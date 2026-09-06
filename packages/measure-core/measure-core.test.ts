@@ -842,6 +842,51 @@ test("a scanned room can be submitted without a photograph", () => {
   );
 });
 
+test("a short wall on a scanned room does not trap the customer", () => {
+  /*
+   * Charlie could not get past the photo step. A scanned room reported
+   * "Too short (min 0.3 m)" on a wall -- and a scanned room has no
+   * walls screen, so the flow had nowhere to send him. The error named
+   * a box that exists nowhere he could reach, on every screen, with no
+   * way out. The survey simply ended there.
+   *
+   * The minimum is a typo-catcher for someone typing into a field.
+   * Nobody means to enter a 4 cm wall. It is not a fact about
+   * buildings: a scanner reports the 150 mm return beside a chimney
+   * breast because it is really there.
+   */
+  const scanned = planRoom("s", "Lounge", 4, 3);
+  scanned.measuredByScan = true;
+  scanned.photos = [];
+  scanned.floorPolygonM = undefined;
+  scanned.walls = [
+    { id: "w1", label: "Wall 1", lengthM: "4.00", photos: [] },
+    { id: "w2", label: "Wall 2", lengthM: "0.15", photos: [] },
+  ] as typeof scanned.walls;
+
+  assert.deepEqual(
+    validateRoom(scanned, 0).filter((i) => i.path.includes("-wall-")),
+    [],
+    "a measurement from the sensor is not a typo",
+  );
+});
+
+test("a short wall typed by hand is still caught", () => {
+  // The exemption must not reach typed rooms: 0.15 in a box the
+  // customer filled in is a slipped decimal point, and catching it
+  // while they are stood in the room is the entire point.
+  const typed = planRoom("t", "Lounge", 4, 3);
+  typed.floorPolygonM = undefined;
+  typed.walls = [
+    { id: "w1", label: "Wall 1", lengthM: "0.15", photos: [] },
+  ] as typeof typed.walls;
+
+  assert.equal(
+    validateRoom(typed, 0).filter((i) => i.path === "room-0-wall-0").length,
+    1,
+  );
+});
+
 test("a typed room still needs a photograph", () => {
   // The exemption is for scanned rooms only. On a typed room the photo
   // is the sole means the architect has of auditing the numbers.

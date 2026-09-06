@@ -23,7 +23,7 @@
  * round a house cannot be left with no route forward.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { Opening, RoomDraft, RoomShape } from "@tm-designs/measure-core";
 import { validateRoom } from "@tm-designs/measure-core";
 import WallPositionPicker from "@/components/measure/WallPositionPicker";
@@ -224,6 +224,23 @@ export default function GuidedRoomFlow({
    */
   const [finishIssue, setFinishIssue] = useState<string | null>(null);
 
+  /**
+   * The wall length boxes, so finishing one can move to the next.
+   *
+   * Entering six numbers is the longest single stretch of typing in
+   * the survey, and having to put the phone down, tap the next box and
+   * pick the keyboard back up between each one is where people lose
+   * their place in the room. Enter — the "Go"/return key — advances;
+   * the last box closes the keyboard rather than trapping the cursor.
+   *
+   * Note the iOS decimal keypad has no return key of its own. What it
+   * does have, inside the app, is the WKWebView accessory bar with
+   * up/down arrows, which walks these same inputs because they are
+   * siblings in the document. This handler covers hardware keyboards
+   * and Android; the arrows cover iPhone.
+   */
+  const wallInputs = useRef<(HTMLInputElement | null)[]>([]);
+
 
   const step = steps[stepIndex];
   const isLast = stepIndex === steps.length - 1;
@@ -286,15 +303,27 @@ export default function GuidedRoomFlow({
     const issues = validateRoom(room, roomIndex).filter(
       (i) => !i.path.endsWith("-photos"),
     );
-    if (issues.length) {
-      const first = issues[0];
-      const target = stepForPath(first.path);
+    /*
+     * Only stop for something the customer can actually go and fix.
+     *
+     * Staying put and showing the message was the polite-looking
+     * version of a dead end: a scanned room has no walls or ceiling
+     * screen, so an issue on one of those fields named a box that
+     * exists nowhere in the flow, and Finish did nothing on every
+     * screen with no way to learn why. The specific case is fixed in
+     * validateRoom, but the trap is structural — any future step list
+     * that drops a screen would rebuild it — so the rule belongs here:
+     * a fault the customer cannot reach is not a fault we may block
+     * them with. Submission still checks the whole survey.
+     */
+    const reachable = issues.filter((i) => {
+      const target = stepForPath(i.path);
+      return target !== null && steps.includes(target);
+    });
+    if (reachable.length) {
+      const first = reachable[0];
       setFinishIssue(first.message);
-      // indexOf returns -1 for a step this room does not have — a
-      // scanned room has no walls or ceiling screen. Jumping to -1
-      // would blank the flow, so stay put and just say what is wrong.
-      const at = target ? steps.indexOf(target) : -1;
-      if (at >= 0) setStepIndex(at);
+      setStepIndex(steps.indexOf(stepForPath(first.path)!));
       return;
     }
     setFinishIssue(null);
@@ -502,14 +531,17 @@ export default function GuidedRoomFlow({
           setStepIndex((i) => i + 1);
           return;
         }
-        // Last question of the last room: check this room, then add the
-        // next one. Finishing the whole survey is a separate, deliberate
-        // choice in the menu — most people have another room to do, and
-        // the button under their thumb should be the likely one.
-        if (roomIndex + 1 >= totalRooms && onAddRoom) {
-          finishRoom(onAddRoom);
-          return;
-        }
+        // Last question of the last room: finish the rooms and move on
+        // to the whole-house stage.
+        //
+        // This used to add another room, on the reasoning that most
+        // people have one more to do. The flaw is that it never
+        // stopped: the only way out was "Done with the rooms" in the
+        // Steps menu, so anyone who did not open that menu pressed
+        // Next and got Room 2, then Room 3, with no visible end to the
+        // survey. Adding a room is now the link above the bar, where
+        // it is one tap and clearly a choice; the button under the
+        // thumb moves forward.
         finishRoom();
       }}
       nextDisabled={!!block}
@@ -517,9 +549,7 @@ export default function GuidedRoomFlow({
         isLast
           ? roomIndex + 1 < totalRooms
             ? "Next room"
-            : onAddRoom
-              ? "Add another room"
-              : "Finish"
+            : "Done with the rooms"
           : "Next"
       }
       blockMessage={block ?? finishIssue}
@@ -807,7 +837,24 @@ export default function GuidedRoomFlow({
                   {w.label || `Wall ${i + 1}`}
                 </span>
                 <input
+                  ref={(el) => {
+                    wallInputs.current[i] = el;
+                  }}
                   inputMode="decimal"
+                  enterKeyHint={
+                    i < room.walls.length - 1 ? "next" : "done"
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    const next = wallInputs.current[i + 1];
+                    if (next) {
+                      next.focus();
+                      next.select();
+                    } else {
+                      e.currentTarget.blur();
+                    }
+                  }}
                   value={w.lengthM}
                   onChange={(e) =>
                     onPatch({
@@ -967,6 +1014,23 @@ export default function GuidedRoomFlow({
             />
           </div>
         </div>
+      )}
+
+      {/* The other way out of the last room.
+          Next now finishes the rooms, so adding one has to be visible
+          on this screen or it goes back to living only in the Steps
+          menu — which is how the survey ended up with no exit in the
+          first place. A bordered button rather than a link: it is the
+          less likely choice, not a footnote. */}
+      {isLast && roomIndex + 1 >= totalRooms && onAddRoom && (
+        <button
+          type="button"
+          onClick={() => finishRoom(onAddRoom)}
+          style={{ minHeight: 56 }}
+          className="mt-6 w-full rounded-full border-2 border-outline px-4 text-sm font-bold uppercase tracking-wide text-on-surface"
+        >
+          Add another room
+        </button>
       )}
 
     </GuidedScreen>

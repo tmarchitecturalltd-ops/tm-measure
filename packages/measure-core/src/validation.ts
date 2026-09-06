@@ -87,7 +87,25 @@ export function validateRoom(room: RoomDraft, index: number): FieldIssue[] {
    * again is asking for the same information twice and then refusing
    * to proceed without it.
    */
-  const drawn = (room.floorPolygonM?.length ?? 0) >= 3;
+  /*
+   * A scan replaces them too, and for a sharper reason than drawing.
+   *
+   * The 0.3 m minimum is a typo-catcher for a human typing into a box:
+   * nobody means to enter a 4 cm wall. It is not a fact about
+   * buildings. A scanner reports what is actually there, including the
+   * 150 mm return beside a chimney breast or the reveal of a doorway,
+   * and those are genuinely shorter than 0.3 m.
+   *
+   * Charlie hit this and could not get past it. The room was scanned,
+   * so the flow has no walls screen at all -- finishRoom looked up the
+   * step that owned the failing wall, found the room does not have
+   * one, and correctly stayed put. The result was a room reporting a
+   * fault on a field that exists nowhere the customer can reach, on
+   * every screen, for ever. An unfixable error is worse than no
+   * validation: the survey simply ends there.
+   */
+  const drawn =
+    (room.floorPolygonM?.length ?? 0) >= 3 || room.measuredByScan === true;
   if (!drawn) {
     room.walls.forEach((w, wi) => {
       const hit = validateWallLength(w.lengthM, `${p}-wall-${wi}`);
