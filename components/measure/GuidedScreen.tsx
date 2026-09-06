@@ -20,15 +20,21 @@
  *     behind show through.
  *   - Two corner controls only: a way home on the left, a menu on the
  *     right. Everything else the customer might want is in that menu.
- *   - The question vertically centred, its answer under it, and
- *     Back/Next under that — not pinned to the bottom edge, so the eye
- *     does not have to travel from what was just typed to a button
- *     somewhere else.
+ *   - The question vertically centred with its answer under it, and
+ *     Back/Next on the bottom edge in a BottomActionBar.
  *   - The middle band scrolls internally (min-h-0 + overflow-y-auto)
  *     so a long step keeps the corners and the buttons in place.
+ *
+ * The buttons started directly beneath the question, so the eye never
+ * travelled from the answer to the control. They moved to the bottom
+ * edge for thumb reach, which is a trade rather than a straight win —
+ * see BottomActionBar. The short version: this is used one-handed
+ * while holding a tape measure, and Next is pressed about fifty times
+ * a survey against reading its position once.
  */
 
 import Link from "next/link";
+import BottomActionBar from "@/components/measure/BottomActionBar";
 import { useEffect, useRef, type ReactNode } from "react";
 
 export type MenuItem = {
@@ -205,7 +211,9 @@ export default function GuidedScreen({
       {/* ── The question ──────────────────────────────────────────── */}
       <div
         ref={scrollRef}
-        className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-5 py-4"
+        // justify-center keeps a short question in the middle of the
+        // band; a long one scrolls from the top as normal.
+        className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-5 py-5"
       >
         <div className="mx-auto w-full max-w-xl">
           {eyebrow && (
@@ -218,33 +226,26 @@ export default function GuidedScreen({
           </h2>
 
           {children}
-
-          {blockMessage && (
-            <p className="mt-4 rounded-md bg-amber-100/60 px-3 py-2 text-sm text-amber-900">
-              {blockMessage}
-            </p>
-          )}
-
-          <div className="mt-7 flex items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={onBack}
-              disabled={backDisabled || !onBack}
-              className="rounded-full border border-outline px-6 py-3 text-sm font-bold uppercase tracking-widest disabled:opacity-40"
-            >
-              Back
-            </button>
-            <button
-              type="button"
-              onClick={onNext}
-              disabled={nextDisabled}
-              className="rounded-full bg-primary px-8 py-3 text-sm font-bold uppercase tracking-widest text-on-primary disabled:opacity-40"
-            >
-              {nextLabel}
-            </button>
-          </div>
         </div>
       </div>
+
+      {/* Controls last in the column, so they sit on the bottom edge
+          without overlaying anything — see BottomActionBar for why this
+          is a flex child rather than a fixed bar. */}
+      <BottomActionBar
+        onBack={onBack}
+        backDisabled={backDisabled || !onBack}
+        onNext={onNext}
+        nextLabel={nextLabel}
+        nextDisabled={nextDisabled}
+        message={
+          blockMessage ? (
+            <p className="rounded-md bg-amber-100/60 px-3 py-2 text-sm text-amber-900">
+              {blockMessage}
+            </p>
+          ) : undefined
+        }
+      />
     </div>
   );
 }
