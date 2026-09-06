@@ -28,7 +28,7 @@ import RoomPlan
  * On cancel the modal's cancel button calls `dismiss(payload:.failure)`.
  */
 @available(iOS 16.0, *)
-class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate {
+class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionDelegate {
 
     enum RoomPlanError: LocalizedError {
         case cancelled
@@ -126,6 +126,59 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate {
         dismiss(payload: .failure(RoomPlanError.cancelled))
     }
 
+
+    // MARK: - Coaching
+
+    /**
+     * Required, and deliberately empty.
+     *
+     * Every other method on RoomCaptureSessionDelegate ships with a
+     * blank default implementation; this one does not, so conforming
+     * without it fails to compile. We take the delegate purely for the
+     * coaching instructions below, and RoomCaptureView draws the live
+     * model itself.
+     */
+    func captureSession(_ session: RoomCaptureSession, didAdd room: CapturedRoom) {}
+
+    /**
+     * Apple's own scanning advice, in our words and our size.
+     *
+     * RoomPlan watches the scan and reports when it is going badly:
+     * moving too fast, too close to a wall, too dark, or pointed at a
+     * blank surface it cannot get a fix on. RoomCaptureView shows these
+     * as a small grey pill, which Charlie's recording did not show at
+     * all — either it never fired or it was too faint to notice while
+     * walking round a room holding a phone up.
+     *
+     * Taking the session delegate is what makes this possible, and it
+     * has one consequence worth stating: only one object can be the
+     * delegate, so Apple's own pill stops. That is the intent — ours
+     * replaces it — but if the live 3D model ever stops drawing during
+     * a scan, this is the first thing to suspect and removing the
+     * `captureSession.delegate` assignment is the whole revert.
+     *
+     * `.normal` clears the message rather than showing "carry on",
+     * which would be a permanent nag saying nothing.
+     */
+    func captureSession(
+        _ session: RoomCaptureSession,
+        didProvide instruction: RoomCaptureSession.Instruction
+    ) {
+        let text: String?
+        switch instruction {
+        case .moveCloseToWall:  text = "Move a little closer to the wall"
+        case .moveAwayFromWall: text = "Step back from the wall"
+        case .slowDown:         text = "Slow down — move the phone more gently"
+        case .turnOnLight:      text = "It's a bit dark — turn a light on"
+        case .lowTexture:       text = "Point at something with more detail — a plain wall is hard to read"
+        case .normal:           text = nil
+        @unknown default:       text = nil
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.modalVC?.showCoaching(text)
+        }
+    }
+
     // MARK: - RoomCaptureViewDelegate
 
     /// Returning true lets Apple's pipeline process raw scan data into
@@ -170,6 +223,7 @@ private class CaptureModalViewController: UIViewController {
     private var doneButton: UIButton?
     private var cancelButton: UIButton?
     private var statusLabel: UILabel?
+    private var coachingLabel: UILabel?
     /// True once Done has been pressed, so the session is not stopped a
     /// second time by viewWillDisappear while it is already processing.
     private var isFinishing: Bool = false
@@ -285,6 +339,66 @@ private class CaptureModalViewController: UIViewController {
                 greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
         ])
         self.statusLabel = status
+
+        // Coaching panel — hidden until the sensor has something to say.
+        let coaching = UILabel()
+        coaching.numberOfLines = 0
+        coaching.textAlignment = .center
+        coaching.textColor = .white
+        coaching.font = .systemFont(ofSize: 19, weight: .bold)
+        coaching.backgroundColor = UIColor(white: 0.0, alpha: 0.78)
+        coaching.layer.cornerRadius = 16
+        coaching.layer.cornerCurve = .continuous
+        coaching.layer.masksToBounds = true
+        coaching.alpha = 0
+        coaching.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(coaching)
+        NSLayoutConstraint.activate([
+            coaching.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            coaching.topAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 96),
+            coaching.leadingAnchor.constraint(
+                greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
+            coaching.trailingAnchor.constraint(
+                lessThanOrEqualTo: view.trailingAnchor, constant: -24),
+            coaching.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
+        ])
+        self.coachingLabel = coaching
+    }
+
+
+    /**
+     * A coaching message, centred, for three seconds.
+     *
+     * Sits in the upper third: the middle and bottom of this screen are
+     * Apple's live model, and the top corners are Cancel and Done.
+     *
+     * `hideWork` is cancelled on every new message so a fresh one is
+     * not wiped by the timer belonging to the last. Same instruction
+     * twice running is ignored, which stops the panel flickering while
+     * the sensor repeats itself.
+     */
+    private var coachingText: String?
+    private var hideWork: DispatchWorkItem?
+
+    func showCoaching(_ text: String?) {
+        guard text != coachingText else { return }
+        coachingText = text
+        hideWork?.cancel()
+
+        guard let text else {
+            UIView.animate(withDuration: 0.2) { self.coachingLabel?.alpha = 0 }
+            return
+        }
+        coachingLabel?.text = text
+        UIView.animate(withDuration: 0.2) { self.coachingLabel?.alpha = 1 }
+
+        let work = DispatchWorkItem { [weak self] in
+            UIView.animate(withDuration: 0.3) { self?.coachingLabel?.alpha = 0 }
+            self?.coachingText = nil
+        }
+        hideWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: work)
     }
 
     @objc private func onDone() {
@@ -309,6 +423,7 @@ private class CaptureModalViewController: UIViewController {
         // starting twice back-to-back can log harmless warnings.
         guard !hasStartedSession else { return }
         hasStartedSession = true
+        captureView?.captureSession.delegate = delegateRunner
         let cfg = RoomCaptureSession.Configuration()
         captureView?.captureSession.run(configuration: cfg)
     }
