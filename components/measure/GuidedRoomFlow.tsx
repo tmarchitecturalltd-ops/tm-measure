@@ -59,8 +59,17 @@ type Props = {
   onDone: () => void;
   onExitGuided: () => void;
   issueFor: (suffix: string) => string | undefined;
-  /** Open the LiDAR scanner for this room. Absent where unsupported. */
+  /** Open the scanner for this room. Absent when scanning is off. */
   onScanRoom?: () => void;
+  /**
+   * True when this phone measures with LiDAR rather than the camera.
+   *
+   * Only changes the wording. A phone without the sensor still has a
+   * scanner — corner-tap, using the camera — and hiding it from those
+   * customers left the app's headline feature visible to about a fifth
+   * of them.
+   */
+  scanIsLidar?: boolean;
   /** Open the whole-property scanner. Absent where unsupported. */
   onScanHouse?: () => void;
   /** Jump straight to another room. */
@@ -77,6 +86,16 @@ type Props = {
   onAddRoom?: () => void;
   /** Room names, for the jump list in the menu. */
   roomNames?: string[];
+  /**
+   * Where Back goes from the first question.
+   *
+   * It used to be disabled there, which is correct in the sense that
+   * there is no previous question and wrong in every other sense: a
+   * greyed-out button in the corner of the first screen of a flow reads
+   * as broken, not as "nothing behind this". Reported as the back
+   * buttons not working. Every screen now has somewhere to go back to.
+   */
+  onBackFromFirst?: () => void;
   /**
    * This phone has LiDAR, so scanning is the way rooms get measured
    * and the typed fields are not offered.
@@ -115,10 +134,12 @@ export default function GuidedRoomFlow({
   onExitGuided,
   issueFor,
   onScanRoom,
+  scanIsLidar = false,
   onScanHouse,
   onGoToRoom,
   roomNames = [],
   onAddRoom,
+  onBackFromFirst,
   scanRequired = false,
   scanFailed = false,
 }: Props) {
@@ -397,7 +418,9 @@ export default function GuidedRoomFlow({
               ...(onScanRoom
                 ? [
                     {
-                      label: "Measure this room automatically",
+                      label: scanIsLidar
+                        ? "Measure this room with the sensor"
+                        : "Measure this room with the camera",
                       onClick: onScanRoom,
                     },
                   ]
@@ -460,8 +483,12 @@ export default function GuidedRoomFlow({
       onMenuOpenChange={setMenuOpen}
       menuSections={menuSections}
       scrollKey={`${roomIndex}-${stepIndex}`}
-      onBack={() => setStepIndex((i) => Math.max(0, i - 1))}
-      backDisabled={stepIndex === 0}
+      onBack={() =>
+        stepIndex === 0
+          ? onBackFromFirst?.()
+          : setStepIndex((i) => i - 1)
+      }
+      backDisabled={stepIndex === 0 && !onBackFromFirst}
       onNext={() => {
         if (block) return;
         setFinishIssue(null);
@@ -859,10 +886,10 @@ export default function GuidedRoomFlow({
 
       {step === "photos" && (
         <div className="space-y-4">
-          <p className="text-sm text-on-surface-variant">
-            At least one, so the architect can see what the measurements
-            can&apos;t show — a chimney breast, a radiator, the state of the
-            room.
+          <p className="text-base leading-relaxed text-on-surface-variant">
+            One photo of the whole room is enough. It shows us things the
+            measurements can&apos;t — radiators, alcoves, where the light
+            comes from.
           </p>
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold uppercase tracking-widest text-on-primary">
             <span

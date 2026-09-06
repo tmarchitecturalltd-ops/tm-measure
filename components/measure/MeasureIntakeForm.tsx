@@ -5433,6 +5433,10 @@ export default function MeasureIntakeForm() {
           onDone={goRooms}
           onExitGuided={() => setGuidedMode(false)}
           issueFor={issueFor}
+          // Home rather than a dead button on the very first screen.
+          onBackFromFirst={() => {
+            window.location.href = "/";
+          }}
         />
       )}
 
@@ -5492,14 +5496,35 @@ export default function MeasureIntakeForm() {
           // Scanning is offered only where the sensor exists.
           // Passing the handler regardless would put two dead
           // entries in the menu on every non-Pro device.
+          /*
+           * Scanning is offered on every phone that can do it at all.
+           *
+           * Two faults here. It required arSupport === "yes", so a
+           * phone without LiDAR was shown no scanning option
+           * whatsoever — even though the corner-tap camera scanner
+           * works on any camera and is exactly the fallback
+           * RoomScanOverlay exists to provide.
+           *
+           * And it called setScanRoomId directly, which opens that
+           * camera overlay — so even on a 15 Pro the menu entry led to
+           * corner-tapping rather than the sensor. The scanRoom helper
+           * that picks between them was written and then lost when this
+           * block was moved.
+           *
+           * The whole-property scan stays LiDAR-only: merging rooms
+           * into one coordinate system is a StructureBuilder feature
+           * with no camera equivalent to fall back to.
+           */
           onScanRoom={
-            arSupport === "yes"
-        ? () => setScanRoomId(rooms[activeRoomIndex].id)
-        : undefined
+            SCAN_ENABLED ? () => scanRoom(rooms[activeRoomIndex].id) : undefined
           }
+          scanIsLidar={arSupport === "yes"}
           onScanHouse={
             arSupport === "yes" ? () => void startHouseScan() : undefined
           }
+          // Back from the first question leaves the rooms step rather
+          // than sitting there greyed out.
+          onBackFromFirst={() => setStep("project")}
           onGoToRoom={setActiveRoomIndex}
           roomNames={rooms.map((r) => r.name)}
           // Add a room and land on it. Without this the guided flow

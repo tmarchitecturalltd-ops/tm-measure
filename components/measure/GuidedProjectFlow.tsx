@@ -74,6 +74,14 @@ type Props = {
   onDone: () => void;
   onExitGuided: () => void;
   issueFor: (path: string) => string | undefined;
+  /**
+   * Where Back goes from the first question.
+   *
+   * Disabling it there is correct in that there is no previous
+   * question, and wrong in every other sense: a greyed-out button in
+   * the corner of the first screen someone sees reads as broken.
+   */
+  onBackFromFirst?: () => void;
 };
 
 export default function GuidedProjectFlow({
@@ -93,6 +101,7 @@ export default function GuidedProjectFlow({
   onDone,
   onExitGuided,
   issueFor,
+  onBackFromFirst,
 }: Props) {
   const steps: StepId[] = ["name", "email", "project", "type", "ceiling", "unit"];
   const [stepIndex, setStepIndex] = useState(0);
@@ -165,8 +174,10 @@ export default function GuidedProjectFlow({
       onMenuOpenChange={setMenuOpen}
       menuSections={menuSections}
       scrollKey={stepIndex}
-      onBack={() => setStepIndex((i) => Math.max(0, i - 1))}
-      backDisabled={stepIndex === 0}
+      onBack={() =>
+        stepIndex === 0 ? onBackFromFirst?.() : setStepIndex((i) => i - 1)
+      }
+      backDisabled={stepIndex === 0 && !onBackFromFirst}
       onNext={() => {
         if (block) return;
         if (isLast) onDone();
