@@ -32,6 +32,46 @@ import LengthHint from "@/components/measure/LengthHint";
 import CustomShapeEditor from "@/components/measure/CustomShapeEditor";
 import GuidedScreen, { type MenuSection } from "@/components/measure/GuidedScreen";
 
+/**
+ * The rooms a UK house actually has, in roughly the order they get
+ * surveyed. Nine is the limit: a wall of chips is as much work to read
+ * as the keyboard was to use, and the tenth room is the one that needs
+ * typing anyway.
+ */
+const ROOM_NAMES = [
+  "Kitchen",
+  "Living room",
+  "Dining room",
+  "Hallway",
+  "Bedroom",
+  "Master bedroom",
+  "Bathroom",
+  "En suite",
+  "Utility",
+] as const;
+
+/**
+ * The next free name in a series — "Bedroom", then "Bedroom 2".
+ *
+ * A house has three bedrooms and two bathrooms, so a fixed list gets
+ * you one of each and leaves the rest to the keyboard. Worse, without
+ * numbering the customer names two rooms "Bedroom" and the plan comes
+ * back with two identical labels and no way to tell which is which —
+ * which is a drawing Charlie has to ring someone about.
+ *
+ * The first one is unnumbered, because "Kitchen 1" in a house with one
+ * kitchen reads as a mistake.
+ */
+function nextFreeName(base: string, taken: string[]): string {
+  const used = new Set(taken.map((n) => n.trim().toLowerCase()));
+  if (!used.has(base.toLowerCase())) return base;
+  for (let i = 2; i < 50; i++) {
+    const candidate = `${base} ${i}`;
+    if (!used.has(candidate.toLowerCase())) return candidate;
+  }
+  return base;
+}
+
 type StepId =
   | "name"
   | "scan"
@@ -41,7 +81,6 @@ type StepId =
   | "ceiling"
   | "doors"
   | "windows"
-  | "stairs"
   | "photos";
 
 type Props = {
@@ -52,9 +91,6 @@ type Props = {
   onSetShape: (shape: RoomShape) => void;
   onAddOpening: (kind: "doors" | "windows") => void;
   onRemoveOpening: (kind: "doors" | "windows", id: string) => void;
-  onAddStairs: () => void;
-  onRemoveStairs: (id: string) => void;
-  onSetStairs: (id: string, patch: Partial<NonNullable<RoomDraft["stairs"]>[number]>) => void;
   onPhotos: (files: FileList | null) => void;
   onDone: () => void;
   onExitGuided: () => void;
@@ -84,6 +120,18 @@ type Props = {
    * the second room is not much of a survey.
    */
   onAddRoom?: () => void;
+  /**
+   * Delete this room and go back to the one before it.
+   *
+   * The way out of a room nobody wanted. A room added by mistake could
+   * not be got rid of from inside the flow: the name question blocks
+   * Next until it is answered, and Finish runs the same check, so an
+   * empty extra room held the whole survey until it was given a name
+   * it did not deserve. Offered only while the room is still blank —
+   * once there are measurements in it, deleting is a decision for the
+   * rooms list, where the undo lives.
+   */
+  onRemoveRoom?: () => void;
   /** Room names, for the jump list in the menu. */
   roomNames?: string[];
   /**
@@ -114,7 +162,6 @@ const LABELS: Record<StepId, string> = {
   ceiling: "How high is the ceiling?",
   doors: "Any doors?",
   windows: "Any windows?",
-  stairs: "Any stairs in this room?",
   photos: "A photo of the room",
 };
 
@@ -126,9 +173,6 @@ export default function GuidedRoomFlow({
   onSetShape,
   onAddOpening,
   onRemoveOpening,
-  onAddStairs,
-  onRemoveStairs,
-  onSetStairs,
   onPhotos,
   onDone,
   onExitGuided,
@@ -139,6 +183,7 @@ export default function GuidedRoomFlow({
   onGoToRoom,
   roomNames = [],
   onAddRoom,
+  onRemoveRoom,
   onBackFromFirst,
   scanRequired = false,
   scanFailed = false,
@@ -186,10 +231,22 @@ export default function GuidedRoomFlow({
 
   const steps: StepId[] = useMemo(
     () =>
+      /*
+       * No stairs step.
+       *
+       * A staircase is not a feature of a room. It arrives in one, ends
+       * in another, and belongs to neither -- so asking "are there
+       * stairs in this room?" once per room invites the same flight to
+       * be entered twice, from the landing and from the hall, or missed
+       * entirely because each end looked like the other end's job. It
+       * is asked once now, at the whole-house stage, where the question
+       * is which room each flight starts in. The data still hangs off a
+       * room, because that is what the plan needs to draw against.
+       */
       mustScan
         ? ["name", "scan"]
         : scanned
-        ? ["name", "stairs", "photos"]
+        ? ["name", "photos"]
         : [
             "name",
             "shape",
@@ -197,7 +254,6 @@ export default function GuidedRoomFlow({
             "ceiling",
             "doors",
             "windows",
-            "stairs",
             "photos",
           ],
     [scanned, mustScan],
@@ -223,6 +279,23 @@ export default function GuidedRoomFlow({
    * whether the app is broken, slow, or waiting for something.
    */
   const [finishIssue, setFinishIssue] = useState<string | null>(null);
+
+  /**
+   * Nothing has been put in this room yet.
+   *
+   * Deliberately strict: any wall length, photo, memo, opening, traced
+   * outline or scan counts as work, and work is not something to throw
+   * away behind an underlined bit of text on the name screen.
+   */
+  const roomIsEmpty =
+    !room.name.trim() &&
+    !room.walls.some((w) => w.lengthM.trim()) &&
+    (room.photos?.length ?? 0) === 0 &&
+    (room.voiceMemos?.length ?? 0) === 0 &&
+    (room.doors?.length ?? 0) === 0 &&
+    (room.windows?.length ?? 0) === 0 &&
+    (room.floorPolygonM?.length ?? 0) === 0 &&
+    room.measuredByScan !== true;
 
   /**
    * The wall length boxes, so finishing one can move to the next.
@@ -564,9 +637,55 @@ export default function GuidedRoomFlow({
             className={input}
             autoFocus
           />
-          <p className="mt-2 text-sm text-on-surface-variant">
+          {/* Tap instead of type.
+              Naming rooms is the one bit of typing that repeats — once
+              per room, ten times in a house — and it is typing on a
+              phone held in one hand while standing up. Nine names cover
+              most of a survey. The field stays, because plenty of
+              houses have a snug or a boot room and the app should not
+              argue with what someone calls their own house. */}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {ROOM_NAMES.map((base) => {
+              // Names already used by the *other* rooms. This room's own
+              // name is excluded, so a chip you have already picked
+              // stays selected rather than offering to renumber itself.
+              const others = roomNames.filter((_, i) => i !== roomIndex);
+              const label = nextFreeName(base, others);
+              return (
+                <button
+                  key={base}
+                  type="button"
+                  onClick={() => onPatch({ name: label })}
+                  style={{ minHeight: 44 }}
+                  className={`rounded-full border px-4 text-sm font-bold ${
+                    room.name === label
+                      ? "border-primary bg-primary/10 text-on-surface"
+                      : "border-outline-variant/40 text-on-surface-variant"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-sm text-on-surface-variant">
             Whatever you call it at home is fine.
           </p>
+
+          {/* The escape hatch for a room added by mistake.
+              Only while it is empty — see onRemoveRoom. Plain text
+              rather than a button, because it must be findable without
+              competing with the answer. */}
+          {onRemoveRoom && roomIsEmpty && totalRooms > 1 && (
+            <button
+              type="button"
+              onClick={onRemoveRoom}
+              style={{ minHeight: 44 }}
+              className="mt-5 text-sm font-bold uppercase tracking-widest text-on-surface-variant underline"
+            >
+              I didn&apos;t mean to add this room
+            </button>
+          )}
         </div>
       )}
 
@@ -899,72 +1018,6 @@ export default function GuidedRoomFlow({
 
       {step === "doors" && openingStep("doors")}
       {step === "windows" && openingStep("windows")}
-
-      {step === "stairs" && (
-        <div className="space-y-4">
-          {(room.stairs ?? []).length === 0 && (
-            <p className="text-sm text-on-surface-variant">
-              Only if a flight starts, ends or passes through this room.
-              Otherwise carry on.
-            </p>
-          )}
-          {(room.stairs ?? []).map((s) => (
-            <div
-              key={s.id}
-              className="rounded-lg border border-outline-variant/30 bg-surface-container-lowest p-4"
-            >
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="min-w-[7rem] flex-1">
-                  <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
-                    Width (m)
-                  </label>
-                  <input
-                    inputMode="decimal"
-                    value={s.widthM}
-                    onChange={(e) =>
-                      onSetStairs(s.id, { widthM: e.target.value })
-                    }
-                    placeholder="0.90"
-                    className={input}
-                  />
-                </div>
-                <div className="min-w-[7rem] flex-1">
-                  <label className="mb-1 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
-                    Going
-                  </label>
-                  <select
-                    value={s.direction}
-                    onChange={(e) =>
-                      onSetStairs(s.id, {
-                        direction: e.target.value as "up" | "down",
-                      })
-                    }
-                    className={input}
-                  >
-                    <option value="up">Up from here</option>
-                    <option value="down">Down from here</option>
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onRemoveStairs(s.id)}
-                  aria-label="Remove stairs"
-                  className="material-symbols-outlined rounded p-2 text-on-surface-variant hover:text-error"
-                >
-                  close
-                </button>
-              </div>
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={onAddStairs}
-            className="rounded-full border border-primary px-5 py-2 text-sm font-bold uppercase tracking-widest text-primary"
-          >
-            + Add stairs
-          </button>
-        </div>
-      )}
 
       {step === "photos" && (
         <div className="space-y-4">

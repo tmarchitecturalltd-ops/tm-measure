@@ -15,8 +15,7 @@
  *     New build, Renovation, Garage, Other). Tapping a tile routes
  *     to /measure?type=<key> so the form can pre-fill the project
  *     type without an extra step.
- *  3. How it works — three condensed cards (Capture → Review → Send).
- *  4. Recent submissions — empty state for new users; reverse-chrono
+ *  3. Recent submissions — empty state for new users; reverse-chrono
  *     list for returning users, sourced from localStorage.
  *
  * The entire component is a client component because the recent-
@@ -259,8 +258,8 @@ export default function AppHome() {
           </h2>
           <p className="mt-3 max-w-prose text-sm leading-relaxed text-on-surface-variant md:text-base">
             Pick the type below to start. We&apos;ll guide you through walls,
-            doors, windows and a quick floor plan — usually around 15 minutes
-            per room. One reference photo per room, then it&apos;s in our hands.
+            doors, windows and a quick floor plan. One reference photo per
+            room, then it&apos;s in our hands.
           </p>
 
           {/* Tile grid — each tile keeps the cream surface base but
@@ -304,29 +303,15 @@ export default function AppHome() {
           </div>
         </section>
 
-        {/* ── How it works ─────────────────────────────────────── */}
-        <section className="mt-12">
-          <h3 className="font-label text-sm font-bold uppercase tracking-[0.25em] text-primary">
-            How it works
-          </h3>
-          <ol className="mt-3 grid gap-3 sm:grid-cols-3">
-            <Step
-              n={1}
-              title="Capture"
-              text="Walk room-by-room. Use the camera scan or type wall lengths in metres."
-            />
-            <Step
-              n={2}
-              title="Review"
-              text="Check measurements in metric and imperial. Add notes, photos, doors and windows."
-            />
-            <Step
-              n={3}
-              title="Send"
-              text="Drag rooms onto the floor plan and submit. We reply within 2 working days."
-            />
-          </ol>
-        </section>
+        {/* The "How it works" cards used to sit here.
+            They are now a single screen shown once, at the moment the
+            customer starts a project -- which is the only moment the
+            information is wanted. On the home screen they were three
+            cards between the tiles and the resume card, read by nobody
+            and pushing the thing a returning customer came back for
+            further down the page. The "How it works" button in the
+            footer still opens the welcome screen for anyone who wants
+            a reminder. */}
 
         {/* ── Continue where you left off ──────────────────────── */}
         {draft && (
@@ -580,27 +565,6 @@ export default function AppHome() {
         </div>
       </nav>
     </div>
-  );
-}
-
-function Step({ n, title, text }: { n: number; title: string; text: string }) {
-  return (
-    <li className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-4">
-      <div className="flex items-center gap-2.5">
-        <span
-          className="font-headline flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-sm font-bold text-primary"
-          aria-hidden
-        >
-          {n}
-        </span>
-        <p className="font-headline text-sm font-semibold text-on-surface">
-          {title}
-        </p>
-      </div>
-      <p className="mt-2.5 text-sm leading-relaxed text-on-surface-variant">
-        {text}
-      </p>
-    </li>
   );
 }
 

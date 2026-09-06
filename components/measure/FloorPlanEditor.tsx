@@ -243,6 +243,55 @@ export default function FloorPlanEditor({
    * flight along a wall and move it to a different one with the same
    * gesture.
    */
+  /**
+   * World metres → a room's own coordinates.
+   *
+   * The inverse of the `translate(...) rotate(...)` the room group is
+   * drawn with. Written against that string deliberately: if the two
+   * ever disagree, a flight lands somewhere the customer did not drop
+   * it, which is the sort of thing that looks like a bug in the drag
+   * rather than in the maths.
+   */
+  const worldToLocal = useCallback(
+    (world: { x: number; z: number }, p: RoomPlacement) => {
+      if (!p.positionM) return null;
+      const dx = world.x - p.positionM.x;
+      const dz = world.z - p.positionM.z;
+      const rad = (-p.rotationDeg * Math.PI) / 180;
+      return {
+        x: dx * Math.cos(rad) - dz * Math.sin(rad),
+        z: dx * Math.sin(rad) + dz * Math.cos(rad),
+      };
+    },
+    [],
+  );
+
+  /**
+   * Which placed room on this floor a world point falls inside.
+   *
+   * Bounding boxes, not exact outlines. An L-shaped room's notch will
+   * claim a point that is technically outside it, which is wrong and
+   * harmless: the flight then snaps to that room's nearest wall, a
+   * quarter of a metre from where it was dropped, and can be dragged
+   * again. Getting it exactly right would mean point-in-polygon
+   * against every room on every pointer move.
+   */
+  const roomAtPoint = useCallback(
+    (world: { x: number; z: number }) =>
+      roomsOnFloor.find((r) => {
+        const p = placementFor(r.id);
+        if (!p.positionM) return false;
+        const b = roomBoundingBox(p.positionM, roomFootprint(r), p.rotationDeg);
+        return (
+          world.x >= b.minX &&
+          world.x <= b.maxX &&
+          world.z >= b.minZ &&
+          world.z <= b.maxZ
+        );
+      }) ?? null,
+    [roomsOnFloor, placementFor],
+  );
+
   const slideStairs = useCallback(
     (roomId: string, stairsId: string, at: { x: number; z: number }) => {
       if (!onRoomChange) return;
@@ -291,23 +340,126 @@ export default function FloorPlanEditor({
     [onRoomChange, rooms],
   );
 
+  /**
+   * Take a flight out of one room and put it in another, unchanged.
+   *
+   * Width, direction, tread count and notes travel with it — the only
+   * things that do not are the wall and the distance along it, which
+   * are meaningless in a room they did not come from and are set by
+   * the drag immediately afterwards.
+   */
+  const moveStairsToRoom = useCallback(
+    (fromId: string, toId: string, stairsId: string) => {
+      if (!onRoomChange) return;
+      const from = rooms.find((r) => r.id === fromId);
+      const to = rooms.find((r) => r.id === toId);
+      if (!from || !to) return;
+      const flight = (from.stairs ?? []).find((s) => s.id === stairsId);
+      if (!flight) return;
+      onRoomChange(fromId, {
+        stairs: (from.stairs ?? []).filter((s) => s.id !== stairsId),
+      });
+      onRoomChange(toId, { stairs: [...(to.stairs ?? []), flight] });
+    },
+    [onRoomChange, rooms],
+  );
+
+  /**
+   * Add a flight to the selected room, sitting on its first wall.
+   *
+   * Width and tread count are left at the usual domestic values rather
+   * than blank. A blank width draws nothing, so the customer would add
+   * stairs from the plan and watch the plan not change; 0.9 m and 13
+   * treads are both visible and roughly right, and both are editable.
+   */
+  const addStairsToSelected = useCallback(() => {
+    if (!onRoomChange || !selected) return;
+    const room = rooms.find((r) => r.id === selected);
+    if (!room) return;
+    onRoomChange(selected, {
+      stairs: [
+        ...(room.stairs ?? []),
+        {
+          id: `st-${Date.now().toString(36)}`,
+          widthM: "0.90",
+          direction: "up",
+          wallIndex: 0,
+          positionM: "0.50",
+          positionApprox: true,
+        },
+      ],
+    });
+  }, [onRoomChange, rooms, selected]);
+
+  /** Same, for a door. 0.83 m is a standard UK internal leaf. */
+  const addDoorToSelected = useCallback(() => {
+    if (!onRoomChange || !selected) return;
+    const room = rooms.find((r) => r.id === selected);
+    if (!room) return;
+    onRoomChange(selected, {
+      doors: [
+        ...(room.doors ?? []),
+        {
+          id: `d-${Date.now().toString(36)}`,
+          widthM: "0.83",
+          note: "",
+          wallIndex: 0,
+          positionM: "0.50",
+          positionApprox: true,
+        },
+      ],
+    });
+  }, [onRoomChange, rooms, selected]);
+
   const onItemPointerMove = useCallback(
     (e: ReactPointerEvent) => {
       const st = itemDragRef.current;
       if (!st || st.pointerId !== e.pointerId) return;
       e.stopPropagation();
-      const local = localCoordsFromEvent(e);
+      /*
+       * Drop it wherever it belongs, including in another room.
+       *
+       * A flight used to snap to the nearest wall of the room it was
+       * created in, and only that room — so a staircase entered
+       * against a bedroom, which is where the customer was standing
+       * when they thought of it, could never be moved to the landing
+       * where it actually is. Dragging it out of the room did nothing
+       * except pin it to whichever bedroom wall was closest.
+       *
+       * Now the drop point decides. Land inside another room and the
+       * flight moves to it; land on nothing and it stays where it was,
+       * because a staircase in the garden is not a thing we can draw.
+       */
+      const world = svgCoordsFromEvent(e);
+      if (!world) return;
+      const target = roomAtPoint(world) ?? rooms.find((r) => r.id === st.roomId);
+      if (!target) return;
+      const local = worldToLocal(world, placementFor(target.id));
       if (!local) return;
-      const next = {
-        x: snapM(st.startPos.x + (local.x - st.startLocal.x)),
-        z: snapM(st.startPos.z + (local.z - st.startLocal.z)),
-      };
-      slideStairs(st.roomId, st.itemId, next);
+
+      if (target.id !== st.roomId) {
+        moveStairsToRoom(st.roomId, target.id, st.itemId);
+        // The id is preserved by the move, so the drag keeps hold of
+        // the same flight and the next pointermove slides it.
+        itemDragRef.current = { ...st, roomId: target.id };
+      }
+      slideStairs(target.id, st.itemId, {
+        x: snapM(local.x),
+        z: snapM(local.z),
+      });
     },
     // slideStairs must be listed: it closes over `rooms`, so omitting it
     // leaves a drag started before a room was added writing back to the
     // room list as it was then, silently dropping the new room.
-    [localCoordsFromEvent, slideStairs],
+    [
+      svgCoordsFromEvent,
+      roomAtPoint,
+      worldToLocal,
+      placementFor,
+      moveStairsToRoom,
+      rooms,
+      slideStairs,
+    ],
   );
 
   const onItemPointerUp = useCallback((e: ReactPointerEvent) => {
@@ -979,7 +1131,36 @@ export default function FloorPlanEditor({
         >
           Clear layout
         </button>
+        {/* Add things from the plan, not only from the questions.
+            Someone looking at the layout is the person best placed to
+            notice a missing staircase or a door they walked through
+            and never recorded — and until now the only way to add
+            either was to go back through the room questions and find
+            the right room. Adds to the selected room, because "which
+            room?" is a question the plan can already answer: the one
+            you tapped. */}
+        {onRoomChange && selected && (
+          <>
+            <button
+              type="button"
+              onClick={() => addStairsToSelected()}
+              className="rounded-full border border-[#b89650] px-3 py-1 font-semibold text-[#8a6f2f]"
+            >
+              + Stairs here
+            </button>
+            <button
+              type="button"
+              onClick={() => addDoorToSelected()}
+              className="rounded-full border border-[#b89650] px-3 py-1 font-semibold text-[#8a6f2f]"
+            >
+              + Door here
+            </button>
+          </>
+        )}
         <span className="text-sm text-on-surface-variant">
+          {onRoomChange && !selected
+            ? "Tap a room to add stairs or a door to it · "
+            : ""}
           Grid = 25 cm · drag rooms · ↻ rotates 90° · × removes from plan
         </span>
       </div>

@@ -278,7 +278,29 @@ export type RoomDraft = {
  * the architect can visualise the building envelope; the proposal
  * block lets the customer paste a short brief plus optional sketches.
  */
-export type ExteriorSide = "front" | "back" | "left" | "right";
+/**
+ * Four elevations, plus two anchors that are not sides of the house at
+ * all.
+ *
+ * "Take a photo of the outside" gets you four pictures of walls. What
+ * it does not get you is the boiler, the consumer unit, or the state
+ * of the guttering — and those decide whether a job is quotable from
+ * the desk or needs a second visit. A customer will never think to
+ * photograph a consumer unit unasked; asked directly, it costs them
+ * one tap.
+ *
+ * They live in the same record as the elevations because everything
+ * downstream — state, draft, submission payload, media counter — keys
+ * off it generically, so a new anchor is one string here and one
+ * screen in GuidedExtrasFlow. Both are skippable like the rest.
+ */
+export type ExteriorSide =
+  | "front"
+  | "back"
+  | "left"
+  | "right"
+  | "services"
+  | "roof";
 
 export type ExteriorPhotos = {
   /** Photos keyed by side. Each side may have 0..N photos. */

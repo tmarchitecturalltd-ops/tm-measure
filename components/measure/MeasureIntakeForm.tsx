@@ -57,6 +57,7 @@ import WallPositionPicker from "@/components/measure/WallPositionPicker";
 import GuidedRoomFlow from "@/components/measure/GuidedRoomFlow";
 import GuidedProjectFlow from "@/components/measure/GuidedProjectFlow";
 import GuidedExtrasFlow from "@/components/measure/GuidedExtrasFlow";
+import HowItWorksOverlay from "@/components/measure/HowItWorksOverlay";
 import GuidedScreen from "@/components/measure/GuidedScreen";
 import LengthHint from "@/components/measure/LengthHint";
 import {
@@ -1587,7 +1588,14 @@ export default function MeasureIntakeForm() {
   // ── Exterior (4-sides) photos ──────────────────────────────────────
   const [exteriorPhotos, setExteriorPhotos] = useState<
     Record<ExteriorSide, RoomPhoto[]>
-  >({ front: [], back: [], left: [], right: [] });
+  >({
+    front: [],
+    back: [],
+    left: [],
+    right: [],
+    services: [],
+    roof: [],
+  });
 
   const attachExteriorPhotos = useCallback(
     (side: ExteriorSide, files: FileList | null) => {
@@ -2743,18 +2751,13 @@ export default function MeasureIntakeForm() {
               Self measure
             </h1>
           </div>
-          <span className="hidden items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3 py-1.5 text-sm font-semibold text-on-surface-variant sm:inline-flex">
-            <span
-              className="material-symbols-outlined text-primary"
-              style={{ fontSize: "14px" }}
-              aria-hidden
-            >
-              schedule
-            </span>
-            {/* Per room, so nobody multiplies. A whole house is
-                closer to two hours; see the estimate in the notes. */}
-            ~15 min per room
-          </span>
+          {/* The time estimate is gone.
+              It was honest and it was unhelpful. "~15 min per room" is
+              read as a promise, and a customer who takes longer -- which
+              most do, on their first room, with a tape in one hand --
+              concludes they are doing it wrong rather than that the
+              estimate was optimistic. The survey takes as long as it
+              takes, and every screen already shows where they are. */}
           {savedLabel && (
             <span
               aria-live="polite"
@@ -5048,15 +5051,22 @@ export default function MeasureIntakeForm() {
                     <h3 className="font-headline mb-4 text-lg text-primary">
                       {room.name}
                     </h3>
+                    {/* Only the walls with something wrong.
+                        Every wall used to get its own tile, so an
+                        eight-sided room produced eight cards of numbers
+                        the customer had already typed and could do
+                        nothing useful with — and on a scanned room they
+                        are not even numbers anyone entered. Nine tiles
+                        marked OK is not a check, it is a wall of green
+                        that trains you to scroll past the one that
+                        isn't. The ones that need looking at are still
+                        here, on their own, where they can be seen. */}
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {room.walls.map((w, wi) => {
+                        const wallIssue = issueFor(`room-${ri}-wall-${wi}`);
+                        if (!wallIssue) return null;
                         const m = parseMeters(w.lengthM);
                         const dual = formatLengthDual(m, unit);
-                        // The badge used to read "OK" unconditionally, so a
-                        // wall the validator would flag still looked
-                        // approved on the screen where the customer decides
-                        // to submit. Derive it from the same check instead.
-                        const wallIssue = issueFor(`room-${ri}-wall-${wi}`);
                         return (
                           <div
                             key={w.id}
@@ -5074,14 +5084,10 @@ export default function MeasureIntakeForm() {
                               </p>
                             </div>
                             <span
-                              className={
-                                wallIssue
-                                  ? "text-sm font-bold text-error"
-                                  : "text-sm font-bold text-emerald-700"
-                              }
-                              title={wallIssue ?? undefined}
+                              className="text-sm font-bold text-error"
+                              title={wallIssue}
                             >
-                              {wallIssue ? "CHECK" : "OK"}
+                              CHECK
                             </span>
                           </div>
                         );
@@ -5271,26 +5277,16 @@ export default function MeasureIntakeForm() {
                       generated and sent with the submission instead, which
                       is where it is useful — to the person drawing the
                       house, not the person measuring it. */}
-                  <button
-                    type="button"
-                    onClick={submitToBackend}
-                    disabled={submitStatus === "submitting"}
-                    data-submit
-                    className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 transition-all hover:bg-surface-tint active:scale-[0.97] disabled:opacity-60"
-                  >
-                    {submitStatus === "submitting"
-                      ? submitProgress && submitProgress.total > 0
-                        ? submitProgress.done < submitProgress.total
-                          ? `Preparing photo ${submitProgress.done + 1} of ${submitProgress.total}…`
-                          : "Sending…"
-                        : "Sending…"
-                      : (
-                        <>
-                          <span className="material-symbols-outlined" style={{ fontSize: "18px" }} aria-hidden>send</span>
-                          Send to TM Designs
-                        </>
-                      )}
-                  </button>
+                  {/* The second Send button used to sit here.
+                      Two buttons that do exactly the same thing, on the
+                      same screen, one of them the last thing you press
+                      in the whole survey — the customer has to work out
+                      whether they are the same, and pressing the wrong
+                      one is the sort of thing people worry about when
+                      they are about to submit something irreversible.
+                      The one in the bottom bar survives: it is where
+                      the primary action has been on every other screen,
+                      and it is the one a thumb reaches. */}
                 </div>
                 {/* No CAD drawing, said out loud.
                     buildDxfAttachment returns null when no room has a
@@ -5412,6 +5408,10 @@ export default function MeasureIntakeForm() {
           photosBySide={exteriorPhotos}
           onAddSidePhotos={attachExteriorPhotos}
           onRemoveSidePhoto={removeExteriorPhoto}
+          rooms={rooms}
+          onAddStairs={addStairs}
+          onSetStairs={setStairs}
+          onRemoveStairs={removeStairs}
           description={proposalDescription}
           onDescription={setProposalDescription}
           sketches={proposalSketches}
@@ -5421,6 +5421,10 @@ export default function MeasureIntakeForm() {
           onDone={() => setStep("plan")}
         />
       )}
+
+      {/* Shown over the first question, once per install. It renders
+          nothing at all on every later visit — see the component. */}
+      <HowItWorksOverlay />
 
       {guidedProjectActive && (
         <GuidedProjectFlow
@@ -5470,11 +5474,6 @@ export default function MeasureIntakeForm() {
           onAddOpening={(kind) => addOpening(rooms[activeRoomIndex].id, kind)}
           onRemoveOpening={(kind, id) =>
             removeOpening(rooms[activeRoomIndex].id, kind, id)
-          }
-          onAddStairs={() => addStairs(rooms[activeRoomIndex].id)}
-          onRemoveStairs={(id) => removeStairs(rooms[activeRoomIndex].id, id)}
-          onSetStairs={(id, patch) =>
-            setStairs(rooms[activeRoomIndex].id, id, patch)
           }
           onPhotos={(files) => attachPhotos(rooms[activeRoomIndex].id, files)}
           onDone={() => {
@@ -5546,6 +5545,18 @@ export default function MeasureIntakeForm() {
             addRoom();
             setActiveRoomIndex(rooms.length);
           }}
+          // Drop an unwanted room and land on the one before it. Guarded
+          // to more than one room, so the survey can never be left with
+          // none.
+          onRemoveRoom={
+            rooms.length > 1
+              ? () => {
+                  const id = rooms[activeRoomIndex].id;
+                  setActiveRoomIndex(Math.max(0, activeRoomIndex - 1));
+                  removeRoom(id);
+                }
+              : undefined
+          }
           // On a LiDAR phone the sensor measures; the typed fields are
           // not offered unless a scan has actually failed.
           scanRequired={arSupport === "yes"}
