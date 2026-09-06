@@ -425,6 +425,17 @@ export default function FloorPlanEditor({
   const [insertKind, setInsertKind] = useState<"door" | "window" | "stairs">(
     "door",
   );
+  /**
+   * The room the insert panel writes to.
+   *
+   * `selected` when the customer has tapped a room, and the first room
+   * on the floor otherwise -- so the panel is usable the moment it is
+   * seen rather than being a set of controls that quietly do nothing.
+   * `selected` also holds stairs ids, which are not rooms, so it is
+   * checked against the room list rather than trusted.
+   */
+  const insertRoomId =
+    roomsOnFloor.find((r) => r.id === selected)?.id ?? roomsOnFloor[0]?.id ?? "";
   const [insertWidthM, setInsertWidthM] = useState("0.838");
   const [insertTreads, setInsertTreads] = useState("13");
   const [insertWinders, setInsertWinders] = useState(false);
@@ -439,9 +450,10 @@ export default function FloorPlanEditor({
    * is at least visibly wrong, which is what prompts the drag.
    */
   const insertIntoSelected = useCallback(() => {
-    if (!onRoomChange || !selected) return;
-    const room = rooms.find((r) => r.id === selected);
+    if (!onRoomChange || !insertRoomId) return;
+    const room = rooms.find((r) => r.id === insertRoomId);
     if (!room) return;
+    const target = insertRoomId;
     const id = `${insertKind[0]}-${Date.now().toString(36)}`;
     const base = {
       id,
@@ -453,7 +465,7 @@ export default function FloorPlanEditor({
       positionApprox: true,
     };
     if (insertKind === "stairs") {
-      onRoomChange(selected, {
+      onRoomChange(target, {
         stairs: [
           ...(room.stairs ?? []),
           {
@@ -469,7 +481,7 @@ export default function FloorPlanEditor({
     }
     const opening = { ...base, widthM: insertWidthM, note: "" };
     onRoomChange(
-      selected,
+      target,
       insertKind === "door"
         ? { doors: [...(room.doors ?? []), opening] }
         : { windows: [...(room.windows ?? []), opening] },
@@ -477,7 +489,7 @@ export default function FloorPlanEditor({
   }, [
     onRoomChange,
     rooms,
-    selected,
+    insertRoomId,
     insertKind,
     insertWidthM,
     insertTreads,
@@ -1377,37 +1389,6 @@ export default function FloorPlanEditor({
         )}
       </div>
 
-      {/* Controls */}
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <button
-          type="button"
-          onClick={applyAutoLayout}
-          className="rounded-full border border-[#b89650] px-3 py-1 font-semibold text-[#8a6f2f]"
-        >
-          Auto-layout this floor
-        </button>
-        <button
-          type="button"
-          onClick={clearFloor}
-          className="rounded-full border border-[#d9d3c8] px-3 py-1 font-semibold text-[#6e6a5f]"
-        >
-          Clear layout
-        </button>
-        {/* Add things from the plan, not only from the questions.
-            Someone looking at the layout is the person best placed to
-            notice a missing staircase or a door they walked through
-            and never recorded — and until now the only way to add
-            either was to go back through the room questions and find
-            the right room. Adds to the selected room, because "which
-            room?" is a question the plan can already answer: the one
-            you tapped. */}
-        <span className="text-sm text-on-surface-variant">
-          {onRoomChange && !selected
-            ? "Tap a room to add a door, window or stairs to it · "
-            : ""}
-          Grid = 25 cm · drag rooms · ↻ rotates 90° · × removes from plan
-        </span>
-      </div>
 
       {/* ── Insert into the selected room ───────────────────────────
           Someone looking at the layout is the person best placed to
@@ -1422,18 +1403,43 @@ export default function FloorPlanEditor({
           "which of these is it closest to" is both easier to answer
           and closer to the truth. The width can still be corrected in
           the room questions if the door really is a one-off. */}
-      {onRoomChange && selected && (
+      {onRoomChange && roomsOnFloor.length > 0 && (
         <div
           className="rounded-lg border border-[#b89650]/50 p-3"
           style={{ backgroundColor: "#fffdf8" }}
         >
           <p className="mb-2 text-sm font-bold uppercase tracking-[0.2em] text-on-surface-variant">
-            Add to {rooms.find((r) => r.id === selected)?.name || "this room"}
+            Add feature
           </p>
           <div className="flex flex-wrap items-end gap-2">
+            {/* The room is picked here rather than by tapping the plan.
+                The panel used to appear only once a room was selected,
+                which meant the way to find out that doors and windows
+                could be added at all was to tap a room and notice
+                something new had appeared underneath — so the honest
+                answer to "where is the button?" was that there wasn't
+                one until you had already guessed. Tapping a room still
+                sets this, because that is the quicker gesture once you
+                know it works. */}
             <label className="text-sm">
               <span className="mb-1 block font-semibold text-[#6e6a5f]">
-                What
+                Room
+              </span>
+              <select
+                value={insertRoomId}
+                onChange={(e) => setSelected(e.target.value)}
+                className="rounded-lg border border-[#d9d3c8] bg-white px-3 py-2 text-sm"
+              >
+                {roomsOnFloor.map((r, i) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name?.trim() || `Room ${i + 1}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block font-semibold text-[#6e6a5f]">
+                Feature
               </span>
               <select
                 value={insertKind}
@@ -1515,6 +1521,26 @@ export default function FloorPlanEditor({
           </p>
         </div>
       )}
+      {/* Controls */}
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <button
+          type="button"
+          onClick={applyAutoLayout}
+          className="rounded-full border border-[#b89650] px-3 py-1 font-semibold text-[#8a6f2f]"
+        >
+          Auto-layout this floor
+        </button>
+        <button
+          type="button"
+          onClick={clearFloor}
+          className="rounded-full border border-[#d9d3c8] px-3 py-1 font-semibold text-[#6e6a5f]"
+        >
+          Clear layout
+        </button>
+        <span className="text-sm text-on-surface-variant">
+          Grid = 25 cm · drag rooms · ↻ rotates 90° · × removes from plan
+        </span>
+      </div>
 
       {/* ── Ceiling height for this floor ──────────────────────────
           Asked here rather than once for the whole property, because

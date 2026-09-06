@@ -206,9 +206,31 @@ function doPost(e) {
     const submissionId = Utilities.getUuid().slice(0, 8).toUpperCase();
     uploadPhotos_(payload, submissionId);
     appendRows_(payload, submissionId);
-    sendEmail_(payload, submissionId);
 
-    return jsonResponse_({ ok: true, submissionId: submissionId });
+    /*
+     * A failed notification is not a failed submission.
+     *
+     * This used to be a bare call. The survey was already in the sheet
+     * and the photos already in Drive by the time it ran, so when the
+     * mail threw, the customer was told the whole thing had failed and
+     * pressed Send again -- writing the same survey a second time under
+     * a new id. Two identical rows in the sheet, one anxious customer,
+     * and the actual fault (the mail) invisible behind a message that
+     * pointed at the submission.
+     *
+     * The work that matters is done above. If the notification fails,
+     * that is our problem to see in the log, not the customer's problem
+     * to solve by resubmitting.
+     */
+    let emailed = true;
+    try {
+      sendEmail_(payload, submissionId);
+    } catch (mailErr) {
+      emailed = false;
+      console.error('Submission ' + submissionId + ' saved, email failed: ' + mailErr);
+    }
+
+    return jsonResponse_({ ok: true, submissionId: submissionId, emailed: emailed });
   } catch (err) {
     console.error(err);
     return jsonResponse_({ ok: false, error: String(err.message || err) });
@@ -879,6 +901,60 @@ function sendEmail_(payload, submissionId) {
     htmlBody: buildHtmlEmail_(payload, submissionId),
     body: buildPlainTextEmail_(payload, submissionId),
   });
+}
+
+/**
+ * Send a test email and report what the script can actually see.
+ *
+ * The CONFIG comment above has told you to "test with
+ * emailDiagnostic()" for some time, and the function did not exist —
+ * so the one instruction left for the next person to hit this problem
+ * was a dead end. Run it from the Apps Script editor: pick
+ * emailDiagnostic from the function list, Run, then read the log.
+ *
+ * What it distinguishes:
+ *
+ *   - Deployment drift. It logs the recipient this *deployed* script
+ *     is using. If that reads inquiries@tmdesignsltd.com then the
+ *     editor has the new code and the deployment does not, which is
+ *     the commonest cause of "I changed it and nothing happened" and
+ *     is fixed by Deploy → Manage deployments → pencil → New version.
+ *   - Quota. MailApp silently does nothing once the daily allowance is
+ *     spent, so the remaining count is worth seeing before blaming
+ *     anything else.
+ *   - Delivery. If this arrives and a real submission does not, the
+ *     problem is in the submission path, not in the mail.
+ *     If neither arrives, check spam and the Gmail filters.
+ */
+function emailDiagnostic() {
+  const quota = MailApp.getRemainingDailyQuota();
+  const stamp = new Date().toISOString();
+  Logger.log('Recipient in the DEPLOYED script: ' + CONFIG.recipientEmail);
+  Logger.log('Remaining MailApp quota today: ' + quota);
+  if (quota <= 0) {
+    Logger.log('QUOTA EXHAUSTED — no mail will send until it resets.');
+    return;
+  }
+  try {
+    MailApp.sendEmail({
+      to: CONFIG.recipientEmail,
+      subject: 'TM Measure — email diagnostic ' + stamp,
+      body:
+        'If you are reading this, the deployed script can send mail to ' +
+        CONFIG.recipientEmail +
+        '.\n\nSent at ' +
+        stamp +
+        '\nRemaining quota when sent: ' +
+        quota +
+        '\n\nA submission that reaches the script sends the same way. If ' +
+        'this arrived and a real submission did not, the submission never ' +
+        'got to the script — check the app is pointed at the current ' +
+        '/exec URL.',
+    });
+    Logger.log('Sent. Check the inbox, and the spam folder.');
+  } catch (err) {
+    Logger.log('sendEmail threw: ' + err);
+  }
 }
 
 function buildHtmlEmail_(payload, submissionId) {

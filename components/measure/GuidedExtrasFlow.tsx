@@ -11,8 +11,8 @@
  * survey that changes its manner two thirds of the way through reads
  * as two applications stitched together.
  *
- * Eight screens now — one per side of the house, then manholes and the
- * roof, then the description and the sketches. Every one of them is skippable, because all of
+ * Seven screens now — one per side of the house, then manholes, then
+ * the description and the sketches. Every one of them is skippable, because all of
  * this is genuinely optional: a customer who cannot get round the back
  * of their own house should not be stopped here.
  */
@@ -39,14 +39,18 @@ type Side = ExteriorSide;
 type StepId = Side | "description" | "sketches";
 
 /**
- * Manholes and roof sit after the four elevations.
+ * Manholes sit after the four elevations.
  *
- * They are the two things a survey is most often missing when it comes
- * back, and neither is something a customer would think to photograph
- * unprompted — a drain cover is part of the path to the person who
- * walks over it every day. Asked plainly, at the point they are
- * already outside with the camera open, they cost a tap each and save
- * a second visit.
+ * Drains are the thing a survey is most often missing when it comes
+ * back, and not something a customer would photograph unprompted — a
+ * cover is part of the path to the person who walks over it every
+ * day. Asked plainly, while they are already outside with the camera
+ * open, it costs a tap and saves a second visit.
+ *
+ * A roof-and-gutters step sat here too. It was cut: the elevations
+ * already show the roof from the ground, which is all a photograph
+ * taken by someone standing in their own garden can show, so it was
+ * one more screen to skip for a picture we already had.
  */
 const STEPS: StepId[] = [
   "front",
@@ -54,7 +58,6 @@ const STEPS: StepId[] = [
   "left",
   "right",
   "services",
-  "roof",
   "description",
   "sketches",
 ];
@@ -65,7 +68,6 @@ const LABELS: Record<StepId, string> = {
   left: "A photo of the left side",
   right: "A photo of the right side",
   services: "Any manhole covers",
-  roof: "The roof and the gutters",
   description: "What are you hoping to build?",
   sketches: "Any sketches or inspiration?",
 };
@@ -80,9 +82,7 @@ const HINTS: Record<StepId, string> = {
   // it has been drawn. Photographed from above, with the surroundings
   // in shot, so the run between covers can be read off the picture.
   services:
-    "The round or square metal covers in a path or the garden. Stand over each one and shoot straight down, with a bit of the ground around it, so we can see which way the drains run.",
-  roof:
-    "From the ground is fine. The gutters, and the roof if you can see it. Worth photographing anything already sagging or patched.",
+    "The round or square metal covers in a path or the garden. Take two: one straight down over the cover, and one from further back showing the path with the cover in it and the back of the house behind — so we can see where it sits in relation to the house.",
   description:
     "A few sentences is plenty. What you want, roughly where, and anything that matters to you.",
   sketches:
@@ -190,11 +190,8 @@ export default function GuidedExtrasFlow({
   return (
     <GuidedScreen
       eyebrow={
-        step === "services" || step === "roof"
-          ? // Not "Outside the house": a boiler is usually in a kitchen
-            // cupboard, and telling someone to go outside to photograph
-            // it is how the step gets skipped.
-            "A few details"
+        step === "services"
+          ? "Drains"
           : isSide
             ? "Outside the house"
             : "Your project"

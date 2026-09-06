@@ -334,8 +334,7 @@ export type ExteriorSide =
   | "back"
   | "left"
   | "right"
-  | "services"
-  | "roof";
+  | "services";
 
 export type ExteriorPhotos = {
   /** Photos keyed by side. Each side may have 0..N photos. */

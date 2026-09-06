@@ -1602,7 +1602,6 @@ export default function MeasureIntakeForm() {
     left: [],
     right: [],
     services: [],
-    roof: [],
   });
 
   const attachExteriorPhotos = useCallback(
@@ -5236,9 +5235,9 @@ export default function MeasureIntakeForm() {
                   Thanks — your measurements are on their way.
                 </p>
                 <p className="mt-2 text-sm text-on-surface-variant">
-                  We&apos;ve received the details for {projectName || "your project"} and
-                  will reply to {email} within 2 working days with a design
-                  quote.
+                  We&apos;ve received the details for {projectName || "your project"}.
+                  Your design will be completed within 2 weeks, and we&apos;ll
+                  send it to {email}.
                 </p>
                 {lastSubmissionId && (
                   <div className="mt-4 rounded-md bg-surface-container-lowest p-3 text-sm text-on-surface">

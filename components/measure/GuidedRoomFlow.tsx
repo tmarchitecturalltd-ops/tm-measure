@@ -48,6 +48,11 @@ const ROOM_NAMES = [
   "Bathroom",
   "En suite",
   "Utility",
+  // Demo only. Harry asked for it as a joke for a walkthrough, and it
+  // is one chip in a list a customer sees on every room they name --
+  // so it comes out before anything goes to the App Store, where a
+  // reviewer would find it long before a homeowner did.
+  "Sex dungeon",
 ] as const;
 
 /**

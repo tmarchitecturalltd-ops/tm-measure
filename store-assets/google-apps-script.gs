@@ -21,7 +21,19 @@ const CONFIG = {
   // Email address that receives every submission.
   // Routed through the inquiries@ alias which forwards to the
   // tmarchitecturalltd@gmail.com inbox.
-  recipientEmail: 'inquiries@tmdesignsltd.com',
+  // Was inquiries@tmdesignsltd.com. MailApp accepted every message and
+  // the send quota decremented, but nothing was ever delivered -- the
+  // sheet and Drive filled up correctly for months while no submission
+  // notification ever arrived.
+  //
+  // apps-script-COMPLETE.js was changed to the Gmail address at the
+  // time; this copy was not, and the two files have since drifted apart
+  // in both directions. Whichever one is deployed, it now sends
+  // somewhere that delivers.
+  //
+  // Point this back at inquiries@ only once that address is confirmed
+  // to deliver; test with emailDiagnostic() before trusting it.
+  recipientEmail: 'tmarchitecturalltd@gmail.com',
 
   // Name of the sheet tab used as the customer log.
   // Created automatically on the first submission.
