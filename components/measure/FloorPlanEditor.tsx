@@ -44,6 +44,32 @@ import {
   type RoomStairs,
 } from "@tm-designs/measure-core";
 
+/**
+ * Standard UK leaf widths, in metres, labelled the way a merchant
+ * lists them. Imperial in brackets because that is what is written on
+ * the door in most houses built before the 1980s, and because a
+ * customer holding a tape will recognise 2'6" faster than 0.762.
+ */
+const DOOR_WIDTHS = [
+  { value: "0.610", label: "610 mm · 2'0\" (cupboard)" },
+  { value: "0.686", label: "686 mm · 2'3\"" },
+  { value: "0.762", label: "762 mm · 2'6\" (common)" },
+  { value: "0.838", label: "838 mm · 2'9\" (common)" },
+  { value: "0.926", label: "926 mm · 3'0\" (wide / front)" },
+  { value: "1.200", label: "1200 mm (double / French)" },
+  { value: "1.800", label: "1800 mm (patio / bi-fold)" },
+] as const;
+
+/** Windows vary far more than doors, so this is a ladder, not a list. */
+const WINDOW_WIDTHS = [
+  { value: "0.600", label: "600 mm (small / bathroom)" },
+  { value: "0.900", label: "900 mm" },
+  { value: "1.200", label: "1200 mm (common)" },
+  { value: "1.500", label: "1500 mm" },
+  { value: "1.800", label: "1800 mm (large)" },
+  { value: "2.400", label: "2400 mm (bay / picture)" },
+] as const;
+
 const GOLD = "#b89650";
 const CREAM = "#fcf9f5";
 const DARK = "#1c1c1a";
@@ -329,6 +355,13 @@ export default function FloorPlanEditor({
                 ...s,
                 wallIndex: best.index,
                 positionM: snapM(best.along).toFixed(2),
+                // Back against a wall, so the free position and its
+                // frozen heading are dropped. Leaving them would mean
+                // a flight that reads as wall-anchored in the form and
+                // draws somewhere else entirely in the DXF, where
+                // worldM wins.
+                worldM: undefined,
+                headingDeg: undefined,
                 // Dragging is not measuring. Same distinction the
                 // opening picker makes, and for the same reason.
                 positionApprox: true,
@@ -365,51 +398,137 @@ export default function FloorPlanEditor({
   );
 
   /**
-   * Add a flight to the selected room, sitting on its first wall.
+   * The one height on this floor, or "" when the rooms disagree.
    *
-   * Width and tread count are left at the usual domestic values rather
-   * than blank. A blank width draws nothing, so the customer would add
-   * stairs from the plan and watch the plan not change; 0.9 m and 13
-   * treads are both visible and roughly right, and both are editable.
+   * Derived rather than held in state, so it cannot drift from the
+   * rooms it describes — switching floors, adding a room or editing a
+   * single room's height all show up here without anything to keep in
+   * sync.
    */
-  const addStairsToSelected = useCallback(() => {
-    if (!onRoomChange || !selected) return;
-    const room = rooms.find((r) => r.id === selected);
-    if (!room) return;
-    onRoomChange(selected, {
-      stairs: [
-        ...(room.stairs ?? []),
-        {
-          id: `st-${Date.now().toString(36)}`,
-          widthM: "0.90",
-          direction: "up",
-          wallIndex: 0,
-          positionM: "0.50",
-          positionApprox: true,
-        },
-      ],
-    });
-  }, [onRoomChange, rooms, selected]);
+  const floorCeilings = roomsOnFloor.map((r) => (r.ceilingHeightM ?? "").trim());
+  const ceilingIsMixed =
+    floorCeilings.length > 1 &&
+    new Set(floorCeilings.filter(Boolean)).size > 1;
+  const floorCeiling = ceilingIsMixed ? "" : (floorCeilings[0] ?? "");
 
-  /** Same, for a door. 0.83 m is a standard UK internal leaf. */
-  const addDoorToSelected = useCallback(() => {
+  /** Set every room on this floor to the same height. */
+  const setFloorCeilingForFloor = useCallback(
+    (value: string) => {
+      if (!onRoomChange) return;
+      for (const r of roomsOnFloor) {
+        onRoomChange(r.id, { ceilingHeightM: value });
+      }
+    },
+    [onRoomChange, roomsOnFloor],
+  );
+
+  const [insertKind, setInsertKind] = useState<"door" | "window" | "stairs">(
+    "door",
+  );
+  const [insertWidthM, setInsertWidthM] = useState("0.838");
+  const [insertTreads, setInsertTreads] = useState("13");
+  const [insertWinders, setInsertWinders] = useState(false);
+
+  /**
+   * Put the chosen thing on the selected room's first wall.
+   *
+   * Everything lands on wall 0 at half a metre along, marked
+   * approximate, and is then dragged. Guessing a better starting wall
+   * from the layout would be guessing: the plan knows where the rooms
+   * are, not where the customer walks. Half a metre in from a corner
+   * is at least visibly wrong, which is what prompts the drag.
+   */
+  const insertIntoSelected = useCallback(() => {
     if (!onRoomChange || !selected) return;
     const room = rooms.find((r) => r.id === selected);
     if (!room) return;
-    onRoomChange(selected, {
-      doors: [
-        ...(room.doors ?? []),
-        {
-          id: `d-${Date.now().toString(36)}`,
-          widthM: "0.83",
-          note: "",
-          wallIndex: 0,
-          positionM: "0.50",
-          positionApprox: true,
-        },
-      ],
-    });
-  }, [onRoomChange, rooms, selected]);
+    const id = `${insertKind[0]}-${Date.now().toString(36)}`;
+    const base = {
+      id,
+      wallIndex: 0,
+      positionM: "0.50",
+      // Placed from a plan, not measured against a wall. Same
+      // distinction the opening picker makes, and for the same reason:
+      // the draughtsman needs to know which numbers were paced out.
+      positionApprox: true,
+    };
+    if (insertKind === "stairs") {
+      onRoomChange(selected, {
+        stairs: [
+          ...(room.stairs ?? []),
+          {
+            ...base,
+            widthM: "0.90",
+            direction: "up" as const,
+            treads: insertTreads.trim() || "13",
+            winders: insertWinders,
+          },
+        ],
+      });
+      return;
+    }
+    const opening = { ...base, widthM: insertWidthM, note: "" };
+    onRoomChange(
+      selected,
+      insertKind === "door"
+        ? { doors: [...(room.doors ?? []), opening] }
+        : { windows: [...(room.windows ?? []), opening] },
+    );
+  }, [
+    onRoomChange,
+    rooms,
+    selected,
+    insertKind,
+    insertWidthM,
+    insertTreads,
+    insertWinders,
+  ]);
+
+  /**
+   * Cut a flight loose from its wall and pin it to the plan.
+   *
+   * The heading is frozen on the way out, from the wall it was last
+   * against and the rotation of the room it was in, so a staircase
+   * drawn running north-south does not swing round to east-west the
+   * moment it clears the doorway. Once free it keeps that heading
+   * until it is dropped back into a room.
+   */
+  const setStairsFree = useCallback(
+    (roomId: string, stairsId: string, worldM: { x: number; z: number }) => {
+      if (!onRoomChange) return;
+      const room = rooms.find((r) => r.id === roomId);
+      if (!room) return;
+      const p = placementFor(roomId);
+      onRoomChange(roomId, {
+        stairs: (room.stairs ?? []).map((s) => {
+          if (s.id !== stairsId) return s;
+          // Wall 0 runs +x, 1 runs +z, 2 runs -x, 3 runs -z, before
+          // the room's own rotation is added.
+          const heading =
+            s.headingDeg ?? ((s.wallIndex ?? 0) * 90 + p.rotationDeg) % 360;
+          return { ...s, worldM, headingDeg: heading, positionApprox: true };
+        }),
+      });
+    },
+    [onRoomChange, rooms, placementFor],
+  );
+
+  /** Put a freed flight back against a wall. */
+  const clearStairsFree = useCallback(
+    (roomId: string, stairsId: string) => {
+      if (!onRoomChange) return;
+      const room = rooms.find((r) => r.id === roomId);
+      if (!room) return;
+      onRoomChange(roomId, {
+        stairs: (room.stairs ?? []).map((s) =>
+          s.id === stairsId
+            ? { ...s, worldM: undefined, headingDeg: undefined }
+            : s,
+        ),
+      });
+    },
+    [onRoomChange, rooms],
+  );
 
   const onItemPointerMove = useCallback(
     (e: ReactPointerEvent) => {
@@ -432,8 +551,26 @@ export default function FloorPlanEditor({
        */
       const world = svgCoordsFromEvent(e);
       if (!world) return;
-      const target = roomAtPoint(world) ?? rooms.find((r) => r.id === st.roomId);
-      if (!target) return;
+      const target = roomAtPoint(world);
+
+      /*
+       * Dropped outside every room — leave it there.
+       *
+       * A stairwell in a hall, a flight on an open landing, a run
+       * between two rooms that belongs to neither: all real, and all
+       * impossible while a flight could only be pinned to a wall of
+       * the room it happened to be entered in. Dragging one clear now
+       * frees it, and dragging it back into a room re-anchors it to
+       * the nearest wall.
+       */
+      if (!target) {
+        setStairsFree(st.roomId, st.itemId, {
+          x: snapM(world.x),
+          z: snapM(world.z),
+        });
+        return;
+      }
+
       const local = worldToLocal(world, placementFor(target.id));
       if (!local) return;
 
@@ -772,6 +909,131 @@ export default function FloorPlanEditor({
             );
           })}
 
+          {/* ── Stairs that belong to no room ────────────────────────
+              Drawn at plan level rather than inside a room's group,
+              because that is exactly what makes them free: their
+              position is in world metres and does not move when the
+              room they are filed under moves. A stairwell in a hall is
+              the ordinary case, not an exotic one.
+
+              ↻ rotates the run in 90° steps and ⌖ puts it back against
+              a wall, both as taps rather than gestures — a flight is
+              small on screen and a rotate handle on it would be a
+              two-millimetre target. */}
+          {roomsOnFloor.flatMap((r) =>
+            (r.stairs ?? [])
+              .filter((st) => st.worldM)
+              .map((st: RoomStairs) => {
+                const wM = Number.parseFloat(st.widthM);
+                const width = Number.isFinite(wM) && wM > 0 ? wM : 0.9;
+                const run = 2.6;
+                const at = st.worldM!;
+                const heading = st.headingDeg ?? 0;
+                const treads = 8;
+                return (
+                  <g
+                    key={st.id}
+                    transform={`translate(${at.x} ${at.z}) rotate(${heading} 0 0)`}
+                  >
+                    <rect
+                      x={0}
+                      y={-width / 2}
+                      width={run}
+                      height={width}
+                      fill="#efe7d6"
+                      fillOpacity={0.95}
+                      stroke={DARK}
+                      strokeWidth={1.5}
+                      vectorEffect="non-scaling-stroke"
+                      style={{ cursor: "grab" }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        setSelected(st.id);
+                        itemDragRef.current = {
+                          roomId: r.id,
+                          itemId: st.id,
+                          pointerId: e.pointerId,
+                          startLocal: { x: 0, z: 0 },
+                          startPos: { x: 0, z: 0 },
+                        };
+                        setFrozenViewBox(viewBox);
+                        (e.currentTarget as SVGElement).setPointerCapture(
+                          e.pointerId,
+                        );
+                      }}
+                      onPointerMove={onItemPointerMove}
+                      onPointerUp={onItemPointerUp}
+                      onPointerCancel={onItemPointerUp}
+                    />
+                    {Array.from({ length: treads - 1 }, (_, i) => {
+                      const x = (run * (i + 1)) / treads;
+                      return (
+                        <line
+                          key={i}
+                          x1={x}
+                          y1={-width / 2}
+                          x2={x}
+                          y2={width / 2}
+                          stroke={DARK}
+                          strokeWidth={0.5}
+                          vectorEffect="non-scaling-stroke"
+                          pointerEvents="none"
+                        />
+                      );
+                    })}
+                    <text
+                      x={run / 2}
+                      y={0.1}
+                      fontSize={0.3}
+                      fill={DARK}
+                      textAnchor="middle"
+                      pointerEvents="none"
+                    >
+                      {st.direction === "down" ? "DN" : "UP"}
+                    </text>
+                    {onRoomChange && (
+                      <>
+                        <text
+                          x={run + 0.3}
+                          y={0.1}
+                          fontSize={0.45}
+                          fill={GOLD}
+                          textAnchor="middle"
+                          style={{ cursor: "pointer" }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRoomChange(r.id, {
+                              stairs: (r.stairs ?? []).map((s) =>
+                                s.id === st.id
+                                  ? { ...s, headingDeg: (heading + 90) % 360 }
+                                  : s,
+                              ),
+                            });
+                          }}
+                        >
+                          ↻
+                        </text>
+                        <text
+                          x={-0.3}
+                          y={0.1}
+                          fontSize={0.4}
+                          fill={GOLD}
+                          textAnchor="middle"
+                          style={{ cursor: "pointer" }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            clearStairsFree(r.id, st.id);
+                          }}
+                        >
+                          ⌖
+                        </text>
+                      </>
+                    )}
+                  </g>
+                );
+              }),
+          )}
+
           {/* Room shapes — rectangle by default; L-shape carves a
               corner notch from the bottom-right of the bounding box. */}
           {roomsOnFloor.map((r) => {
@@ -892,7 +1154,7 @@ export default function FloorPlanEditor({
                     the DXF, but were invisible here — so the one place
                     a customer could see whether the layout made sense
                     was the one place the staircase did not appear. */}
-                {(r.stairs ?? []).map((st: RoomStairs) => {
+                {(r.stairs ?? []).filter((st) => !st.worldM).map((st: RoomStairs) => {
                   const wi = (st.wallIndex ?? 0) % 4;
                   const wM = Number.parseFloat(st.widthM);
                   const width = Number.isFinite(wM) && wM > 0 ? wM : 0.9;
@@ -1139,31 +1401,154 @@ export default function FloorPlanEditor({
             the right room. Adds to the selected room, because "which
             room?" is a question the plan can already answer: the one
             you tapped. */}
-        {onRoomChange && selected && (
-          <>
-            <button
-              type="button"
-              onClick={() => addStairsToSelected()}
-              className="rounded-full border border-[#b89650] px-3 py-1 font-semibold text-[#8a6f2f]"
-            >
-              + Stairs here
-            </button>
-            <button
-              type="button"
-              onClick={() => addDoorToSelected()}
-              className="rounded-full border border-[#b89650] px-3 py-1 font-semibold text-[#8a6f2f]"
-            >
-              + Door here
-            </button>
-          </>
-        )}
         <span className="text-sm text-on-surface-variant">
           {onRoomChange && !selected
-            ? "Tap a room to add stairs or a door to it · "
+            ? "Tap a room to add a door, window or stairs to it · "
             : ""}
           Grid = 25 cm · drag rooms · ↻ rotates 90° · × removes from plan
         </span>
       </div>
+
+      {/* ── Insert into the selected room ───────────────────────────
+          Someone looking at the layout is the person best placed to
+          notice a missing staircase or a door they walked through and
+          never recorded — and until now the only way to add either was
+          to go back through the room questions and find the right
+          room.
+
+          Sizes are offered as a list rather than a box to type in. A
+          door is one of about four widths, a customer measuring one
+          with a tape gets 0.81 where the real answer is 0.838, and
+          "which of these is it closest to" is both easier to answer
+          and closer to the truth. The width can still be corrected in
+          the room questions if the door really is a one-off. */}
+      {onRoomChange && selected && (
+        <div
+          className="rounded-lg border border-[#b89650]/50 p-3"
+          style={{ backgroundColor: "#fffdf8" }}
+        >
+          <p className="mb-2 text-sm font-bold uppercase tracking-[0.2em] text-on-surface-variant">
+            Add to {rooms.find((r) => r.id === selected)?.name || "this room"}
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-sm">
+              <span className="mb-1 block font-semibold text-[#6e6a5f]">
+                What
+              </span>
+              <select
+                value={insertKind}
+                onChange={(e) => {
+                  const next = e.target.value as "door" | "window" | "stairs";
+                  setInsertKind(next);
+                  // Reset the width to that list's default. Without
+                  // this, switching to Window leaves 0.838 selected --
+                  // a value the window list does not contain, so the
+                  // dropdown shows 600 mm and inserts 838.
+                  if (next === "door") setInsertWidthM("0.838");
+                  if (next === "window") setInsertWidthM("1.200");
+                }}
+                className="rounded-lg border border-[#d9d3c8] bg-white px-3 py-2 text-sm"
+              >
+                <option value="door">Door</option>
+                <option value="window">Window</option>
+                <option value="stairs">Stairs</option>
+              </select>
+            </label>
+
+            {insertKind !== "stairs" && (
+              <label className="text-sm">
+                <span className="mb-1 block font-semibold text-[#6e6a5f]">
+                  Width
+                </span>
+                <select
+                  value={insertWidthM}
+                  onChange={(e) => setInsertWidthM(e.target.value)}
+                  className="rounded-lg border border-[#d9d3c8] bg-white px-3 py-2 text-sm"
+                >
+                  {(insertKind === "door" ? DOOR_WIDTHS : WINDOW_WIDTHS).map(
+                    (w) => (
+                      <option key={w.value} value={w.value}>
+                        {w.label}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+            )}
+
+            {insertKind === "stairs" && (
+              <>
+                <label className="text-sm">
+                  <span className="mb-1 block font-semibold text-[#6e6a5f]">
+                    Steps
+                  </span>
+                  <input
+                    inputMode="numeric"
+                    value={insertTreads}
+                    onChange={(e) => setInsertTreads(e.target.value)}
+                    placeholder="13"
+                    className="w-20 rounded-lg border border-[#d9d3c8] bg-white px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="flex items-center gap-2 py-2 text-sm font-semibold text-[#6e6a5f]">
+                  <input
+                    type="checkbox"
+                    checked={insertWinders}
+                    onChange={(e) => setInsertWinders(e.target.checked)}
+                    className="h-5 w-5"
+                  />
+                  Turns a corner
+                </label>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={insertIntoSelected}
+              className="rounded-full bg-[#b89650] px-4 py-2 text-sm font-bold uppercase tracking-widest text-white"
+            >
+              Add
+            </button>
+          </div>
+          <p className="mt-2 text-sm text-[#6e6a5f]">
+            It lands on the first wall — drag it to where it really is.
+          </p>
+        </div>
+      )}
+
+      {/* ── Ceiling height for this floor ──────────────────────────
+          Asked here rather than once for the whole property, because
+          here is the only place the floors exist. One number for a
+          whole house is wrong in most of them -- a Victorian ground
+          floor and its bedrooms are rarely the same, and a loft never
+          is -- and the old project-step question was asked before the
+          customer had told us there was an upstairs at all.
+
+          It writes straight through to every room on the floor. Rooms
+          have carried their own height all along; this sets them in
+          one go rather than introducing a second place the number can
+          live and disagree with itself. */}
+      {onRoomChange && roomsOnFloor.length > 0 && (
+        <div className="flex flex-wrap items-end gap-3 rounded-lg border border-[#e6dfd0] p-3">
+          <label className="text-sm">
+            <span className="mb-1 block font-semibold text-[#6e6a5f]">
+              Ceiling height on {floorLabel(currentFloor)} (m)
+            </span>
+            <input
+              inputMode="decimal"
+              value={floorCeiling}
+              onChange={(e) => setFloorCeilingForFloor(e.target.value)}
+              placeholder={ceilingIsMixed ? "Mixed" : "2.40"}
+              className="w-28 rounded-lg border border-[#d9d3c8] bg-white px-3 py-2 text-sm"
+            />
+          </label>
+          <p className="flex-1 py-2 text-sm text-[#6e6a5f]">
+            {ceilingIsMixed
+              ? "Rooms on this floor differ. Typing here sets them all to the same."
+              : "Applies to every room on this floor. Change a single room in its own questions."}
+          </p>
+        </div>
+      )}
 
       {/* Palette of unplaced rooms on current floor */}
       <div

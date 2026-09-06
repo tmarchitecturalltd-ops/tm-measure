@@ -10,29 +10,41 @@
  * that ask questions in visibly different ways is worse than either
  * style on its own. Nothing new is collected here.
  *
- * Ceiling height gets its own screen despite being optional. It is the
- * one number on this step that a customer might have to go and check,
- * and burying it beside the project name is how it ended up guessed.
- * Skipping it is one tap.
+ * Four questions: who you are, how to reach you, what to call the job,
+ * and what you are building. Ceiling height moved to the floor plan and
+ * the units question was dropped -- see the note above StepId.
  */
 
 import { useState } from "react";
-import type { UnitPreference } from "@tm-designs/measure-core";
 import type { ProjectType } from "@/lib/recentSubmissions";
 import GuidedScreen, {
   type MenuSection,
 } from "@/components/measure/GuidedScreen";
-import LengthHint from "@/components/measure/LengthHint";
 
-type StepId = "name" | "email" | "project" | "type" | "ceiling" | "unit";
+/*
+ * No units question, and no ceiling question.
+ *
+ * Units: the app is metric. Every tape sold in the UK reads metric
+ * first, the drawings are produced in millimetres, and the answer was
+ * "metres" on effectively every submission -- so it was a screen that
+ * asked a question with one right answer and offered a way to get it
+ * wrong. Imperial is still shown alongside on the review screen, where
+ * it helps someone sense-check a number they measured in feet.
+ *
+ * Ceiling height: it moved to the floor plan, where the floors are.
+ * One number for the whole property was wrong in most houses -- a
+ * Victorian ground floor and its bedrooms are rarely the same height,
+ * and the loft never is -- and asking before the customer has told us
+ * what floors exist meant asking in the one place the answer could not
+ * be qualified.
+ */
+type StepId = "name" | "email" | "project" | "type";
 
 const LABELS: Record<StepId, string> = {
   name: "What's your name?",
   email: "What's your email?",
   project: "What shall we call this project?",
   type: "What are you planning?",
-  ceiling: "How high are the ceilings?",
-  unit: "Metres or feet?",
 };
 
 /**
@@ -65,11 +77,6 @@ type Props = {
   onProjectName: (v: string) => void;
   projectType: ProjectType | null;
   onProjectType: (v: ProjectType) => void;
-  defaultCeilingHeightM: string;
-  onDefaultCeilingHeightM: (v: string) => void;
-  unit: UnitPreference;
-  onUnit: (v: UnitPreference) => void;
-  unitLocked: boolean;
   /** Runs the same validation the one-page version ran. */
   onDone: () => void;
   /**
@@ -98,16 +105,11 @@ export default function GuidedProjectFlow({
   onProjectName,
   projectType,
   onProjectType,
-  defaultCeilingHeightM,
-  onDefaultCeilingHeightM,
-  unit,
-  onUnit,
-  unitLocked,
   onDone,
   issueFor,
   onBackFromFirst,
 }: Props) {
-  const steps: StepId[] = ["name", "email", "project", "type", "ceiling", "unit"];
+  const steps: StepId[] = ["name", "email", "project", "type"];
   const [stepIndex, setStepIndex] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const step = steps[stepIndex];
@@ -190,8 +192,7 @@ export default function GuidedProjectFlow({
           ? "Start measuring"
           : (step === "name" && !customerName.trim()) ||
               (step === "email" && !email.trim()) ||
-              (step === "project" && !projectName.trim()) ||
-              (step === "type" && !projectType)
+              (step === "project" && !projectName.trim())
             ? "Skip"
             : "Next"
       }
@@ -202,7 +203,7 @@ export default function GuidedProjectFlow({
           <input
             value={customerName}
             onChange={(e) => onCustomerName(e.target.value)}
-            placeholder="e.g. Harry McCulloch"
+            placeholder="e.g. Sarah Whitfield"
             autoComplete="name"
             className={input}
           />
@@ -226,9 +227,6 @@ export default function GuidedProjectFlow({
             placeholder="you@example.com"
             className={input}
           />
-          <p className="mt-2 text-sm text-on-surface-variant">
-            We&apos;ll send your quote and drawings here. Nothing else.
-          </p>
           {issueFor("email") && (
             <p data-error-anchor className="mt-2 text-sm text-error">
               {issueFor("email")}
@@ -282,60 +280,6 @@ export default function GuidedProjectFlow({
         </div>
       )}
 
-      {step === "ceiling" && (
-        <div>
-          <input
-            inputMode="decimal"
-            value={defaultCeilingHeightM}
-            onChange={(e) => onDefaultCeilingHeightM(e.target.value)}
-            placeholder="2.40"
-            className={input}
-          />
-          <LengthHint value={defaultCeilingHeightM} kind="ceiling" />
-          <p className="mt-2 text-sm text-on-surface-variant">
-            Metres, floor to ceiling. Most UK homes are around 2.4. Every room
-            starts from this, and you can change any that differ. Skip it if
-            you&apos;d rather measure as you go.
-          </p>
-        </div>
-      )}
-
-      {step === "unit" && (
-        <div>
-          <div className="grid gap-2">
-            {(["metric", "imperial"] as const).map((u) => (
-              <button
-                key={u}
-                type="button"
-                onClick={() => !unitLocked && onUnit(u)}
-                disabled={unitLocked}
-                aria-pressed={unit === u}
-                className={`w-full justify-start rounded-xl border px-5 py-4 text-left disabled:opacity-60 ${
-                  unit === u
-                    ? "border-primary bg-primary/10"
-                    : "border-outline-variant/40"
-                }`}
-              >
-                <span className="block">
-                  <span className="block text-base font-bold text-on-surface">
-                    {u === "metric" ? "Metres" : "Feet and inches"}
-                  </span>
-                  <span className="mt-0.5 block text-sm text-on-surface-variant">
-                    {u === "metric"
-                      ? "What most tape measures show first"
-                      : "Shown alongside metres either way"}
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>
-          <p className="mt-3 text-sm text-on-surface-variant">
-            {unitLocked
-              ? "Locked for this project so measurements can't get mixed up part way through."
-              : "This locks once you start measuring, so a survey can't end up half in each. Everything is stored in metres and the review step shows both."}
-          </p>
-        </div>
-      )}
     </GuidedScreen>
   );
 }

@@ -390,6 +390,84 @@ test("the plain companion drawing has no doors, stairs or title block", () => {
   assert.ok(!plain.includes("TM-TITLE"));
 });
 
+test("a staircase that turns says so on the drawing", () => {
+  /*
+   * A flight is drawn as a straight run whether or not it turns --
+   * the plan has no geometry for winders and inventing some would be
+   * worse than saying nothing. So the fact has to reach Charlie as
+   * text, on the drawing, next to the flight it belongs to. Carrying
+   * it only in the submission payload means it is in an email above a
+   * DXF that contradicts it, and the DXF is the thing that gets
+   * opened.
+   */
+  const room = planRoom("h", "Hall", 4, 3);
+  room.stairs = [
+    {
+      id: "s1",
+      widthM: "0.9",
+      direction: "up",
+      wallIndex: 0,
+      positionM: "0.5",
+      treads: "13",
+      winders: true,
+    },
+  ];
+  const dxf = buildDetailedPlanDxf([
+    { room, anchor: { x: 0, z: 0 }, rotationDeg: 0 },
+  ]);
+  assert.match(dxf, /UP \(WINDERS\)/);
+
+  // And a straight flight is not labelled as turning.
+  room.stairs[0].winders = false;
+  const straight = buildDetailedPlanDxf([
+    { room, anchor: { x: 0, z: 0 }, rotationDeg: 0 },
+  ]);
+  assert.ok(!straight.includes("WINDERS"));
+  assert.match(straight, /\nUP\n/);
+});
+
+test("a staircase dragged clear of a room is drawn where it was put", () => {
+  /*
+   * Plenty of staircases are not in a room: a stairwell in a hall, a
+   * flight on an open landing, a run between two rooms that belongs to
+   * neither. All of them were impossible to record while a flight
+   * could only be pinned to a wall of whichever room it happened to be
+   * entered in -- drag it out and it snapped straight back.
+   *
+   * `worldM` has to win over the wall fields, and it has to win in the
+   * DXF and not only on screen. A flight the customer sees in the hall
+   * and Charlie receives in the bedroom is worse than one that was
+   * never movable.
+   */
+  const room = planRoom("h", "Hall", 4, 3);
+  const flight = {
+    id: "s1",
+    widthM: "0.9",
+    direction: "up" as const,
+    // Deliberately left set. They are the values the flight had before
+    // it was dragged out, and the point is that they are now ignored.
+    wallIndex: 0,
+    positionM: "0.5",
+    treads: "13",
+  };
+  room.stairs = [{ ...flight, worldM: { x: 20, z: 12 }, headingDeg: 0 }];
+
+  const dxf = buildDetailedPlanDxf([
+    { room, anchor: { x: 0, z: 0 }, rotationDeg: 0 },
+  ]);
+
+  // Millimetres, and z negated for CAD's y-up — so 20 m across and
+  // 12 m down is x=20000, y=-12000. The room sits at the origin and is
+  // only 4 m wide, so nothing wall-anchored could reach out there:
+  // finding those coordinates at all proves worldM was honoured.
+  assert.match(dxf, /\n20000\.00\n/, "run should start at x = 20 m");
+  assert.match(dxf, /\n-12000\.00\n/, "and at z = 12 m, negated for CAD");
+  // 13 treads at the 220 mm going is a 2.86 m run, so the far end
+  // lands at 22860 — which also pins that a free flight is not clipped
+  // to a wall length it no longer has.
+  assert.match(dxf, /\n22860\.00\n/, "run should be its full length");
+});
+
 test("an L-shaped room is drawn as an L, not as its bounding box", () => {
   // Six corners: a 4x4 square with a 2x2 bite out of one corner.
   const room = planRoom("l", "Lounge", 4, 4);

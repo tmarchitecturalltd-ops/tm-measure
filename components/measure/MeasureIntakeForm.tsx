@@ -213,10 +213,18 @@ export default function MeasureIntakeForm() {
   const [projectType, setProjectType] = useState<ProjectType | null>(null);
   const [unit, setUnit] = useState<ProjectDraft["unit"]>("metric");
   const [unitLocked, setUnitLocked] = useState(false);
-  /** Property-wide ceiling height. Asked once on the project step and
-   *  used to pre-fill every room, which the customer can still override
-   *  room by room inside the Add detail panel. */
-  const [defaultCeilingHeightM, setDefaultCeilingHeightM] = useState("");
+  /**
+   * Starting ceiling height for a new room. No longer asked for.
+   *
+   * It used to be a question on the project step and is now set per
+   * floor on the plan, where the floors actually exist -- so this has
+   * to seed itself rather than start blank. 2.4 m is the commonest UK
+   * domestic ceiling by a distance, and a room that arrives with a
+   * plausible number the customer can correct is better than one that
+   * arrives empty and fails validation at the point of submission, an
+   * hour after the room was measured.
+   */
+  const [defaultCeilingHeightM, setDefaultCeilingHeightM] = useState("2.40");
 
   /**
    * Capability probe — runs once on mount so the Project step can show the
@@ -5408,10 +5416,6 @@ export default function MeasureIntakeForm() {
           photosBySide={exteriorPhotos}
           onAddSidePhotos={attachExteriorPhotos}
           onRemoveSidePhoto={removeExteriorPhoto}
-          rooms={rooms}
-          onAddStairs={addStairs}
-          onSetStairs={setStairs}
-          onRemoveStairs={removeStairs}
           description={proposalDescription}
           onDescription={setProposalDescription}
           sketches={proposalSketches}
@@ -5436,11 +5440,6 @@ export default function MeasureIntakeForm() {
           onProjectName={setProjectName}
           projectType={projectType}
           onProjectType={setProjectType}
-          defaultCeilingHeightM={defaultCeilingHeightM}
-          onDefaultCeilingHeightM={setDefaultCeilingHeightM}
-          unit={unit}
-          onUnit={setUnit}
-          unitLocked={unitLocked}
           // Same handler the one-page version used, so guided mode
           // cannot get past validation the other route enforces.
           onDone={goRooms}

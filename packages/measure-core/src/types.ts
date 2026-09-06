@@ -113,12 +113,47 @@ export type RoomStairs = {
   direction: "up" | "down";
   /** Wall the flight runs along or rises from. Optional. */
   wallIndex?: number;
+  /**
+   * Absolute position on the plan, in world metres, when the flight is
+   * not against a wall of its own room.
+   *
+   * Plenty of staircases are not in a room. A stairwell in a hall, a
+   * flight in an open landing, a run between two rooms that belongs to
+   * neither — all of them exist, and all of them were impossible to
+   * record while a flight could only be pinned to a wall of the room
+   * it was entered in. When this is set it wins: `wallIndex` and
+   * `positionM` are ignored, and the flight is drawn where it is.
+   *
+   * The flight still hangs off a room in the data, because it has to
+   * hang off something, but that room is now only its filing cabinet
+   * and not its anchor — moving the room does not move the stairs.
+   */
+  worldM?: { x: number; z: number };
+  /**
+   * Which way the run points, in degrees clockwise from +x, for a
+   * flight positioned by `worldM`.
+   *
+   * Frozen at the moment it was dragged clear of its wall, so a
+   * staircase that was drawn running north-south does not swing round
+   * to east-west the instant it leaves the room.
+   */
+  headingDeg?: number;
   /** Distance from that wall's start corner to the bottom step. */
   positionM?: string;
   /** See Opening.positionApprox — same distinction, same reason. */
   positionApprox?: boolean;
   /** Number of treads, if the customer counted them. */
   treads?: string;
+  /**
+   * The flight turns on tapered treads rather than a flat landing.
+   *
+   * Worth a field of its own rather than a line in the notes, because
+   * it changes what can be done with the space underneath and it is
+   * the single most common reason a staircase drawn as a straight run
+   * turns out not to fit. A homeowner will not use the word "winder",
+   * so the question asked is whether the stairs turn a corner.
+   */
+  winders?: boolean;
   /** Winders, half-landing, spiral, cupboard beneath, and so on. */
   notes?: string;
 };

@@ -24,16 +24,23 @@ import { useEffect, useState } from "react";
 
 const SEEN_KEY = "tm.howItWorks.seen";
 
+/**
+ * Four lines, each one short enough to read standing up.
+ *
+ * It has to fit one screen without scrolling. A briefing you have to
+ * scroll is one where the last point goes unread, and the last point
+ * here is the one that costs a customer a second trip outside.
+ */
 const STEPS: { icon: string; title: string; body: string }[] = [
   {
     icon: "straighten",
-    title: "Measure room by room",
-    body: "We ask one thing at a time. Skip anything you can't answer and come back to it.",
+    title: "Room by room",
+    body: "One question at a time. Skip anything you can't answer.",
   },
   {
     icon: "photo_camera",
-    title: "One photo per room",
-    body: "It shows us what a measurement can't — radiators, alcoves, awkward corners.",
+    title: "A photo of each room",
+    body: "It shows what a measurement can't — radiators, alcoves, odd corners.",
   },
   {
     // Said now, not when we get there. Photographing the outside means
@@ -41,13 +48,13 @@ const STEPS: { icon: string; title: string; body: string }[] = [
     // an hour in, having thought you were nearly finished, is where a
     // survey gets abandoned three screens from the end.
     icon: "home",
-    title: "Then a walk round the outside",
-    body: "At the end we'll ask for a photo of each side of the house, plus the boiler and fuse box. Worth knowing before you start.",
+    title: "Then outside",
+    body: "Each side of the house, and any manhole covers — photograph those from above so we can see which way the drains run.",
   },
   {
     icon: "send",
-    title: "Send it over",
-    body: "It comes straight to us as a drawing. We'll come back to you by email.",
+    title: "Send it",
+    body: "It reaches us as a drawing. We reply by email.",
   },
 ];
 
@@ -94,23 +101,23 @@ export default function HowItWorksOverlay() {
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 1rem)" }}
       >
         <div className="mx-auto w-full max-w-xl">
-          <p className="font-label mb-2 text-sm font-bold uppercase tracking-widest text-primary">
+          <p className="font-label mb-1 text-sm font-bold uppercase tracking-widest text-primary">
             Before you start
           </p>
-          <h2 className="font-headline mb-6 text-3xl leading-tight text-on-surface">
+          <h2 className="font-headline mb-4 text-2xl leading-tight text-on-surface">
             How this works
           </h2>
 
-          <ol className="space-y-5">
+          <ol className="space-y-3.5">
             {STEPS.map((s, i) => (
-              <li key={s.title} className="flex gap-4">
+              <li key={s.title} className="flex gap-3">
                 <span
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
                   aria-hidden
                 >
                   <span
                     className="material-symbols-outlined"
-                    style={{ fontSize: "22px" }}
+                    style={{ fontSize: "20px" }}
                   >
                     {s.icon}
                   </span>
@@ -119,7 +126,7 @@ export default function HowItWorksOverlay() {
                   <p className="text-base font-bold text-on-surface">
                     {i + 1}. {s.title}
                   </p>
-                  <p className="mt-1 text-base leading-relaxed text-on-surface-variant">
+                  <p className="mt-0.5 text-sm leading-snug text-on-surface-variant">
                     {s.body}
                   </p>
                 </div>
@@ -127,8 +134,8 @@ export default function HowItWorksOverlay() {
             ))}
           </ol>
 
-          <p className="mt-6 text-base leading-relaxed text-on-surface-variant">
-            Your progress saves as you go, so you can stop and pick it up
+          <p className="mt-4 text-sm leading-snug text-on-surface-variant">
+            Your progress saves as you go — stop any time and pick it up
             later.
           </p>
         </div>

@@ -561,17 +561,35 @@ function drawStairs(
   s: RoomStairs,
   corners: Pt[],
 ): void {
+  /*
+   * Two ways a flight can be placed, and the free one wins.
+   *
+   * Wall-anchored is the normal case and the one the customer gets by
+   * answering questions about a room. But a stairwell in a hall
+   * belongs to no room's wall, and drawing it against the nearest one
+   * puts a staircase through a doorway. When `worldM` is set the flight
+   * is drawn exactly there, running along `headingDeg`, and the wall
+   * fields are ignored rather than fought with.
+   */
+  const free = s.worldM;
   const wallIndex = s.wallIndex ?? 0;
-  const a = corners[wallIndex % corners.length];
+  const a = free ?? corners[wallIndex % corners.length];
   const b = corners[(wallIndex + 1) % corners.length];
-  const dir = norm(sub(b, a));
+  const rad = ((s.headingDeg ?? 0) * Math.PI) / 180;
+  const dir = free
+    ? { x: Math.cos(rad), z: Math.sin(rad) }
+    : norm(sub(b, a));
   const n = perp(dir);
-  const wallLen = len(sub(b, a));
+  // A free flight has no wall to be clipped against, so its run is
+  // whatever the tread count asks for.
+  const wallLen = free ? Number.POSITIVE_INFINITY : len(sub(b, a));
 
   const width = Number.parseFloat(s.widthM);
   const w = Number.isFinite(width) && width > 0 ? width : 0.9;
   const pos = s.positionM ? Number.parseFloat(s.positionM) : NaN;
-  const start = Number.isFinite(pos) ? Math.max(0, pos - w / 2) : 0.2;
+  // A free flight starts at its own point; the offset along a wall is
+  // meaningless once there is no wall.
+  const start = free ? 0 : Number.isFinite(pos) ? Math.max(0, pos - w / 2) : 0.2;
 
   const treads = Number.parseInt(s.treads ?? "", 10);
   const n_treads = Number.isFinite(treads) && treads > 0 ? treads : 13;
@@ -608,7 +626,11 @@ function drawStairs(
       LAYER.stairs,
       p(start + runLen / 2, w + 0.25),
       140,
-      s.direction === "up" ? "UP" : "DN",
+      // Winders noted on the drawing rather than only in the payload.
+      // A flight drawn as a straight run that actually turns is the
+      // commonest reason a staircase does not fit where the plan says
+      // it does, and the note is what stops it being drawn twice.
+      `${s.direction === "up" ? "UP" : "DN"}${s.winders ? " (WINDERS)" : ""}`,
     ),
   );
 }
