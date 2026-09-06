@@ -24,7 +24,15 @@ import RoomPlan
  *
  * Flow:
  *   1. present(from:)      → capture room 1
- *   2. user taps Done      → "Add another room?" / "Finish"
+ *   2. user taps OUR Done  → "Add another room?" / "Finish"
+ *
+ * That Done button has to be built here. RoomCaptureView supplies the
+ * coaching overlay and nothing else — no way to end a room. Without it
+ * the only control on the screen was Cancel, so a customer could scan
+ * a room and then had a choice between discarding it and being stuck
+ * on the camera. Reported as not being able to "add room" or "come off
+ * the scanning page", which is precisely what a screen with no Done
+ * button feels like from the outside.
  *   3. add another         → capture room 2, ... (repeat)
  *   4. finish              → StructureBuilder merges, we serialise
  *
@@ -75,6 +83,14 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate {
     private weak var hostVC: UIViewController?
     private var modalVC: HouseCaptureModalViewController?
 
+    /// Set while the customer is cancelling the CURRENT room, so the
+    /// data that stopping the session produces is discarded rather than
+    /// silently added to the plan they just chose not to keep.
+    private var isCancellingRoom = false
+
+    /// The completion closure must fire exactly once.
+    private var hasCompleted = false
+
     init(unit: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
         self.unit = unit
         self.completion = completion
@@ -93,6 +109,7 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate {
     }
 
     private func presentCapture(roomNumber: Int) {
+        isCancellingRoom = false
         guard let host = hostVC else {
             finish(.failure(HouseError.cancelled))
             return
@@ -142,6 +159,7 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate {
     /// Cancel button. Only aborts outright if nothing has been captured
     /// yet; otherwise we offer to keep what we have.
     func userCancelled() {
+        isCancellingRoom = true
         if capturedRooms.isEmpty {
             dismissModal { [weak self] in
                 self?.finish(.failure(HouseError.cancelled))
@@ -187,6 +205,8 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate {
     }
 
     private func finish(_ result: Result<[String: Any], Error>) {
+        guard !hasCompleted else { return }
+        hasCompleted = true
         let closure = completion
         dismissModal { closure(result) }
     }
@@ -196,6 +216,10 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate {
     /// Returning true hands the raw scan to Apple's processing. The
     /// result arrives in didPresent, which is where we keep it.
     func captureView(shouldPresent roomDataForProcessing: CapturedRoomData, error: Error?) -> Bool {
+        // Cancel stops the session as well, and a stopped session offers
+        // its data here whatever the reason. Processing it would add the
+        // room the customer just declined to keep.
+        if isCancellingRoom { return false }
         if let error = error {
             dismissModal { [weak self] in
                 self?.finish(.failure(HouseError.captureFailed(error.localizedDescription)))
@@ -206,6 +230,7 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate {
     }
 
     func captureView(didPresent processedResult: CapturedRoom, error: Error?) {
+        if isCancellingRoom { return }
         if let error = error {
             dismissModal { [weak self] in
                 self?.finish(.failure(HouseError.captureFailed(error.localizedDescription)))
@@ -228,6 +253,11 @@ private class HouseCaptureModalViewController: UIViewController {
     private weak var delegateRunner: HouseCaptureRunner?
     private let titleText: String
     private var captureView: RoomCaptureView?
+    private var doneButton: UIButton?
+    private var cancelButton: UIButton?
+    private var statusLabel: UILabel?
+    private var hasStartedSession = false
+    private var isFinishing = false
 
     init(delegate: HouseCaptureRunner, title: String) {
         self.delegateRunner = delegate
@@ -275,14 +305,81 @@ private class HouseCaptureModalViewController: UIViewController {
             cancel.centerYAnchor.constraint(equalTo: label.centerYAnchor),
             cancel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
         ])
+        self.cancelButton = cancel
+
+        // "Done with this room" — the control that was missing.
+        //
+        // Ending a room is what leads to the "Scan another room /
+        // Finish" prompt, so without this button the customer could
+        // neither add a second room nor get off the camera screen with
+        // anything kept. Named for what it does rather than just
+        // "Done", because on a multi-room scan "Done" reads as "done
+        // with the whole house".
+        let done = UIButton(type: .system)
+        done.setTitle("Done with this room", for: .normal)
+        done.setTitleColor(.black, for: .normal)
+        done.titleLabel?.font = .systemFont(ofSize: 18, weight: .bold)
+        done.backgroundColor = .white
+        done.layer.cornerRadius = 28
+        done.layer.cornerCurve = .continuous
+        done.translatesAutoresizingMaskIntoConstraints = false
+        done.addTarget(self, action: #selector(doneTapped), for: .touchUpInside)
+        view.addSubview(done)
+        NSLayoutConstraint.activate([
+            done.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            done.bottomAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -28),
+            done.widthAnchor.constraint(greaterThanOrEqualToConstant: 240),
+            done.heightAnchor.constraint(equalToConstant: 56),
+        ])
+        self.doneButton = done
+
+        // Processing takes several seconds with no indication from
+        // Apple. Silence there reads as a hang, at the exact moment the
+        // customer is waiting to learn whether the room counted.
+        let status = UILabel()
+        status.textColor = .white
+        status.font = .systemFont(ofSize: 15, weight: .semibold)
+        status.textAlignment = .center
+        status.numberOfLines = 2
+        status.shadowColor = UIColor(white: 0.0, alpha: 0.7)
+        status.shadowOffset = CGSize(width: 0, height: 1)
+        status.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(status)
+        NSLayoutConstraint.activate([
+            status.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            status.bottomAnchor.constraint(equalTo: done.topAnchor, constant: -14),
+            status.leadingAnchor.constraint(
+                greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
+        ])
+        self.statusLabel = status
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        guard !hasStartedSession else { return }
+        hasStartedSession = true
         captureView?.captureSession.run(configuration: RoomCaptureSession.Configuration())
     }
 
+    @objc private func doneTapped() {
+        guard !isFinishing else { return }
+        isFinishing = true
+        doneButton?.isEnabled = false
+        doneButton?.alpha = 0.5
+        doneButton?.setTitle("Finishing…", for: .normal)
+        cancelButton?.isEnabled = false
+        cancelButton?.alpha = 0.5
+        statusLabel?.text = "Working out the measurements…"
+        // Stopping hands the scan to Apple's processing; the room comes
+        // back in didPresent, which is where it joins the plan.
+        captureView?.captureSession.stop()
+    }
+
     @objc private func cancelTapped() {
+        // Ignored once Done has been pressed — the result is already on
+        // its way and cancelling now would discard a completed room.
+        guard !isFinishing else { return }
         captureView?.captureSession.stop()
         delegateRunner?.userCancelled()
     }

@@ -13,8 +13,14 @@ import RoomPlan
  *                                 hosting a RoomCaptureView, shows it
  *                                 full-screen, runs the capture session.
  *   2. User walks the room.     RoomCaptureView drives the coaching
- *                                 overlay; nothing needed here.
- *   3. User taps "Done".        Framework calls:
+ *                                 overlay — arrows, the progress toast,
+ *                                 the live geometry. It does NOT provide
+ *                                 a Done button; Apple's own sample app
+ *                                 adds one. This file must too, and for
+ *                                 a long time did not, which left the
+ *                                 customer on the camera screen with
+ *                                 only Cancel and no way to keep a scan.
+ *   3. User taps our "Done".    Framework calls:
  *         captureView(shouldPresent:error:) → return true
  *         captureView(didPresent:error:)    → we serialise and dismiss.
  *   4. Completion closure fires with the JS-serialisable dict.
@@ -50,6 +56,18 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate {
 
     private weak var hostVC: UIViewController?
     private var modalVC: CaptureModalViewController?
+
+    /// Set when the customer chose Cancel, so the scan that stopping the
+    /// session produces is discarded rather than processed and returned.
+    private var isCancelling = false
+
+    /// The completion closure must fire exactly once.
+    ///
+    /// Stopping the session is asynchronous, so a cancel and a delayed
+    /// didPresent could both reach `dismiss`, resolving the same
+    /// Capacitor call twice — which surfaces in JS as a scan that
+    /// "succeeded" immediately after the user cancelled it.
+    private var hasCompleted = false
 
     init(
         title: String,
@@ -87,6 +105,8 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate {
     /// Both success and cancel/error routes funnel through here so the
     /// completion closure always fires exactly once.
     func dismiss(payload: Result<[String: Any], Error>) {
+        guard !hasCompleted else { return }
+        hasCompleted = true
         let closure = self.completion
         let finalPayload = payload
         guard let modal = modalVC else {
@@ -102,6 +122,7 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate {
 
     // Called by the modal's Cancel button.
     func userCancelled() {
+        isCancelling = true
         dismiss(payload: .failure(RoomPlanError.cancelled))
     }
 
@@ -111,6 +132,11 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate {
     /// a CapturedRoom. Returning false would require us to call
     /// `processWithConfiguration` ourselves — more code, zero benefit.
     func captureView(shouldPresent roomDataForProcessing: CapturedRoomData, error: Error?) -> Bool {
+        // Cancelling stops the session too, and a stopped session hands
+        // its data here regardless of why it stopped. Processing it
+        // would turn "Cancel" into "save this room", which is the
+        // opposite of what was asked for.
+        if isCancelling { return false }
         if let error = error {
             dismiss(payload: .failure(RoomPlanError.captureFailed(error.localizedDescription)))
             return false
@@ -119,6 +145,7 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate {
     }
 
     func captureView(didPresent processedResult: CapturedRoom, error: Error?) {
+        if isCancelling { return }
         if let error = error {
             dismiss(payload: .failure(RoomPlanError.captureFailed(error.localizedDescription)))
             return
@@ -140,6 +167,12 @@ private class CaptureModalViewController: UIViewController {
     private let titleText: String
     private var captureView: RoomCaptureView?
     private var hasStartedSession: Bool = false
+    private var doneButton: UIButton?
+    private var cancelButton: UIButton?
+    private var statusLabel: UILabel?
+    /// True once Done has been pressed, so the session is not stopped a
+    /// second time by viewWillDisappear while it is already processing.
+    private var isFinishing: Bool = false
 
     init(delegate: RoomCaptureRunner, title: String) {
         self.delegateRunner = delegate
@@ -153,8 +186,10 @@ private class CaptureModalViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .black
 
-        // RoomCaptureView covers the full screen — Apple renders all the
-        // coaching UI (arrows, progress toast, "Done" button) on top.
+        // RoomCaptureView covers the full screen. Apple renders the
+        // coaching UI on top — arrows, the progress toast, the live
+        // geometry — but NOT a Done button. That is the app's job, and
+        // its absence here is why a scan could never be completed.
         let cv = RoomCaptureView(frame: view.bounds)
         cv.translatesAutoresizingMaskIntoConstraints = false
         cv.delegate = delegateRunner
@@ -198,6 +233,73 @@ private class CaptureModalViewController: UIViewController {
             label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             label.centerYAnchor.constraint(equalTo: cancel.centerYAnchor),
         ])
+        self.cancelButton = cancel
+
+        // Done (bottom centre).
+        //
+        // The one control the whole feature depends on, and it was
+        // missing: RoomCaptureView does not supply it, so the session
+        // could only ever be stopped by Cancel, which throws the scan
+        // away. The customer was left walking round a room with no way
+        // to say "that's the room done".
+        //
+        // Bottom centre and large, because it is pressed one-handed
+        // while holding a phone up at arm's length.
+        let done = UIButton(type: .system)
+        done.setTitle("Done", for: .normal)
+        done.setTitleColor(.black, for: .normal)
+        done.titleLabel?.font = .systemFont(ofSize: 18, weight: .bold)
+        done.backgroundColor = .white
+        done.layer.cornerRadius = 28
+        done.layer.cornerCurve = .continuous
+        done.translatesAutoresizingMaskIntoConstraints = false
+        done.addTarget(self, action: #selector(onDone), for: .touchUpInside)
+        view.addSubview(done)
+        NSLayoutConstraint.activate([
+            done.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            done.bottomAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -28),
+            done.widthAnchor.constraint(greaterThanOrEqualToConstant: 200),
+            done.heightAnchor.constraint(equalToConstant: 56),
+        ])
+        self.doneButton = done
+
+        // Processing takes a few seconds and Apple shows nothing during
+        // it. Without a word here the app looks frozen at exactly the
+        // moment the customer is waiting to find out whether their walk
+        // round the room counted.
+        let status = UILabel()
+        status.text = ""
+        status.textColor = .white
+        status.font = .systemFont(ofSize: 15, weight: .semibold)
+        status.textAlignment = .center
+        status.numberOfLines = 2
+        status.shadowColor = UIColor(white: 0.0, alpha: 0.7)
+        status.shadowOffset = CGSize(width: 0, height: 1)
+        status.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(status)
+        NSLayoutConstraint.activate([
+            status.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            status.bottomAnchor.constraint(equalTo: done.topAnchor, constant: -14),
+            status.leadingAnchor.constraint(
+                greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
+        ])
+        self.statusLabel = status
+    }
+
+    @objc private func onDone() {
+        guard !isFinishing else { return }
+        isFinishing = true
+        // Both controls off: a second tap while Apple is processing
+        // stops a session that has already stopped, and Cancel here
+        // would race the result that is on its way.
+        doneButton?.isEnabled = false
+        doneButton?.alpha = 0.5
+        doneButton?.setTitle("Finishing…", for: .normal)
+        cancelButton?.isEnabled = false
+        cancelButton?.alpha = 0.5
+        statusLabel?.text = "Working out the measurements…"
+        captureView?.captureSession.stop()
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -213,6 +315,11 @@ private class CaptureModalViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        // Not while finishing. Done has already stopped the session and
+        // is waiting on didPresent; stopping again mid-dismissal was
+        // producing a second delegate callback, and with it a second
+        // resolution of the same Capacitor call.
+        guard !isFinishing else { return }
         captureView?.captureSession.stop()
     }
 

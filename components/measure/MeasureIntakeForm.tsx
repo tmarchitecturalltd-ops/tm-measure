@@ -338,7 +338,11 @@ export default function MeasureIntakeForm() {
   const openBannerAutoScan = useCallback(() => {
     if (rooms.length === 0) return;
     if (rooms.length === 1) {
-      setScanRoomId(rooms[0].id);
+      // Via scanRoom, so this reaches the LiDAR scanner on a phone that
+      // has one. Declared later in the file, hence the ref indirection:
+      // scanRoom depends on arSupport and startRoomScan, both of which
+      // are defined after this.
+      scanRoomRef.current?.(rooms[0].id);
       return;
     }
     setScanPickerOpen(true);
@@ -729,6 +733,131 @@ export default function MeasureIntakeForm() {
    * because two rooms could not be related to each other — and each of
    * those is something the person holding the phone can act on.
    */
+  /**
+   * LiDAR-scan a SINGLE room, straight onto the room the customer is in.
+   *
+   * The plugin has exposed `startScan` all along — it is declared in
+   * definitions.ts and bridged in RoomPlanPlugin.m — and nothing in the
+   * app ever called it. `RoomPlan.` appeared exactly twice in this file:
+   * isSupported, and startHouseScan. So "Measure this room
+   * automatically" opened the web corner-tap overlay, and a customer on
+   * a 15 Pro got a camera and a set of crosshairs rather than the LiDAR
+   * scanner their phone was bought for. Reported as not having "the
+   * lidar features to submit a room", which is exactly right.
+   *
+   * Mapped onto the EXISTING room rather than appending a new one: the
+   * customer opened this from inside a room they had already named, and
+   * replacing it with "Room 1" would lose that.
+   */
+  const startRoomScan = useCallback(
+    async (roomId: string) => {
+      setHouseScanError(null);
+      setHouseScanning(true);
+      try {
+        const result = await RoomPlan.startScan({ unit: "m" });
+        const sr = result?.rooms?.[0];
+        if (!sr) {
+          setHouseScanError("The scan finished but no room came back.");
+          return;
+        }
+
+        // Same rule as the whole-house path: more than two wall lengths
+        // means RoomPlan saw something other than a plain rectangle.
+        const wallLengths = (sr.walls ?? [])
+          .map((w) => w.lengthM)
+          .filter((n) => Number.isFinite(n) && n > 0);
+        const useDetailed = wallLengths.length > 2;
+        const walls: WallSegment[] = useDetailed
+          ? wallLengths.map((lengthM, wi) => ({
+              id: newId(),
+              label: `Wall ${wi + 1}`,
+              lengthM: lengthM.toFixed(2),
+            }))
+          : [
+              { id: newId(), label: "Wall 1", lengthM: sr.widthM.toFixed(2) },
+              { id: newId(), label: "Wall 2", lengthM: sr.lengthM.toFixed(2) },
+              { id: newId(), label: "Wall 3", lengthM: sr.widthM.toFixed(2) },
+              { id: newId(), label: "Wall 4", lengthM: sr.lengthM.toFixed(2) },
+            ];
+
+        setRooms((prev) =>
+          prev.map((r) =>
+            r.id !== roomId
+              ? r
+              : {
+                  ...r,
+                  walls,
+                  ceilingHeightM: sr.heightM
+                    ? sr.heightM.toFixed(2)
+                    : r.ceilingHeightM || defaultCeilingHeightM.trim(),
+                  doors: (sr.doors ?? []).map((d) => ({
+                    id: newId(),
+                    widthM: d.widthM.toFixed(2),
+                    note: "Detected by scan",
+                  })),
+                  windows: (sr.windows ?? []).map((w) => ({
+                    id: newId(),
+                    widthM: w.widthM.toFixed(2),
+                    note: "Detected by scan",
+                  })),
+                  shape: useDetailed ? "custom" : "rectangle",
+                  measuredByScan: true,
+                  // A single-room scan reports its outline in the room's
+                  // own frame already — there is no shared property
+                  // origin to subtract, unlike the merged house scan.
+                  floorPolygonM:
+                    !sr.rectangular && (sr.floorPolygonM?.length ?? 0) >= 3
+                      ? sr.floorPolygonM!.map((pt) => ({
+                          x: Number(pt.x.toFixed(3)),
+                          z: Number(pt.z.toFixed(3)),
+                        }))
+                      : r.floorPolygonM,
+                },
+          ),
+        );
+
+        // A scan is minutes of walking, and it lands as the app returns
+        // from the native capture view — the moment iOS is most likely
+        // to suspend it. Don't leave it in a debounce timer.
+        setTimeout(() => draftSaver.current.flush(), 0);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        // Cancelling is a choice, not a fault.
+        if (!/cancel/i.test(message)) setHouseScanError(message);
+      } finally {
+        setHouseScanning(false);
+      }
+    },
+    [defaultCeilingHeightM],
+  );
+
+  /**
+   * "Measure this room" — whichever way this phone can.
+   *
+   * One entry point so the three buttons that offer scanning cannot
+   * disagree about what scanning means. They all used to open the web
+   * corner-tap overlay unconditionally, which on a LiDAR phone is the
+   * worse of the two tools by a wide margin.
+   */
+  /**
+   * Lets openBannerAutoScan reach scanRoom despite being declared
+   * above it. Reordering the declarations would work too, but scanRoom
+   * needs arSupport and startRoomScan, which sit lower still.
+   */
+  const scanRoomRef = useRef<((roomId: string) => void) | null>(null);
+
+  const scanRoom = useCallback(
+    (roomId: string) => {
+      if (arSupport === "yes") {
+        void startRoomScan(roomId);
+        return;
+      }
+      setScanRoomId(roomId);
+    },
+    [arSupport, startRoomScan],
+  );
+  scanRoomRef.current = scanRoom;
+
   const startHouseScan = useCallback(async () => {
     setHouseScanError(null);
     setHouseScanning(true);
@@ -2530,7 +2659,7 @@ export default function MeasureIntakeForm() {
                     <button
                       type="button"
                       onClick={() => {
-                        setScanRoomId(room.id);
+                        scanRoom(room.id);
                         setScanPickerOpen(false);
                       }}
                       className="flex w-full items-center justify-between gap-3 rounded-lg border border-outline-variant/30 bg-surface-container-low px-4 py-4 text-left transition-colors hover:border-primary hover:bg-surface-container-high"
@@ -3067,7 +3196,7 @@ export default function MeasureIntakeForm() {
                     {SCAN_ENABLED && (
                     <button
                       type="button"
-                      onClick={() => setScanRoomId(room.id)}
+                      onClick={() => scanRoom(room.id)}
                       className="rounded-lg border border-primary bg-primary/10 px-4 py-2 text-sm font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
                     >
                       Auto-Scan this room
