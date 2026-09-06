@@ -38,11 +38,7 @@ import {
   roomFootprint,
   sanitisePlacement,
   snapToGrid,
-  FIXTURE_SIZES_M,
-  fixtureFootprintM,
-  type FixtureKind,
   type RoomDraft,
-  type RoomFixture,
   type RoomPlacement,
   type RoomRotationDeg,
   type RoomStairs,
@@ -182,22 +178,21 @@ export default function FloorPlanEditor({
     [],
   );
 
-  /* ── Fixtures and stairs ────────────────────────────────────────
+  /* ── Stairs on the plan ─────────────────────────────────────────
    *
-   * Toilets, baths, kitchen units and radiators had no representation
-   * anywhere in the app. A bathroom reached the draughtsman as a box
-   * with a door in it, and the only evidence it contained a toilet was
-   * whichever photo happened to catch one — so its position was
-   * somebody's recollection. For a bathroom or a kitchen the fixture
-   * layout is most of the design constraint.
+   * Stairs are captured in the room questions and drawn here so the
+   * customer can see whether the layout makes sense — dragging one
+   * finds the nearest wall rather than setting a free position,
+   * because that is how a staircase is built and how the DXF draws it.
    *
-   * Placing works as arm-then-tap rather than drag-from-a-palette:
-   * dragging a small icon from a list at the bottom of the screen into
-   * a room at the top, on a phone, with one thumb, is a gesture that
-   * fails more often than it works. Tap what you want, tap where it
-   * goes.
+   * A fixture palette lived here too — toilet, basin, bath and so on,
+   * placed by tapping into a room. It was removed on review: the plan
+   * step is for saying where the rooms are, and a nine-item palette
+   * under a canvas someone is already unsure about was the wrong place
+   * to ask about sanitaryware. The data model, the DXF layer and their
+   * tests are kept in measure-core, so the same information can be
+   * collected from the room questions later without rebuilding it.
    */
-  const [tool, setTool] = useState<FixtureKind | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
 
   /**
@@ -228,85 +223,14 @@ export default function FloorPlanEditor({
   /** Quarter-metre grid, matching how rooms snap. */
   const snapM = (v: number) => Math.round(v * 4) / 4;
 
-  const addFixture = useCallback(
-    (roomId: string, kind: FixtureKind, at: { x: number; z: number }) => {
-      if (!onRoomChange) return;
-      const room = rooms.find((r) => r.id === roomId);
-      if (!room) return;
-      const f: RoomFixture = {
-        // crypto.randomUUID is unavailable on older WebViews, and an id
-        // collision here silently merges two fixtures into one.
-        id: `fx-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-        kind,
-        positionM: { x: snapM(at.x), z: snapM(at.z) },
-        rotationDeg: 0,
-      };
-      onRoomChange(roomId, { fixtures: [...(room.fixtures ?? []), f] });
-      setSelected(f.id);
-      // Disarm after one placement. Leaving the tool armed means the
-      // next tap — very often an attempt to drag what was just placed —
-      // drops a second toilet on top of the first.
-      setTool(null);
-    },
-    [onRoomChange, rooms],
-  );
-
-  const patchFixture = useCallback(
-    (roomId: string, fixtureId: string, patch: Partial<RoomFixture>) => {
-      if (!onRoomChange) return;
-      const room = rooms.find((r) => r.id === roomId);
-      if (!room) return;
-      onRoomChange(roomId, {
-        fixtures: (room.fixtures ?? []).map((f) =>
-          f.id === fixtureId ? { ...f, ...patch } : f,
-        ),
-      });
-    },
-    [onRoomChange, rooms],
-  );
-
-  const removeFixture = useCallback(
-    (roomId: string, fixtureId: string) => {
-      if (!onRoomChange) return;
-      const room = rooms.find((r) => r.id === roomId);
-      if (!room) return;
-      onRoomChange(roomId, {
-        fixtures: (room.fixtures ?? []).filter((f) => f.id !== fixtureId),
-      });
-      setSelected(null);
-    },
-    [onRoomChange, rooms],
-  );
-
-  /** Drag state for a fixture or a flight of stairs. */
+  /** Drag state for a flight of stairs. */
   const itemDragRef = useRef<{
-    kind: "fixture" | "stairs";
     roomId: string;
     itemId: string;
     pointerId: number;
     startLocal: { x: number; z: number };
     startPos: { x: number; z: number };
   } | null>(null);
-
-  const onFixturePointerDown = useCallback(
-    (roomId: string, f: RoomFixture, e: ReactPointerEvent) => {
-      e.stopPropagation();
-      const local = localCoordsFromEvent(e);
-      if (!local) return;
-      setSelected(f.id);
-      itemDragRef.current = {
-        kind: "fixture",
-        roomId,
-        itemId: f.id,
-        pointerId: e.pointerId,
-        startLocal: local,
-        startPos: { ...f.positionM },
-      };
-      setFrozenViewBox(viewBox);
-      (e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
-    },
-    [localCoordsFromEvent, viewBox],
-  );
 
   /**
    * Move a flight of stairs by dropping a point in the room.
@@ -378,16 +302,12 @@ export default function FloorPlanEditor({
         x: snapM(st.startPos.x + (local.x - st.startLocal.x)),
         z: snapM(st.startPos.z + (local.z - st.startLocal.z)),
       };
-      if (st.kind === "fixture") {
-        patchFixture(st.roomId, st.itemId, { positionM: next });
-      } else {
-        slideStairs(st.roomId, st.itemId, next);
-      }
+      slideStairs(st.roomId, st.itemId, next);
     },
     // slideStairs must be listed: it closes over `rooms`, so omitting it
     // leaves a drag started before a room was added writing back to the
     // room list as it was then, silently dropping the new room.
-    [localCoordsFromEvent, patchFixture, slideStairs],
+    [localCoordsFromEvent, slideStairs],
   );
 
   const onItemPointerUp = useCallback((e: ReactPointerEvent) => {
@@ -736,32 +656,12 @@ export default function FloorPlanEditor({
                   stroke={GOLD}
                   strokeWidth={1.6}
                   vectorEffect="non-scaling-stroke"
-                  style={{ cursor: tool ? "copy" : "grab" }}
-                  onPointerDown={(e) => {
-                    // With a tool armed the room body is a drop target,
-                    // not a handle. Dragging the room while trying to
-                    // place a toilet in it would be maddening.
-                    if (tool) return;
-                    onRoomPointerDown(r.id, e);
-                  }}
+                  style={{ cursor: "grab" }}
+                  onPointerDown={(e) => onRoomPointerDown(r.id, e)}
                   onPointerMove={onRoomPointerMove}
                   onPointerUp={onRoomPointerUp}
                   onPointerCancel={onRoomPointerUp}
-                  onClick={(e) => {
-                    if (!tool) {
-                      setSelected(null);
-                      return;
-                    }
-                    const el = e.currentTarget as SVGGraphicsElement;
-                    const ctm = el.getScreenCTM();
-                    const svgEl = svgRef.current;
-                    if (!ctm || !svgEl) return;
-                    const pt = svgEl.createSVGPoint();
-                    pt.x = e.clientX;
-                    pt.y = e.clientY;
-                    const t = pt.matrixTransform(ctm.inverse());
-                    addFixture(r.id, tool, { x: t.x, z: t.y });
-                  }}
+                  onClick={() => setSelected(null)}
                 />
                 <text
                   x={size.widthM / 2}
@@ -872,13 +772,11 @@ export default function FloorPlanEditor({
                         vectorEffect="non-scaling-stroke"
                         style={{ cursor: "grab" }}
                         onPointerDown={(e) => {
-                          if (tool) return;
                           e.stopPropagation();
                           const local = localCoordsFromEvent(e);
                           if (!local) return;
                           setSelected(st.id);
                           itemDragRef.current = {
-                            kind: "stairs",
                             roomId: r.id,
                             itemId: st.id,
                             pointerId: e.pointerId,
@@ -932,101 +830,6 @@ export default function FloorPlanEditor({
                       >
                         {st.direction === "down" ? "DN" : "UP"}
                       </text>
-                    </g>
-                  );
-                })}
-
-                {/* ── Fixtures ─────────────────────────────────────
-                    Drawn to their real footprint, not as equal-sized
-                    icons. A plan where the bath is the same size as the
-                    toilet tells the customer nothing about whether the
-                    layout fits, which is the entire question they are
-                    trying to answer by looking at it. */}
-                {(r.fixtures ?? []).map((f: RoomFixture) => {
-                  const { widthM: fw, depthM: fd } = fixtureFootprintM(f);
-                  const isSel = selected === f.id;
-                  return (
-                    <g key={f.id}>
-                      <rect
-                        x={f.positionM.x - fw / 2}
-                        y={f.positionM.z - fd / 2}
-                        width={fw}
-                        height={fd}
-                        rx={0.05}
-                        fill={isSel ? "#f7ead0" : "#eef1f4"}
-                        stroke={isSel ? GOLD : "#5a6a80"}
-                        strokeWidth={isSel ? 2 : 1.2}
-                        vectorEffect="non-scaling-stroke"
-                        style={{ cursor: "grab" }}
-                        onPointerDown={(e) => {
-                          if (tool) return;
-                          onFixturePointerDown(r.id, f, e);
-                        }}
-                        onPointerMove={onItemPointerMove}
-                        onPointerUp={onItemPointerUp}
-                        onPointerCancel={onItemPointerUp}
-                      />
-                      <text
-                        x={f.positionM.x}
-                        y={f.positionM.z + 0.08}
-                        fontSize={Math.max(0.16, Math.min(0.26, Math.min(fw, fd) / 2.4))}
-                        fill="#3a4654"
-                        textAnchor="middle"
-                        pointerEvents="none"
-                      >
-                        {FIXTURE_SIZES_M[f.kind].label}
-                      </text>
-
-                      {isSel && onRoomChange && (
-                        <>
-                          {/* Rotate. Cardinal only — a bath at 37
-                              degrees is not a thing anyone is
-                              reporting, and free rotation on a phone is
-                              a fiddle. */}
-                          <g
-                            transform={`translate(${f.positionM.x - fw / 2 - 0.3} ${f.positionM.z - fd / 2 - 0.3})`}
-                            style={{ cursor: "pointer" }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              patchFixture(r.id, f.id, {
-                                rotationDeg: (((f.rotationDeg + 90) % 360) as RoomRotationDeg),
-                              });
-                            }}
-                          >
-                            <circle r={0.55} fill="transparent" />
-                            <circle r={0.26} fill={DARK} pointerEvents="none" />
-                            <text
-                              y={0.09}
-                              fontSize={0.3}
-                              textAnchor="middle"
-                              fill={CREAM}
-                              pointerEvents="none"
-                            >
-                              ↻
-                            </text>
-                          </g>
-                          <g
-                            transform={`translate(${f.positionM.x + fw / 2 + 0.3} ${f.positionM.z - fd / 2 - 0.3})`}
-                            style={{ cursor: "pointer" }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeFixture(r.id, f.id);
-                            }}
-                          >
-                            <circle r={0.55} fill="transparent" />
-                            <circle r={0.26} fill="#8a2f2f" pointerEvents="none" />
-                            <text
-                              y={0.09}
-                              fontSize={0.3}
-                              textAnchor="middle"
-                              fill={CREAM}
-                              pointerEvents="none"
-                            >
-                              ×
-                            </text>
-                          </g>
-                        </>
-                      )}
                     </g>
                   );
                 })}
@@ -1159,60 +962,6 @@ export default function FloorPlanEditor({
           </div>
         )}
       </div>
-
-      {/* ── Fixture palette ─────────────────────────────────────────
-          Arm one, then tap inside a room. Deliberately not a drag from
-          here into the canvas: that gesture asks a thumb to travel the
-          height of the phone while holding a small target, and it fails
-          often enough that people conclude the feature is broken. */}
-      {onRoomChange && (
-        <div className="rounded-xl border border-[#e6dfd0] p-3">
-          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-            <span className="text-sm font-bold uppercase tracking-widest text-[#6e6a5f]">
-              Add to a room
-            </span>
-            <span className="text-sm text-[#8a8375]">
-              {tool
-                ? `Now tap inside the room to place the ${FIXTURE_SIZES_M[tool].label.toLowerCase()}`
-                : "Pick one, then tap where it goes"}
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(Object.keys(FIXTURE_SIZES_M) as FixtureKind[]).map((k) => {
-              const armed = tool === k;
-              return (
-                <button
-                  key={k}
-                  type="button"
-                  aria-pressed={armed}
-                  onClick={() => setTool(armed ? null : k)}
-                  className={`rounded-full border px-4 py-2 text-sm font-semibold ${
-                    armed
-                      ? "border-[#b89650] bg-[#b89650] text-white"
-                      : "border-[#d9d3c8] bg-white text-[#1c1c1a]"
-                  }`}
-                >
-                  {FIXTURE_SIZES_M[k].label}
-                </button>
-              );
-            })}
-            {tool && (
-              <button
-                type="button"
-                onClick={() => setTool(null)}
-                className="rounded-full border border-[#d9d3c8] px-4 py-2 text-sm text-[#6e6a5f]"
-              >
-                Cancel
-              </button>
-            )}
-          </div>
-          <p className="mt-2 text-sm text-[#8a8375]">
-            Sizes are the usual ones, drawn to scale. Drag anything to move
-            it; tap it to rotate or remove it. Stairs come from the room
-            questions and can be dragged along a wall.
-          </p>
-        </div>
-      )}
 
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-2 text-sm">
