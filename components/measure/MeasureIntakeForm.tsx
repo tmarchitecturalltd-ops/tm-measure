@@ -185,6 +185,22 @@ export default function MeasureIntakeForm() {
    * screen that has been shipping all along.
    */
   const [guidedMode, setGuidedMode] = useState(true);
+  /**
+   * A temporary drop to the all-at-once view so a validation problem
+   * can be pointed at.
+   *
+   * Separate from guidedMode on purpose. The error paths used to call
+   * setGuidedMode(false), which is indistinguishable from the customer
+   * choosing the one-page view — so a single failed check ended guided
+   * mode permanently, and the only way back was noticing a button at
+   * the bottom of a long form. In Charlie's recording that is exactly
+   * what happened: he spent the session in the all-at-once view with
+   * "Ask me one question at a time" sitting there unpressed, never
+   * having chosen it.
+   *
+   * This clears itself the moment the issues do.
+   */
+  const [forcedAllView, setForcedAllView] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [email, setEmail] = useState("");
   const [projectName, setProjectName] = useState("");
@@ -1596,6 +1612,18 @@ export default function MeasureIntakeForm() {
     };
   }, []);
 
+  /**
+   * Hand guided mode back once the problems are fixed.
+   *
+   * Without this the customer is dropped into the one-page form to see
+   * an error and simply left there, which is how a temporary
+   * explanation turns into a permanent change of interface nobody
+   * asked for.
+   */
+  useEffect(() => {
+    if (forcedAllView && issues.length === 0) setForcedAllView(false);
+  }, [forcedAllView, issues]);
+
   // Offer any previously-saved draft when the form first mounts.
   useEffect(() => {
     const draft = loadDraft();
@@ -2240,7 +2268,7 @@ export default function MeasureIntakeForm() {
       // populated — the customer would be returned to the rooms step
       // and shown no reason at all. The all-at-once view is where the
       // flagged fields are anchored.
-      setGuidedMode(false);
+      setForcedAllView(true);
       setStep("rooms");
       setSubmitStatus("error");
       // Name the actual problem and the room it belongs to.
@@ -2517,25 +2545,51 @@ export default function MeasureIntakeForm() {
    * the header at all is what makes the screen actually be about the
    * question, which was the point of the takeover.
    */
-  const guidedActive = guidedMode && !pendingDraft && step === "rooms";
+  /**
+   * Guided mode stands down while the resume prompt is up, because a
+   * full-viewport takeover would hide it — and then comes straight
+   * back, because standing down was about that one banner and not a
+   * decision to abandon the guided flow.
+   *
+   * Seen in Charlie's recording: he answered the resume prompt and
+   * spent the rest of the session in the all-at-once form, with the
+   * "Ask me one question at a time" button sitting there unpressed. He
+   * had not chosen that view; the app had, silently, and never gave it
+   * back. Only an explicit "Show everything on one page" turns guided
+   * mode off now.
+   */
+  const guidedActive =
+    guidedMode && !forcedAllView && !pendingDraft && step === "rooms";
   /** Same, for the project step. */
-  const guidedProjectActive = guidedMode && !pendingDraft && step === "project";
+  const guidedProjectActive =
+    guidedMode && !forcedAllView && !pendingDraft && step === "project";
   /** Either takeover on screen — the app header stands down for both. */
   const anyTakeover = guidedActive || guidedProjectActive;
 
-  // Clears the fixed header only. The status-bar inset is handled once
-  // on the body in globals.css — adding it here as well would push the
-  // content down by twice the inset.
+  // No top padding: the header is sticky and sits in the flow, so
+  // nothing needs to reserve space for it. The status-bar inset is
+  // handled on the header itself and once on the body in globals.css.
   return (
-    <div className={`min-h-screen bg-surface pb-28 ${anyTakeover ? "pt-0" : "pt-24"}`}>
+    <div className="min-h-screen bg-surface pb-28">
       <TutorialOverlay />
+      {/* Sticky, not fixed.
+          Fixed positioning takes the header out of the flow, so the
+          page had to reserve space for it with a hard-coded pt-24 —
+          a guess at its height. Raising the body text broke that
+          guess: the two-line title outgrew the h-16 box and collided
+          with itself and the saved-state chip. Sticky keeps the header
+          on screen without anyone having to predict how tall it is,
+          which is the actual fix rather than a bigger guess.
+
+          h-16 is gone for the same reason; min-h with wrapping lets
+          the row grow when the text or the chip needs it. */}
       {!anyTakeover && (
       <header
-        className="fixed left-0 right-0 top-0 z-40 border-b border-outline-variant/20 bg-surface/90 backdrop-blur-xl"
+        className="sticky top-0 z-40 border-b border-outline-variant/20 bg-surface/90 backdrop-blur-xl"
         style={{ paddingTop: "env(safe-area-inset-top)" }}
       >
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 md:px-6">
-          <div className="flex items-center gap-3">
+        <div className="mx-auto flex min-h-16 max-w-5xl flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-2 md:px-6">
+          <div className="flex min-w-0 items-center gap-2">
             <Link
               href="/"
               className="material-symbols-outlined rounded-full p-2 text-primary transition-colors hover:bg-surface-container-low"
@@ -2543,14 +2597,12 @@ export default function MeasureIntakeForm() {
             >
               arrow_back
             </Link>
-            <div>
-              <p className="font-label text-sm font-bold uppercase tracking-widest text-primary">
-                TM Measure
-              </p>
-              <h1 className="font-headline text-lg font-semibold text-on-surface">
-                Self-measurement intake
-              </h1>
-            </div>
+            {/* One line, not two. "TM Measure" above
+                "Self-measurement intake" said the same thing twice and
+                was the pair that overlapped. */}
+            <h1 className="font-headline truncate text-lg font-semibold text-on-surface">
+              Self measure
+            </h1>
           </div>
           <span className="hidden items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3 py-1.5 text-sm font-semibold text-on-surface-variant sm:inline-flex">
             <span
@@ -2560,6 +2612,8 @@ export default function MeasureIntakeForm() {
             >
               schedule
             </span>
+            {/* Per room, so nobody multiplies. A whole house is
+                closer to two hours; see the estimate in the notes. */}
             ~15 min per room
           </span>
           {savedLabel && (
@@ -5234,7 +5288,7 @@ export default function MeasureIntakeForm() {
               // where every flagged field is visible and anchored.
               // Silently refusing here is what made the Finish button
               // look broken.
-              setGuidedMode(false);
+              setForcedAllView(true);
               const ri = firstIssueRoomIndex(v);
               if (ri !== null) setActiveRoomIndex(ri);
               return;
