@@ -34,6 +34,7 @@ import GuidedScreen, { type MenuSection } from "@/components/measure/GuidedScree
 
 type StepId =
   | "name"
+  | "scan"
   | "measured"
   | "shape"
   | "walls"
@@ -66,10 +67,18 @@ type Props = {
   onGoToRoom?: (index: number) => void;
   /** Room names, for the jump list in the menu. */
   roomNames?: string[];
+  /**
+   * This phone has LiDAR, so scanning is the way rooms get measured
+   * and the typed fields are not offered.
+   */
+  scanRequired?: boolean;
+  /** Last scan attempt failed or was cancelled — see the escape hatch. */
+  scanFailed?: boolean;
 };
 
 const LABELS: Record<StepId, string> = {
   name: "What's this room called?",
+  scan: "Let's measure this room",
   measured: "Here's what the scan measured",
   shape: "What shape is it?",
   walls: "How long are the walls?",
@@ -99,6 +108,8 @@ export default function GuidedRoomFlow({
   onScanHouse,
   onGoToRoom,
   roomNames = [],
+  scanRequired = false,
+  scanFailed = false,
 }: Props) {
   /**
    * A scanned room is not asked to be measured again.
@@ -114,9 +125,31 @@ export default function GuidedRoomFlow({
    * shown them. Stairs and photos stay: neither comes out of the scan.
    */
   const scanned = room.measuredByScan === true;
+
+  /**
+   * On a LiDAR phone, the sensor does the measuring.
+   *
+   * Typed lengths are not offered at all on these devices: the phone
+   * can measure a room better than a person with a tape can, and
+   * offering both invites the worse answer — someone types 3.5 where
+   * the sensor would have said 3.47, and nobody downstream can tell
+   * which they got.
+   *
+   * `manualEscape` is the exception, and it exists because a flow with
+   * no way through is the failure this app keeps producing. A scan can
+   * fail: a room too dark, too large, a sensor that will not settle. If
+   * that happens the typed fields come back, because a customer stuck
+   * in their own hallway with a button that will not work is worse than
+   * a measurement we are less sure of.
+   */
+  const [manualEscape, setManualEscape] = useState(false);
+  const mustScan = scanRequired && !scanned && !manualEscape;
+
   const steps: StepId[] = useMemo(
     () =>
-      scanned
+      mustScan
+        ? ["name", "scan"]
+        : scanned
         ? ["name", "measured", "stairs", "photos"]
         : [
             "name",
@@ -128,7 +161,7 @@ export default function GuidedRoomFlow({
             "stairs",
             "photos",
           ],
-    [scanned],
+    [scanned, mustScan],
   );
   const [stepIndex, setStepIndex] = useState(0);
   /**
@@ -170,6 +203,9 @@ export default function GuidedRoomFlow({
    * we ask.
    */
   const blocked = (): string | null => {
+    if (step === "scan" && !scanned) {
+      return "Scan the room to carry on — it only takes a minute.";
+    }
     if (step === "name" && !room.name.trim()) {
       return "Give the room a name so we know which one it is.";
     }
@@ -433,6 +469,66 @@ export default function GuidedRoomFlow({
           <p className="mt-2 text-sm text-on-surface-variant">
             Whatever you call it at home is fine.
           </p>
+        </div>
+      )}
+
+      {step === "scan" && (
+        <div className="space-y-4">
+          <p className="text-base leading-relaxed text-on-surface-variant">
+            Your phone can measure this room itself — walls, ceiling, doors
+            and windows — more precisely than a tape, and there&apos;s
+            nothing to type afterwards.
+          </p>
+          <button
+            type="button"
+            onClick={onScanRoom}
+            style={{ minHeight: 64 }}
+            className="w-full rounded-2xl bg-primary px-6 text-base font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 active:scale-[0.98]"
+          >
+            Scan this room
+          </button>
+          {onScanHouse && (
+            <button
+              type="button"
+              onClick={onScanHouse}
+              style={{ minHeight: 56 }}
+              className="w-full rounded-2xl border-2 border-outline px-6 text-sm font-bold uppercase tracking-widest text-on-surface"
+            >
+              Scan the whole property instead
+            </button>
+          )}
+          <p className="text-sm text-on-surface-variant">
+            Hold the phone up and walk slowly round the room, pointing it at
+            each wall in turn. Tap Done when the whole room is covered.
+          </p>
+
+          {/* The way out.
+              Only after a scan has actually failed or been cancelled —
+              not offered up front, because given the choice people take
+              the familiar option and type a worse number than the phone
+              would have measured. But a room that will not scan has to
+              have a route through it: too dark, too large, a sensor that
+              will not settle. Being stuck in your own hallway with a
+              button that does nothing is the failure this app has
+              produced more than once. */}
+          {scanFailed && !manualEscape && (
+            <div className="rounded-xl border border-outline-variant/40 p-4">
+              <p className="text-sm text-on-surface-variant">
+                Scanning didn&apos;t work? You can measure this room by hand
+                instead — a tape measure and the four wall lengths.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setManualEscape(true);
+                  setStepIndex(1);
+                }}
+                className="mt-3 rounded-full border border-primary px-5 py-2 text-sm font-bold uppercase tracking-widest text-primary"
+              >
+                Enter the sizes by hand
+              </button>
+            </div>
+          )}
         </div>
       )}
 

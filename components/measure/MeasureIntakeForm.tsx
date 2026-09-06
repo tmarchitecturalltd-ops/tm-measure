@@ -556,6 +556,16 @@ export default function MeasureIntakeForm() {
   >({});
 
   const [houseScanning, setHouseScanning] = useState(false);
+  /**
+   * Scan attempts since the last success.
+   *
+   * Drives whether the manual escape is offered on a LiDAR phone.
+   * Counting attempts rather than errors, because cancelling is the
+   * commonest way a scan fails to produce a room and it deliberately
+   * raises no error — so an error-only check would leave someone who
+   * backed out of the scanner facing a Next button that never enables.
+   */
+  const [scanAttempts, setScanAttempts] = useState(0);
   const [houseScanError, setHouseScanError] = useState<string | null>(null);
 
   /**
@@ -780,6 +790,7 @@ export default function MeasureIntakeForm() {
     async (roomId: string) => {
       setHouseScanError(null);
       setHouseScanning(true);
+      setScanAttempts((n) => n + 1);
       try {
         const result = await RoomPlan.startScan({ unit: "m" });
         const sr = result?.rooms?.[0];
@@ -863,6 +874,9 @@ export default function MeasureIntakeForm() {
                 },
           ),
         );
+
+        // Landed: the escape hatch is no longer needed for this room.
+        setScanAttempts(0);
 
         // A scan is minutes of walking, and it lands as the app returns
         // from the native capture view — the moment iOS is most likely
@@ -5348,6 +5362,10 @@ export default function MeasureIntakeForm() {
           }
           onGoToRoom={setActiveRoomIndex}
           roomNames={rooms.map((r) => r.name)}
+          // On a LiDAR phone the sensor measures; the typed fields are
+          // not offered unless a scan has actually failed.
+          scanRequired={arSupport === "yes"}
+          scanFailed={scanAttempts > 0}
         />
       )}
 
