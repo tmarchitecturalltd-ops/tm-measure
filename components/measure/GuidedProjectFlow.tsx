@@ -192,7 +192,7 @@ export default function GuidedProjectFlow({
               (step === "email" && !email.trim()) ||
               (step === "project" && !projectName.trim()) ||
               (step === "type" && !projectType)
-            ? "Skip for now"
+            ? "Skip"
             : "Next"
       }
       blockMessage={block}

@@ -37,10 +37,13 @@ import type { ReactNode } from "react";
 
 type Props = {
   /**
-   * Opens the screen's menu. When present it sits at the left of the
-   * bar, so navigation lives in one place at the bottom of the screen
-   * rather than split between a hamburger in the top corner and the
-   * buttons down here.
+   * Opens the list of steps. Sits between Back and Next, so the row
+   * reads in the order the customer thinks in: where I have been,
+   * where I am, where I am going.
+   *
+   * Labelled "Steps" rather than left as three bare lines. A hamburger
+   * is a convention people have learned, not one they understand, and
+   * the word costs nothing next to the icon.
    */
   onMenu?: () => void;
   /** Secondary action, left. Omit to hide it entirely. */
@@ -77,32 +80,34 @@ export default function BottomActionBar({
     >
       {message && <div className="mx-auto mb-3 max-w-xl">{message}</div>}
       <div className="mx-auto flex max-w-xl items-center gap-2">
-        {onMenu && (
-          <button
-            type="button"
-            onClick={onMenu}
-            aria-label="Menu"
-            style={{ minHeight: 56, minWidth: 56 }}
-            className="flex shrink-0 items-center justify-center rounded-full border-2 border-outline text-on-surface"
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: "26px" }}
-              aria-hidden
-            >
-              menu
-            </span>
-          </button>
-        )}
         {onBack && (
           <button
             type="button"
             onClick={onBack}
             disabled={backDisabled}
             style={{ minHeight: 56 }}
-            className="flex-1 rounded-full border-2 border-outline px-5 text-sm font-bold uppercase tracking-widest text-on-surface transition-colors disabled:opacity-35"
+            className="min-w-0 flex-1 rounded-full border-2 border-outline px-3 text-sm font-bold uppercase leading-tight tracking-wide text-on-surface transition-colors disabled:opacity-35"
           >
             {backLabel}
+          </button>
+        )}
+        {onMenu && (
+          <button
+            type="button"
+            onClick={onMenu}
+            style={{ minHeight: 56 }}
+            className="flex shrink-0 flex-col items-center justify-center rounded-full border-2 border-outline px-3 text-on-surface"
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "22px", lineHeight: 1 }}
+              aria-hidden
+            >
+              menu
+            </span>
+            <span className="mt-0.5 text-[11px] font-bold uppercase tracking-widest">
+              Steps
+            </span>
           </button>
         )}
         <button
@@ -114,7 +119,11 @@ export default function BottomActionBar({
           // primary action should be the obvious one to hit, and the
           // larger target is also the one under the thumb's natural
           // resting arc on a right-handed grip.
-          className="flex-[2] rounded-full bg-primary px-6 text-sm font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 transition-all active:scale-[0.98] disabled:opacity-40 disabled:shadow-none"
+          // min-w-0 and tighter tracking because there are three
+          // controls in this row now: on a 375px screen the old
+          // padding and letter-spacing pushed a two-word label off the
+          // end of its own button.
+          className="min-w-0 flex-[2] rounded-full bg-primary px-4 text-sm font-bold uppercase leading-tight tracking-wide text-on-primary shadow-lg shadow-primary/25 transition-all active:scale-[0.98] disabled:opacity-40 disabled:shadow-none"
         >
           {nextLabel}
         </button>
