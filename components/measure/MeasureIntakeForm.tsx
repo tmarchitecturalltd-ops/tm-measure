@@ -56,6 +56,8 @@ import VoiceRecorder from "@/components/measure/VoiceRecorder";
 import WallPositionPicker from "@/components/measure/WallPositionPicker";
 import GuidedRoomFlow from "@/components/measure/GuidedRoomFlow";
 import GuidedProjectFlow from "@/components/measure/GuidedProjectFlow";
+import GuidedExtrasFlow from "@/components/measure/GuidedExtrasFlow";
+import GuidedScreen from "@/components/measure/GuidedScreen";
 import LengthHint from "@/components/measure/LengthHint";
 import {
   RoomPlan,
@@ -202,6 +204,8 @@ export default function MeasureIntakeForm() {
    * This clears itself the moment the issues do.
    */
   const [forcedAllView, setForcedAllView] = useState(false);
+  /** Menu open state for the plan and review guided shells. */
+  const [extraMenuOpen, setExtraMenuOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [email, setEmail] = useState("");
   const [projectName, setProjectName] = useState("");
@@ -2606,11 +2610,32 @@ export default function MeasureIntakeForm() {
    */
   const guidedActive =
     guidedMode && !forcedAllView && !pendingDraft && step === "rooms";
+  /** Exterior photos and the proposal, as one guided run of screens. */
+  const guidedExtrasActive =
+    guidedMode &&
+    !forcedAllView &&
+    !pendingDraft &&
+    (step === "exterior" || step === "proposal");
   /** Same, for the project step. */
   const guidedProjectActive =
     guidedMode && !forcedAllView && !pendingDraft && step === "project";
   /** Either takeover on screen — the app header stands down for both. */
-  const anyTakeover = guidedActive || guidedProjectActive;
+  /**
+   * Any full-viewport guided screen is on, so the app header stands
+   * down. The plan and review steps wear the shell too — they are not
+   * split into one question each, because a canvas and a pre-submit
+   * summary both need the whole screen, but they carry the same chrome
+   * so the survey does not change its manner two thirds of the way
+   * through.
+   */
+  const anyTakeover =
+    guidedActive ||
+    guidedProjectActive ||
+    guidedExtrasActive ||
+    (guidedMode &&
+      !forcedAllView &&
+      !pendingDraft &&
+      (step === "plan" || step === "review"));
 
   // No top padding: the header is sticky and sits in the flow, so
   // nothing needs to reserve space for it. The status-bar inset is
@@ -4484,7 +4509,7 @@ export default function MeasureIntakeForm() {
           </div>
         )}
 
-        {step === "exterior" && (
+        {step === "exterior" && !guidedExtrasActive && (
           <section className="space-y-6 tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 md:p-8">
             <header>
               <h2 className="font-headline text-2xl text-on-surface">
@@ -4573,7 +4598,7 @@ export default function MeasureIntakeForm() {
           </section>
         )}
 
-        {step === "proposal" && (
+        {step === "proposal" && !guidedExtrasActive && (
           <section className="space-y-6 tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 md:p-8">
             <header>
               <h2 className="font-headline text-2xl text-on-surface">
@@ -4656,6 +4681,30 @@ export default function MeasureIntakeForm() {
         )}
 
         {step === "plan" && (
+          /* Guided chrome, full-height content.
+             The plan needs the canvas and the connections list, so it
+             is not split into one-question screens the way the earlier
+             steps are — but it wears the same shell and the same bottom
+             bar, so it does not read as a different application. */
+          <GuidedScreen
+            eyebrow="Floor plan"
+            title="Where do the rooms sit?"
+            progress={0.85}
+            menuOpen={extraMenuOpen}
+            onMenuOpenChange={setExtraMenuOpen}
+            menuSections={[
+              {
+                items: [
+                  { label: "Back to the rooms", onClick: () => setStep("rooms") },
+                  { label: "Exterior and proposal", onClick: () => setStep("proposal") },
+                ],
+              },
+            ]}
+            scrollKey="plan"
+            onBack={() => setStep("proposal")}
+            onNext={goReview}
+            nextLabel="Review"
+          >
           <div className="space-y-8">
             <section className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 md:p-8">
               <header className="mb-4">
@@ -4876,46 +4925,53 @@ export default function MeasureIntakeForm() {
               />
             </section>
 
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <button
-                type="button"
-                onClick={() => setStep("rooms")}
-                className="inline-flex h-12 w-12 items-center justify-center rounded-full border-2 border-outline bg-surface-container-low text-on-surface shadow-md transition-all hover:bg-surface-container active:scale-[0.94]"
-                aria-label="Back to rooms"
-              >
-                <span
-                  className="material-symbols-outlined"
-                  aria-hidden
-                  style={{ fontSize: "24px" }}
-                >
-                  arrow_back
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={goReview}
-                className="inline-flex items-center gap-3 rounded-full bg-primary px-7 py-3 text-sm font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/30 transition-all hover:bg-surface-tint hover:shadow-xl active:scale-[0.97]"
-                aria-label="Review and export"
-              >
-                <span>Review &amp; export</span>
-                <span
-                  className="material-symbols-outlined"
-                  aria-hidden
-                  style={{ fontSize: "20px" }}
-                >
-                  arrow_forward
-                </span>
-              </button>
-            </div>
             <p className="text-sm text-on-surface-variant">
               The floor plan is optional — an empty layout still submits,
               but the architect will have to infer the arrangement from
               your room connections.
             </p>
           </div>
+          </GuidedScreen>
         )}
 
         {step === "review" && (
+          /* Guided chrome, one page of content.
+             Deliberately not split into one question per screen: this
+             is the last look before something is sent, and a summary
+             you have to page through is not a summary. The submit
+             button moves into the bottom bar, where it is both the
+             primary action and in reach of a thumb. */
+          <GuidedScreen
+            eyebrow="Last look"
+            title="Ready to send?"
+            progress={1}
+            menuOpen={extraMenuOpen}
+            onMenuOpenChange={setExtraMenuOpen}
+            menuSections={[
+              {
+                items: [
+                  { label: "Back to the rooms", onClick: () => setStep("rooms") },
+                  { label: "Back to the floor plan", onClick: () => setStep("plan") },
+                ],
+              },
+            ]}
+            scrollKey="review"
+            onBack={() => setStep("plan")}
+            onNext={submitToBackend}
+            nextDisabled={submitStatus === "submitting"}
+            nextLabel={
+              submitStatus === "submitting"
+                ? submitProgress && submitProgress.total > 0 && submitProgress.done < submitProgress.total
+                  ? `Photo ${submitProgress.done + 1} of ${submitProgress.total}…`
+                  : "Sending…"
+                : "Send to TM Designs"
+            }
+            blockMessage={
+              !dxfWillBeAttached
+                ? "No CAD drawing yet — open the floor plan so the rooms get a position."
+                : null
+            }
+          >
           <div className="space-y-10">
             <section className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 md:p-8">
               <h2 className="font-headline mb-2 text-2xl text-on-surface">
@@ -5261,6 +5317,7 @@ export default function MeasureIntakeForm() {
               </>
             )}
           </div>
+          </GuidedScreen>
         )}
       </main>
 
@@ -5273,6 +5330,21 @@ export default function MeasureIntakeForm() {
           overlay only works if the overlay is genuinely the full
           viewport in every browser; not rendering the content at all
           works everywhere. */}
+      {guidedExtrasActive && (
+        <GuidedExtrasFlow
+          photosBySide={exteriorPhotos}
+          onAddSidePhotos={attachExteriorPhotos}
+          onRemoveSidePhoto={removeExteriorPhoto}
+          description={proposalDescription}
+          onDescription={setProposalDescription}
+          sketches={proposalSketches}
+          onAddSketches={attachProposalSketches}
+          onRemoveSketch={removeProposalSketch}
+          onBackToRooms={() => setStep("rooms")}
+          onDone={() => setStep("plan")}
+        />
+      )}
+
       {guidedProjectActive && (
         <GuidedProjectFlow
           customerName={customerName}

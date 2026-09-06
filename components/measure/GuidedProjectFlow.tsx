@@ -35,13 +35,25 @@ const LABELS: Record<StepId, string> = {
   unit: "Metres or feet?",
 };
 
+/**
+ * Three, down from six.
+ *
+ * The answer changes nothing in the app — it is one word in the email
+ * and one column in the sheet — so every extra option is friction
+ * bought with no return. Six choices at the point of highest drop-off,
+ * before the customer has invested anything, to tell us something we
+ * could ask when we reply.
+ *
+ * These three cover most of the work. New build, renovation and garage
+ * conversions fall into "Something else", where the project name and
+ * the photos say more than a category ever would. `ProjectType` still
+ * carries all six so older drafts and existing submissions keep their
+ * labels.
+ */
 const TYPES: { value: ProjectType; label: string; hint: string }[] = [
   { value: "extension", label: "Extension", hint: "Adding on to the house" },
   { value: "loft", label: "Loft conversion", hint: "Using the roof space" },
-  { value: "renovation", label: "Renovation", hint: "Reworking what's there" },
-  { value: "newbuild", label: "New build", hint: "Building from scratch" },
-  { value: "garage", label: "Garage", hint: "Garage or outbuilding" },
-  { value: "other", label: "Something else", hint: "Tell us later" },
+  { value: "other", label: "Something else", hint: "Tell us when we reply" },
 ];
 
 type Props = {

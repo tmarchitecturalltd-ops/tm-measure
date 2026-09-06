@@ -62,6 +62,19 @@ type Tile = {
   tint: { bg: string; pillBg: string; iconColor: string };
 };
 
+/**
+ * Three tiles, down from six.
+ *
+ * The type a customer picks changes nothing about what the app then
+ * asks — it is one word in the notification email. Six choices on the
+ * first screen is six decisions before anyone has learned what the app
+ * does, in exchange for information we could get by replying to them.
+ *
+ * New build, renovation and garage conversions land under "Something
+ * else"; the project name and the photographs describe those better
+ * than a category does. ProjectType still defines all six so older
+ * drafts and past submissions keep their labels.
+ */
 const TILES: Tile[] = [
   {
     type: "extension",
@@ -96,61 +109,6 @@ const TILES: Tile[] = [
         <path d="M2 12L12 4l10 8" />
         <path d="M5 11v9h14v-9" />
         <rect x="10" y="13" width="4" height="4" />
-      </svg>
-    ),
-  },
-  {
-    type: "newbuild",
-    title: "New build",
-    blurb: "Self-build or replacement dwelling",
-    // Sage — fresh foundations.
-    tint: {
-      bg: "rgba(120, 145, 110, 0.05)",
-      pillBg: "rgba(120, 145, 110, 0.16)",
-      iconColor: "#5e7456",
-    },
-    icon: (
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <path d="M4 21V8l8-5 8 5v13" />
-        <path d="M4 14h16" />
-        <path d="M9 21v-7h6v7" />
-      </svg>
-    ),
-  },
-  {
-    type: "renovation",
-    title: "Renovation",
-    blurb: "Internal layout changes, refurb, full re-fit",
-    // Terracotta — warm refurb palette.
-    tint: {
-      bg: "rgba(180, 110, 90, 0.05)",
-      pillBg: "rgba(180, 110, 90, 0.15)",
-      iconColor: "#8a4f3d",
-    },
-    icon: (
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <path d="M3 21V8l9-5 9 5v13" />
-        <path d="M9 21v-6h6v6" />
-        <path d="M14 11l3 3" />
-        <path d="M16 9l4 4" />
-      </svg>
-    ),
-  },
-  {
-    type: "garage",
-    title: "Garage conversion",
-    blurb: "Garage to habitable room or annexe",
-    // Stone taupe — concrete/structural.
-    tint: {
-      bg: "rgba(140, 125, 110, 0.05)",
-      pillBg: "rgba(140, 125, 110, 0.16)",
-      iconColor: "#6f5e4d",
-    },
-    icon: (
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <path d="M3 11l9-7 9 7v9H3z" />
-        <path d="M6 14h12" />
-        <path d="M6 17h12" />
       </svg>
     ),
   },
@@ -250,14 +208,12 @@ export default function AppHome() {
               </h1>
             </div>
           </div>
-          <a
-            href="https://tmdesignsltd.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary"
-          >
-            tmdesignsltd.com
-          </a>
+          {/* The tmdesignsltd.com link lived here and is gone.
+              Someone who has opened the app has already chosen us; a
+              link out to the marketing site at the top of every screen
+              only offers them a way to stop measuring and start reading
+              about extensions. There is nothing on the website a
+              customer part-way through a survey needs. */}
         </div>
       </header>
 
