@@ -272,6 +272,13 @@ export default function RoomScanOverlay({
    * the customer touches them -- but they are guesses that move
    * together with the person rather than assuming one.
    */
+  /**
+   * Which of the three setup questions is on screen.
+   *
+   * 0 method · 1 you · 2 the ceiling. See the gate itself for why it
+   * is three screens and not one long one.
+   */
+  const [gateStep, setGateStep] = useState(0);
   const [personHeightIn, setPersonHeightIn] = useState(68);
   const [posture, setPosture] = useState<"waist" | "chest" | "eye">("chest");
 
@@ -1834,13 +1841,33 @@ export default function RoomScanOverlay({
                   style={{ color: GOLD }}
                   className="shrink-0 px-5 pb-3 pt-5 text-sm font-bold uppercase tracking-widest"
                 >
-                  How do you want to measure?
+                  {gateStep === 0
+                    ? "How do you want to measure?"
+                    : gateStep === 1
+                      ? "About you"
+                      : "The ceiling"}
                 </p>
 
                 {/* min-h-0 is load-bearing: without it a flex child
                     refuses to shrink below its content height and the
                     overflow never engages. */}
+                {/* One question per screen.
+                    Everything below used to be a single scrolling sheet:
+                    three method cards, a LiDAR notice, a height, a
+                    posture, a ceiling measurement and a lens picker,
+                    stacked in front of someone who has not measured
+                    anything yet. It reads as an interrogation, and the
+                    reliable response to an interrogation is to hammer
+                    the button at the bottom -- which is how a scan gets
+                    started with the calibration skipped and the height
+                    left at its default.
+
+                    Three steps, in the order the answers matter. The
+                    rest of the app already asks one thing at a time;
+                    this was the last screen that did not. */}
                 <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2">
+                {gateStep === 0 && (
+                  <>
                 <p className="mb-2 text-sm uppercase tracking-widest text-white/45">
                   Method
                 </p>
@@ -1852,7 +1879,14 @@ export default function RoomScanOverlay({
                     style={
                       measureMode === "span"
                         ? { backgroundColor: GOLD, color: "#1c1c1a" }
-                        : { border: "1px solid rgba(255,255,255,0.2)" }
+                        : {
+                            border: "1px solid rgba(255,255,255,0.2)",
+                            // Explicit, because without it the title
+                            // span inherits and renders dark on a dark
+                            // sheet -- the unselected options lost their
+                            // headings entirely and showed only body text.
+                            color: "rgba(255,255,255,0.92)",
+                          }
                     }
                   >
                     <span className="block text-sm font-bold uppercase tracking-widest">
@@ -1872,7 +1906,14 @@ export default function RoomScanOverlay({
                     style={
                       measureMode === "wall"
                         ? { backgroundColor: GOLD, color: "#1c1c1a" }
-                        : { border: "1px solid rgba(255,255,255,0.2)" }
+                        : {
+                            border: "1px solid rgba(255,255,255,0.2)",
+                            // Explicit, because without it the title
+                            // span inherits and renders dark on a dark
+                            // sheet -- the unselected options lost their
+                            // headings entirely and showed only body text.
+                            color: "rgba(255,255,255,0.92)",
+                          }
                     }
                   >
                     <span className="block text-sm font-bold uppercase tracking-widest">
@@ -1891,7 +1932,14 @@ export default function RoomScanOverlay({
                     style={
                       measureMode === "room"
                         ? { backgroundColor: GOLD, color: "#1c1c1a" }
-                        : { border: "1px solid rgba(255,255,255,0.2)" }
+                        : {
+                            border: "1px solid rgba(255,255,255,0.2)",
+                            // Explicit, because without it the title
+                            // span inherits and renders dark on a dark
+                            // sheet -- the unselected options lost their
+                            // headings entirely and showed only body text.
+                            color: "rgba(255,255,255,0.92)",
+                          }
                     }
                   >
                     {/* Worded bluntly on purpose. "Needs a lot of space"
@@ -1957,6 +2005,11 @@ export default function RoomScanOverlay({
                     </p>
                   )}
                 </div>
+                  </>
+                )}
+
+                {gateStep === 1 && (
+                  <>
 
                 <p className="mb-2 text-sm uppercase tracking-widest text-white/45">
                   You&apos;ll tap the ceiling corners
@@ -2060,6 +2113,11 @@ export default function RoomScanOverlay({
                   </label>
                 </div>
 
+                  </>
+                )}
+
+                {gateStep === 2 && (
+                  <>
                 <div className="mb-4">
                     <label className="flex items-center gap-2 text-sm text-white/70">
                       <span className="uppercase tracking-widest text-white/45">
@@ -2174,6 +2232,8 @@ export default function RoomScanOverlay({
                     </div>
                   </>
                 )}
+                  </>
+                )}
 
                 </div>
 
@@ -2193,23 +2253,54 @@ export default function RoomScanOverlay({
                       3 m room does not make the answer slightly wrong,
                       it makes it wrong by a quarter, uniformly, in a
                       way that looks entirely plausible on the plan. */}
-                  {!ceilingMeasured && (
+                  {gateStep === 2 && !ceilingMeasured && (
                     <p className="mb-2 text-center text-sm text-white/55">
                       Confirm the ceiling height above to start
                     </p>
                   )}
-                  <button
-                    type="button"
-                    disabled={!ceilingMeasured}
-                    onClick={() => {
-                      setMethodChosen(true);
-                      setHudCollapsed(true);
-                    }}
-                    className="w-full rounded-full px-4 py-3 text-sm font-bold uppercase tracking-widest text-[#1c1c1a] disabled:opacity-40"
-                    style={{ backgroundColor: GOLD }}
-                  >
-                    Start measuring
-                  </button>
+                  {/* Three dots, so the end is visible from the start.
+                      A sequence of questions with no sign of how many
+                      there are is the thing that reads as endless. */}
+                  <div className="mb-3 flex justify-center gap-1.5">
+                    {[0, 1, 2].map((i) => (
+                      <span
+                        key={i}
+                        className="h-1.5 w-6 rounded-full"
+                        style={{
+                          backgroundColor:
+                            i <= gateStep ? GOLD : "rgba(255,255,255,0.18)",
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {gateStep > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setGateStep((i) => i - 1)}
+                        style={{ minHeight: 48 }}
+                        className="flex-1 rounded-full border border-white/25 px-4 text-sm font-bold uppercase tracking-widest text-white/80"
+                      >
+                        Back
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={gateStep === 2 && !ceilingMeasured}
+                      style={{ minHeight: 48, backgroundColor: GOLD }}
+                      onClick={() => {
+                        if (gateStep < 2) {
+                          setGateStep((i) => i + 1);
+                          return;
+                        }
+                        setMethodChosen(true);
+                        setHudCollapsed(true);
+                      }}
+                      className="flex-[2] rounded-full px-4 text-sm font-bold uppercase tracking-widest text-[#1c1c1a] disabled:opacity-40"
+                    >
+                      {gateStep < 2 ? "Next" : "Start measuring"}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
