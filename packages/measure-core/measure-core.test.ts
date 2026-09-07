@@ -24,6 +24,7 @@ import {
   distance,
   type CameraPose,
   type FloorPoint3D,
+  type TapPoint,
 } from "./src/perspective.ts";
 import { roomBoundingBox } from "./src/floorplan.ts";
 import { buildFloorPlanDxf, roomCornersM } from "./src/dxf.ts";
@@ -114,6 +115,72 @@ test("a known room is recovered exactly when the tilt is right", () => {
   assert.ok(Math.abs(out.wallsM[0] - 4.5) < 0.01);
   assert.ok(Math.abs(out.wallsM[1] - 3.0) < 0.01);
   assert.equal(out.rectangular, true);
+});
+
+test("a wrong ceiling height scales the whole room by the same proportion", () => {
+  /*
+   * The non-LiDAR scan now taps ceiling corners only, because in a
+   * furnished room the floor corners are behind the sofa and under the
+   * rug while the ceiling ones are clean. The cost of that choice is
+   * this test.
+   *
+   * A ceiling-plane reconstruction scales linearly with the distance
+   * from the camera to the plane -- ceiling height minus camera height.
+   * Get that distance wrong by 10% and every wall is wrong by 10%, in
+   * the same direction, which produces a floor plan that is internally
+   * consistent, perfectly rectangular, and quietly the wrong size. It
+   * is the one error in this app that a human eye cannot catch on the
+   * drawing.
+   *
+   * Hence the tick-box in the scanner insisting the height was
+   * measured rather than left at 2.40. This pins the reason: it proves
+   * the failure is a clean scale factor, so if this ever stops being
+   * true the interface built on top of it is wrong too.
+   */
+  const truth: FloorPoint3D[] = [
+    { xM: -2.0, zM: 1.5 },
+    { xM: 2.0, zM: 1.5 },
+    { xM: 2.0, zM: 4.5 },
+    { xM: -2.0, zM: 4.5 },
+  ];
+  // Looking up at the ceiling: positive tilt, plane above the camera.
+  const pose: CameraPose = { ...POSE, tiltDeg: 25 };
+  const trueOffset = 0.9; // 2.40 m ceiling, phone held at 1.50 m.
+
+  const corners = truth.map((p) => {
+    const px = projectFloorToPixel(p, pose, trueOffset);
+    assert.ok(px, "ceiling corner should project");
+    return px;
+  }) as [TapPoint, TapPoint, TapPoint, TapPoint];
+
+  const solve = (offsetM: number) =>
+    estimateRoomFromFloorTaps({ corners, pose, planeOffsetM: offsetM });
+
+  const right = solve(trueOffset);
+  assert.ok(!("error" in right), "solver should not error on exact input");
+  assert.ok(Math.abs(right.wallsM[0] - 4.0) < 0.01, "4 m wall recovered");
+  assert.ok(Math.abs(right.wallsM[1] - 3.0) < 0.01, "3 m wall recovered");
+
+  // Now the same taps with the height guessed 10 cm too low. 0.10 on
+  // 0.90 is 11%, and the room shrinks by exactly that.
+  const wrong = solve(0.8);
+  assert.ok(!("error" in wrong));
+  const ratio = wrong.wallsM[0] / right.wallsM[0];
+  // Tolerance is 0.005, not 0.001: wallsM is rounded to centimetres on
+  // the way out, so a ratio of two rounded numbers cannot be pinned
+  // tighter than the rounding that produced them.
+  assert.ok(
+    Math.abs(ratio - 0.8 / 0.9) < 0.005,
+    `expected a clean ${(0.8 / 0.9).toFixed(3)} scale, got ${ratio.toFixed(3)}`,
+  );
+  // Every wall by the same factor -- which is why it looks plausible.
+  assert.ok(
+    Math.abs(wrong.wallsM[1] / right.wallsM[1] - ratio) < 0.005,
+    "both axes must scale together",
+  );
+  // 11% on a 4 m wall is 44 cm. Worth stating in the assertion rather
+  // than only in prose.
+  assert.ok(right.wallsM[0] - wrong.wallsM[0] > 0.4);
 });
 
 // ── Calibration ──────────────────────────────────────────────────────

@@ -25,6 +25,94 @@ import {
   RoomPlan,
   type RoomPlanScanResult,
 } from "@tm-designs/capacitor-roomplan";
+import ScanToast from "@/components/measure/ScanToast";
+
+/**
+ * Things a household already has, whose size is fixed by something
+ * other than the person measuring.
+ *
+ * Ordered by how likely someone is to have one within arm's reach.
+ * A4 first: it is in the printer, it is 29.7 cm on the long edge
+ * wherever it was made, it is already flat, and on the floor it is
+ * unambiguously on the floor -- which is the condition the geometry
+ * needs and the one people get wrong by tapping the top of a box.
+ *
+ * A tape measure is still offered, and is still the most accurate at
+ * a metre, but it is no longer the price of entry.
+ */
+/**
+ * Where the phone is, worked out from two things people know.
+ *
+ * Nobody can answer "how high are you holding your phone?" in metres.
+ * Everybody knows their own height, and everybody can say whether the
+ * phone is at their waist, their chest or up at eye level. Multiply
+ * the two and you have the number the geometry needs.
+ *
+ * The first attempt at this offered fixed heights -- chest 1.35, eye
+ * 1.55 -- which quietly assumed an average adult. A person of 1.55 m
+ * holding a phone at chest height is at about 1.12 m, so that preset
+ * was 23 cm out for them, and in ceiling mode 23 cm is a 25% error on
+ * every wall in the room. The same preset is near-perfect for someone
+ * of 1.85 m. Averages are exactly wrong for the people at the ends.
+ *
+ * Ratios are standard anthropometry as a fraction of standing height:
+ * eye is about 0.93, mid-chest about 0.72, waist about 0.60. They are
+ * approximations, but they are approximations that scale with the
+ * person instead of ignoring them.
+ */
+const PHONE_POSTURES: {
+  key: "waist" | "chest" | "eye";
+  label: string;
+  ratio: number;
+  hint: string;
+}[] = [
+  {
+    key: "chest",
+    label: "Chest height",
+    ratio: 0.72,
+    hint: "Elbows in, screen tilted up. The usual way.",
+  },
+  {
+    key: "eye",
+    label: "Up at eye level",
+    ratio: 0.93,
+    hint: "Held up to see the ceiling corners",
+  },
+  {
+    key: "waist",
+    label: "Down by your waist",
+    ratio: 0.6,
+    hint: "Arms down, looking down at the screen",
+  },
+];
+
+/**
+ * Heights to choose from, in inches, labelled in feet and inches with
+ * the metric underneath.
+ *
+ * The app is metric everywhere else and this is the one deliberate
+ * exception: ask a British homeowner how tall they are and the answer
+ * comes back in feet and inches, whatever the tape measure in their
+ * hand is marked in. Asking for 1.73 m would get a conversion done in
+ * someone's head, badly, on the number that scales the whole room.
+ */
+const PERSON_HEIGHTS_IN: number[] = Array.from(
+  { length: 23 },
+  (_, i) => 58 + i,
+);
+
+function heightLabel(inches: number): string {
+  const ft = Math.floor(inches / 12);
+  const inch = inches % 12;
+  return `${ft}′ ${inch}″ · ${(inches * 0.0254).toFixed(2)} m`;
+}
+
+const CALIB_PRESETS: { label: string; cm: string; hint: string }[] = [
+  { label: "A4 sheet of paper", cm: "29.7", hint: "The long edge. Any printer paper." },
+  { label: "Bank card", cm: "8.6", hint: "Long edge. Every card is the same." },
+  { label: "Ruler", cm: "30", hint: "The usual 30 cm school ruler." },
+  { label: "Tape measure", cm: "100", hint: "Pull out one metre and lock it." },
+];
 
 /**
  * LIDAR_ENABLED — build-time gate for the Apple RoomPlan / LiDAR path.
@@ -176,6 +264,33 @@ export default function RoomScanOverlay({
   const [result, setResult] = useState<ScanDimensions | null>(null);
   /** Stable user-adjustable camera height; changing this re-runs math. */
   const [cameraHeightM, setCameraHeightM] = useState(DEFAULT_CAMERA_HEIGHT_M);
+  /**
+   * The two answers the phone height is derived from.
+   *
+   * 68 inches is 5′8″, near enough the UK adult median, and chest is
+   * how almost everyone holds a phone. Both are still guesses until
+   * the customer touches them -- but they are guesses that move
+   * together with the person rather than assuming one.
+   */
+  const [personHeightIn, setPersonHeightIn] = useState(68);
+  const [posture, setPosture] = useState<"waist" | "chest" | "eye">("chest");
+
+  /*
+   * Derive the camera height whenever either answer changes.
+   *
+   * Written back into cameraHeightM rather than computed at the point
+   * of use, so the number stays editable: someone who has actually
+   * measured from the floor to their phone should be able to type it
+   * and have it stick, and typing it must not be undone by the next
+   * render. The effect only fires when the inputs change.
+   */
+  useEffect(() => {
+    const ratio =
+      PHONE_POSTURES.find((p) => p.key === posture)?.ratio ?? 0.72;
+    setCameraHeightM(
+      Math.round(personHeightIn * 0.0254 * ratio * 100) / 100,
+    );
+  }, [personHeightIn, posture]);
   /** Live tilt from DeviceOrientation, null until we get a reading. */
   const [liveTiltDeg, setLiveTiltDeg] = useState<number | null>(null);
   /** Tracks whether we've asked iOS for orientation permission. */
@@ -247,8 +362,38 @@ export default function RoomScanOverlay({
    * Walls are vertical, so the ceiling outline equals the floor outline.
    * Ceiling mode needs a known ceiling height, since that sets the scale.
    */
-  const [tapPlane, setTapPlane] = useState<"floor" | "ceiling">("floor");
+  /*
+   * Ceiling only.
+   *
+   * Floor corners are behind the sofa, under the rug, hidden by the
+   * skirting and the radiator -- in a furnished room they are the one
+   * part of the geometry you usually cannot see. Ceiling corners are
+   * almost always clean and unobstructed, and a tap you can place
+   * accurately beats a better plane you have to guess at.
+   *
+   * The trade is real and worth stating: the reconstruction scales
+   * linearly with the distance from camera to plane. Floor mode uses
+   * camera height (~1.5 m) and rides on one uncertain number. Ceiling
+   * mode uses ceiling height minus camera height (~0.9 m) and rides on
+   * two -- a shorter lever with more slop in it, which is roughly
+   * double the scale error for the same tap precision.
+   *
+   * That is only acceptable because the ceiling height is now measured
+   * rather than assumed; see requireMeasuredCeiling below. Left at a
+   * 2.40 default it would be the worst of both.
+   */
+  const tapPlane = "ceiling" as const;
   const [ceilingHeightM, setCeilingHeightM] = useState("2.4");
+  /**
+   * The customer has stated the ceiling height is a tape measurement.
+   *
+   * Not a formality. In ceiling mode this number is the scale factor
+   * for the whole room, and the field arrives pre-filled with 2.40
+   * because the maths needs something -- so the single value every
+   * measurement depends on was also the one nobody had reason to look
+   * at. A pre-filled box reads as answered.
+   */
+  const [ceilingMeasured, setCeilingMeasured] = useState(false);
   /**
    * How much of the room is captured in one go.
    *
@@ -287,9 +432,89 @@ export default function RoomScanOverlay({
   /** Collapsed HUD shrinks the corner-tap panel to a single
    *  prompt + progress line so the camera view isn't obscured.
    *  Defaults to collapsed so first-time users see the room. */
+  /**
+   * The message currently in the notification, and how loudly to say
+   * it. Setting it shows the toast; it clears itself.
+   *
+   * `action` is for the two-second flash that tells someone what to do
+   * next -- gold, and gone before it is in the way. `info` is the
+   * longer, quieter kind.
+   */
+  const [scanHint, setScanHint] = useState<string | null>(null);
+  const [scanHintTone, setScanHintTone] = useState<"info" | "action">("info");
+  /** Fired once per session so the opening flash cannot repeat. */
+  const introShownRef = useRef(false);
+
   const [hudCollapsed, setHudCollapsed] = useState(true);
   /** Lets the user dismiss the setup gate and scan uncalibrated anyway. */
   const [setupDismissed, setSetupDismissed] = useState(false);
+
+  /*
+   * The one instruction, flashed the moment there is something to tap.
+   *
+   * Corner-marking is not self-evident. The screen shows a live camera
+   * view, and every other app on the phone treats a camera view as
+   * something you point rather than something you touch -- so people
+   * aim at a corner and wait for it to do something. Nothing happens,
+   * because the app is waiting for a tap.
+   *
+   * Said once, in seven words, at the only moment it is needed: after
+   * the setup gate has gone and the viewfinder is live. Gone in two and
+   * a half seconds, and can be flicked away sooner. Anyone who misses
+   * it still has the quieter running hints behind it.
+   */
+  useEffect(() => {
+    if (introShownRef.current) return;
+    if (phase !== "camera" || scanMode !== "corners") return;
+    // Not while the setup gate is up -- the toast would be behind it.
+    if (
+      !setupDismissed &&
+      (tiltPermission !== "granted" || calibratedFocalPx === null)
+    ) {
+      return;
+    }
+    introShownRef.current = true;
+    setScanHintTone("action");
+    setScanHint("Tap each ceiling corner — keep the phone still");
+  }, [phase, scanMode, setupDismissed, tiltPermission, calibratedFocalPx]);
+
+  /*
+   * Confirm each corner as it lands.
+   *
+   * Tapping into a camera view gives no feedback that anything was
+   * received beyond a dot appearing somewhere in a picture of a room,
+   * which is easy to miss and easy to mistake for part of the scene.
+   * Saying the count out loud is the difference between "I have marked
+   * three corners" and "I think it might have taken some of those".
+   *
+   * Skipped for the first corner, which the opening flash has just
+   * covered, and skipped at zero so clearing the taps is not narrated.
+   */
+  useEffect(() => {
+    if (phase !== "camera" || scanMode !== "corners") return;
+    if (cornerCount < 2) return;
+    setScanHintTone("info");
+    /*
+     * Say "from the same spot", every time, in the running hint.
+     *
+     * All four taps are projected through a single camera pose --
+     * CameraPose carries height, tilt and focal length, and no yaw or
+     * translation at all. Turning to reach the far corner is therefore
+     * not slightly worse, it is unmodelled: the maths quietly treats
+     * the new view as if it were the old one. Nothing in the interface
+     * said so, so the natural thing to do -- turn to see the corner
+     * you are tapping -- was also the thing that broke it.
+     *
+     * If they cannot see all four from one spot, wall-by-wall is the
+     * mode that lets them move, and it is offered rather than left to
+     * be discovered.
+     */
+    setScanHint(
+      cornerCount >= 3
+        ? "Last corner — still from the same spot"
+        : `${cornerCount} marked — stay where you are for the rest`,
+    );
+  }, [cornerCount, phase, scanMode]);
   /**
    * Camera-lens picker, collapsed by default.
    *
@@ -1387,16 +1612,21 @@ export default function RoomScanOverlay({
       {(phase === "camera" || phase === "calibrate") &&
         scanMode !== "corners" && <Reticle />}
 
-      {/* Corner-tap: a small fixed hint instead of a reticle. */}
+      {/* Corner-tap guidance, as a notification rather than a fixture.
+          This was a pill pinned to the top of the viewfinder for the
+          whole session, repeating one sentence whether you had read it
+          once or fifty times — so it stopped being guidance and became
+          something covering the top of the room. It now behaves the
+          way a phone notification does: arrives, leaves on its own,
+          and can be flicked up if it is in the way. */}
       {(phase === "camera" || phase === "calibrate") &&
         scanMode === "corners" && (
-          <div
-            className="pointer-events-none absolute left-1/2 top-6 z-10 -translate-x-1/2 rounded-full px-3 py-1.5 text-center text-sm font-semibold"
-            style={{ backgroundColor: `${HUD}dd`, color: GOLD }}
-            aria-hidden
-          >
-            Tap the target on screen — don&apos;t aim, don&apos;t move the phone
-          </div>
+          <ScanToast
+            message={scanHint}
+            tone={scanHintTone}
+            durationMs={scanHintTone === "action" ? 2500 : 4000}
+            onDismiss={() => setScanHint(null)}
+          />
         )}
 
       {/* Top bar.
@@ -1548,12 +1778,26 @@ export default function RoomScanOverlay({
                     paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
                   }}
                 >
+                  {/* "Less accurate" was doing far too much work.
+                      Skipping calibration means the focal length is a
+                      guess from the field of view, and focal length is
+                      a direct multiplier on every measurement -- so
+                      the cost is not a bit of noise, it is a room that
+                      comes out the wrong size and looks perfectly
+                      normal on the plan. A real test of a cupboard
+                      with calibration skipped came back 21% short on
+                      one wall.
+
+                      Still skippable. Someone standing in a house with
+                      nothing of a known size to hand has to be able to
+                      get on with it, and a rough survey beats none.
+                      But they should know what they are choosing. */}
                   <button
                     type="button"
                     onClick={() => setSetupDismissed(true)}
                     className="w-full text-sm font-bold uppercase tracking-widest text-white/50 underline"
                   >
-                    Skip — measure anyway (less accurate)
+                    Skip — expect measurements to be out by 10–20%
                   </button>
                 </div>
               </div>
@@ -1662,8 +1906,10 @@ export default function RoomScanOverlay({
                     <span
                       className={`mt-0.5 block text-sm ${measureMode === "room" ? "text-[#1c1c1a]/70" : "text-white/60"}`}
                     >
-                      All four floor corners must be visible at once. Only
-                      works in large rooms — use Wall to wall otherwise.
+                      All four ceiling corners visible at once, and the phone
+                      still for all four taps — you can&apos;t turn to reach
+                      one. Large rooms only; use Wall to wall otherwise,
+                      which lets you move between walls.
                     </span>
                   </button>
                 </div>
@@ -1713,30 +1959,108 @@ export default function RoomScanOverlay({
                 </div>
 
                 <p className="mb-2 text-sm uppercase tracking-widest text-white/45">
-                  Tap which corners?
+                  You&apos;ll tap the ceiling corners
                 </p>
-                <div className="mb-4 flex gap-2">
-                  {(["floor", "ceiling"] as const).map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setTapPlane(p)}
-                      className="flex-1 rounded-lg px-3 py-2 text-sm font-bold uppercase tracking-widest"
-                      style={
-                        tapPlane === p
-                          ? { backgroundColor: GOLD, color: "#1c1c1a" }
-                          : {
-                              border: "1px solid rgba(255,255,255,0.2)",
-                              color: "rgba(255,255,255,0.8)",
-                            }
-                      }
-                    >
-                      {p === "floor" ? "Floor" : "Ceiling"}
-                    </button>
-                  ))}
+
+                {/* ── How high the phone is held ─────────────────────
+                    This existed, defaulted to 1.50 m, was labelled
+                    "eye height", and sat inside a HUD panel that opens
+                    collapsed -- so in practice nobody had ever set it
+                    and every scan assumed the same 1.50 m adult.
+
+                    It was always a scale factor. It is a harsher one
+                    now: ceiling mode scales on (ceiling - phone), which
+                    is around 0.9 m, so 20 cm of error is 22% on every
+                    wall where the same 20 cm cost 13% tapping the
+                    floor. Changing the plane without bringing this
+                    forward would have made the scan worse, not better.
+
+                    Offered as three postures rather than a number,
+                    because nobody knows how high they hold a phone but
+                    everybody knows whether they are looking down at it
+                    or holding it up. */}
+                <label className="mb-3 block">
+                  <span className="mb-1 block text-sm uppercase tracking-widest text-white/45">
+                    How tall are you?
+                  </span>
+                  <select
+                    value={personHeightIn}
+                    onChange={(e) => setPersonHeightIn(Number(e.target.value))}
+                    style={{ minHeight: 48 }}
+                    className="w-full rounded-xl border border-white/15 bg-white/10 px-3 text-base text-white outline-none"
+                  >
+                    {PERSON_HEIGHTS_IN.map((inches) => (
+                      <option key={inches} value={inches} className="text-black">
+                        {heightLabel(inches)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <p className="mb-2 text-sm uppercase tracking-widest text-white/45">
+                  Where will you hold the phone?
+                </p>
+                <div className="mb-4 grid gap-2">
+                  {PHONE_POSTURES.map((p) => {
+                    const active = posture === p.key;
+                    return (
+                      <button
+                        key={p.key}
+                        type="button"
+                        onClick={() => setPosture(p.key)}
+                        style={{
+                          minHeight: 48,
+                          borderColor: active ? GOLD : "rgba(255,255,255,0.15)",
+                          backgroundColor: active
+                            ? "rgba(184,150,80,0.15)"
+                            : "transparent",
+                        }}
+                        className="flex items-center justify-between rounded-xl border px-4 text-left"
+                      >
+                        <span>
+                          <span className="block text-base font-semibold text-white/90">
+                            {p.label}
+                          </span>
+                          <span className="block text-sm text-white/45">
+                            {p.hint}
+                          </span>
+                        </span>
+                        <span
+                          className="ml-3 shrink-0 font-mono text-sm"
+                          style={{ color: active ? GOLD : "rgba(255,255,255,0.45)" }}
+                        >
+                          {(personHeightIn * 0.0254 * p.ratio).toFixed(2)} m
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {/* The derived number, shown rather than hidden.
+                      It is what the maths uses, so it should be
+                      visible and correctable -- and seeing it lets
+                      someone who does know their phone height spot
+                      immediately that the estimate is off. */}
+                  <label className="flex items-center gap-2 text-sm text-white/70">
+                    <span className="uppercase tracking-widest text-white/45">
+                      Phone is at
+                    </span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={0.8}
+                      max={2.2}
+                      step={0.01}
+                      value={cameraHeightM}
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        if (Number.isFinite(n)) setCameraHeightM(n);
+                      }}
+                      className="w-20 rounded bg-white/10 px-2 py-1 text-right font-mono text-white outline-none focus:bg-white/15"
+                    />
+                    <span className="text-white/40">m above the floor</span>
+                  </label>
                 </div>
-                {tapPlane === "ceiling" && (
-                  <div className="mb-4">
+
+                <div className="mb-4">
                     <label className="flex items-center gap-2 text-sm text-white/70">
                       <span className="uppercase tracking-widest text-white/45">
                         Ceiling height
@@ -1764,12 +2088,31 @@ export default function RoomScanOverlay({
                         color: GOLD,
                       }}
                     >
-                      Measure this properly — don&apos;t guess. In ceiling
-                      mode it sets the scale, so if it&apos;s wrong every
-                      measurement is wrong by the same proportion.
+                      This number sets the scale. Get it wrong and every
+                      measurement is wrong by the same proportion — 10 cm
+                      out here is 17 cm out on a 4 m wall.
                     </p>
+                    {/* An explicit tick, not a filled-in field.
+                        The box arrives pre-filled with 2.40 because a
+                        room needs some number to work with, and a
+                        pre-filled box reads as answered -- so the one
+                        value the whole scan is scaled by was the one
+                        value nobody ever looked at. Ticking is a
+                        second of work and converts a silent assumption
+                        into a stated fact, which is also what the
+                        draughtsman needs to know he has. */}
+                    <label className="mt-2 flex items-start gap-2.5 text-sm text-white/80">
+                      <input
+                        type="checkbox"
+                        checked={ceilingMeasured}
+                        onChange={(e) => setCeilingMeasured(e.target.checked)}
+                        className="mt-0.5 h-6 w-6 shrink-0"
+                      />
+                      <span>
+                        I&apos;ve measured this with a tape, not guessed it
+                      </span>
+                    </label>
                   </div>
-                )}
 
                 {/* Lens picker. An ultra-wide lens is the difference between
                     a wall fitting in frame and not. */}
@@ -1842,13 +2185,27 @@ export default function RoomScanOverlay({
                     paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
                   }}
                 >
+                  {/* Blocked until the ceiling height is confirmed as
+                      measured. This is the one gate in the scanner that
+                      genuinely earns its place: every wall length that
+                      comes out of a ceiling-plane scan is this number
+                      multiplied by a ratio, so an unchecked 2.40 in a
+                      3 m room does not make the answer slightly wrong,
+                      it makes it wrong by a quarter, uniformly, in a
+                      way that looks entirely plausible on the plan. */}
+                  {!ceilingMeasured && (
+                    <p className="mb-2 text-center text-sm text-white/55">
+                      Confirm the ceiling height above to start
+                    </p>
+                  )}
                   <button
                     type="button"
+                    disabled={!ceilingMeasured}
                     onClick={() => {
                       setMethodChosen(true);
                       setHudCollapsed(true);
                     }}
-                    className="w-full rounded-full px-4 py-3 text-sm font-bold uppercase tracking-widest text-[#1c1c1a]"
+                    className="w-full rounded-full px-4 py-3 text-sm font-bold uppercase tracking-widest text-[#1c1c1a] disabled:opacity-40"
                     style={{ backgroundColor: GOLD }}
                   >
                     Start measuring
@@ -2036,49 +2393,18 @@ export default function RoomScanOverlay({
                 {/* Method and plane are chosen on the gate before the
                     camera appears, so nothing but progress and the live
                     readouts belongs here. */}
-
-                {/* Which plane is live, always visible. Getting this wrong
-                    produces a confusing "aim at the floor" error while
-                    you're pointing at the ceiling, so it shouldn't be
-                    buried on a previous screen. */}
+                {/* The plane picker used to sit here. There is only one
+                    plane now -- the ceiling -- so a two-button toggle
+                    where one button was always the answer was a way to
+                    get it wrong and nothing else. The height it scales
+                    by is still worth showing, because it is the number
+                    every measurement on this screen depends on. */}
                 {cornerCount === 0 && (
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="text-sm uppercase tracking-widest text-white/45">
-                      Tapping
-                    </span>
-                    {(["floor", "ceiling"] as const).map((p) => (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => {
-                          setTapPlane(p);
-                          setMarkers([]);
-                          setCornerCount(0);
-                          pixelTapsRef.current = [];
-                          tiltPerCornerRef.current = [];
-                          subTapsRef.current = [];
-                          setSubTapCount(0);
-                        }}
-                        className="rounded-full px-2.5 py-0.5 text-sm font-bold uppercase tracking-widest"
-                        style={
-                          tapPlane === p
-                            ? { backgroundColor: GOLD, color: "#1c1c1a" }
-                            : {
-                                border: "1px solid rgba(255,255,255,0.25)",
-                                color: "rgba(255,255,255,0.7)",
-                              }
-                        }
-                      >
-                        {p}
-                      </button>
-                    ))}
-                    {tapPlane === "ceiling" && (
-                      <span className="text-sm text-white/50">
-                        ceiling {ceilingHeightM} m
-                      </span>
-                    )}
-                  </div>
+                  <p className="mb-2 text-sm text-white/50">
+                    Tapping ceiling corners · scaled to {ceilingHeightM} m
+                  </p>
                 )}
+
 
                 {/* Progress through the two spans / walls. */}
                 {(measureMode === "wall" || measureMode === "span") &&
@@ -2277,22 +2603,68 @@ export default function RoomScanOverlay({
                     <p style={{ color: GOLD }} className="mb-1 font-semibold">
                       Scale-bar calibration
                     </p>
+                    {/* Pick the object, don't go and find a tape.
+                        This step asked for a tape measure or a ruler
+                        and a typed length in centimetres, which is two
+                        obstacles before the first measurement: fetch a
+                        thing most people cannot immediately lay hands
+                        on, then type a number correctly. A customer
+                        without a tape measure is the whole reason this
+                        mode exists.
+
+                        A4 paper is the answer to nearly everyone. It
+                        is in the printer, it is exactly 29.7 cm on its
+                        long edge whoever made it, it is already flat,
+                        and laid on the floor it is unmistakably on the
+                        floor -- which is the condition the maths needs
+                        and the one people get wrong by tapping the top
+                        of a box. */}
                     <p className="mb-3 text-white/65">
-                      Lay a{" "}
-                      <strong className="text-white">tape measure or ruler flat on the floor</strong>
-                      , turned{" "}
-                      <strong className="text-white">left-to-right across your view</strong>{" "}
-                      — not pointing away from you. Then tap each end, so the
-                      two dots sit side by side on screen.
+                      Put something of a known size{" "}
+                      <strong className="text-white">flat on the floor</strong>,
+                      turned{" "}
+                      <strong className="text-white">left-to-right across your view</strong>
+                      . Then tap each end.
                     </p>
-                    <p className="mb-3 text-sm text-white/45">
-                      Both taps must touch the floor. The side of a bin or box
-                      won&apos;t work — those points sit above it. And an
-                      object pointing away from you gives the maths almost
-                      nothing to work with.
-                    </p>
+                    <div className="mb-3 grid gap-2">
+                      {CALIB_PRESETS.map((p) => {
+                        const active = calibLengthCm === p.cm;
+                        return (
+                          <button
+                            key={p.cm + p.label}
+                            type="button"
+                            onClick={() => setCalibLengthCm(p.cm)}
+                            style={{
+                              minHeight: 48,
+                              borderColor: active ? GOLD : "rgba(255,255,255,0.15)",
+                              backgroundColor: active
+                                ? "rgba(184,150,80,0.15)"
+                                : "transparent",
+                            }}
+                            className="flex items-center justify-between rounded-xl border px-4 text-left"
+                          >
+                            <span>
+                              <span className="block text-base font-semibold text-white/90">
+                                {p.label}
+                              </span>
+                              <span className="block text-sm text-white/45">
+                                {p.hint}
+                              </span>
+                            </span>
+                            <span
+                              className="ml-3 shrink-0 font-mono text-sm"
+                              style={{ color: active ? GOLD : "rgba(255,255,255,0.45)" }}
+                            >
+                              {p.cm} cm
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                     <label className="mb-3 flex items-center gap-2 text-sm text-white/70">
-                      <span className="uppercase tracking-widest text-white/45">Reference length</span>
+                      <span className="uppercase tracking-widest text-white/45">
+                        Or type a length
+                      </span>
                       <input
                         type="number"
                         inputMode="decimal"
@@ -2305,6 +2677,10 @@ export default function RoomScanOverlay({
                       />
                       <span className="text-white/40">cm</span>
                     </label>
+                    <p className="mb-3 text-sm text-white/45">
+                      Both taps must be on the floor. The side of a bin or box
+                      won&apos;t work — those points sit above it.
+                    </p>
                   </>
                 ) : (
                   <p style={{ color: GOLD }} className="mb-2 font-semibold">
