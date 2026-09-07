@@ -122,17 +122,60 @@ function textEntity(
 }
 
 /**
+ * Characters that do not survive the trip into an R12 DXF.
+ *
+ * We write $ACADVER AC1009 for the widest compatibility, and R12 has
+ * no Unicode: the file is bytes in the drawing's code page. Anything
+ * outside ASCII goes in as raw UTF-8 and comes out the other side as
+ * mojibake -- "3.1 m²" arriving in BricsCAD as "3.1 mÂ²", and an em
+ * dash in the title block as "â€"".
+ *
+ * That was on every drawing this app has ever produced. It is the
+ * first thing anyone opening one sees, and it makes the whole export
+ * look broken regardless of whether the geometry is right.
+ *
+ * Transliterated rather than stripped. "m2" is what a draughtsman
+ * writes by hand anyway, and a hyphen reads as a dash; deleting the
+ * characters instead would leave "3.1 m" and change the meaning.
+ */
+const DXF_TRANSLITERATIONS: [RegExp, string][] = [
+  [/²/g, "2"],
+  [/³/g, "3"],
+  [/[—–]/g, "-"],
+  [/[’‘]/g, "'"],
+  [/[”“]/g, '"'],
+  [/×/g, "x"],
+  [/·/g, "-"],
+  [/°/g, " deg"],
+  [/…/g, "..."],
+  [/[   ]/g, " "],
+];
+
+/**
  * DXF text is newline-delimited, so a stray newline in a room name
  * would terminate the entity early and corrupt everything after it.
  * Commas and control characters get the same treatment.
+ *
+ * Non-ASCII is transliterated where there is an obvious equivalent and
+ * dropped otherwise -- see DXF_TRANSLITERATIONS. Dropping is the right
+ * fallback for the remainder: a room called "Séjour" reaching Charlie
+ * as "Sjour" is legible, and as "SÃ©jour" is not.
  */
 export function sanitiseDxfText(raw: string): string {
-  return String(raw ?? "")
-    .replace(/[\r\n]+/g, " ")
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\x00-\x1f]/g, "")
-    .trim()
-    .slice(0, 120);
+  let s = String(raw ?? "").replace(/[\r\n]+/g, " ");
+  for (const [pattern, replacement] of DXF_TRANSLITERATIONS) {
+    s = s.replace(pattern, replacement);
+  }
+  return (
+    s
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\x00-\x1f]/g, "")
+      // Anything still outside printable ASCII cannot be represented.
+      // eslint-disable-next-line no-control-regex
+      .replace(/[^\x20-\x7e]/g, "")
+      .trim()
+      .slice(0, 120)
+  );
 }
 
 export type DxfRoomInput = {

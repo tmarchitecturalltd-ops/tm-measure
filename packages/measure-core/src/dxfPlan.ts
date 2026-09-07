@@ -53,6 +53,7 @@ export const LAYER = {
   doors: "TM-DOORS",
   windows: "TM-WINDOWS",
   stairs: "TM-STAIRS",
+  dims: "TM-DIMS",
   fixtures: "TM-FIXTURES",
   labels: "TM-LABELS",
   title: "TM-TITLE",
@@ -240,6 +241,12 @@ function text(
   heightMm: number,
   value: string,
   centred = true,
+  /**
+   * Rotation in the app's frame, degrees. Negated on the way out for
+   * the same reason the arc angles are: z is flipped for CAD's y-up,
+   * which reverses the direction of rotation.
+   */
+  rotationDeg = 0,
 ): string {
   const P = toMm(at);
   const base = [
@@ -250,11 +257,184 @@ function text(
     pair(30, "0.0"),
     pair(40, heightMm.toFixed(1)),
   ];
+  if (rotationDeg) base.push(pair(50, (-rotationDeg).toFixed(2)));
   if (centred) {
     base.push(pair(72, 1), pair(11, P.x.toFixed(2)), pair(21, P.y.toFixed(2)), pair(31, "0.0"));
   }
   base.push(pair(1, sanitiseDxfText(value)));
   return base.join("\n");
+}
+
+/**
+ * A dimension, drawn from primitives rather than as a DXF DIMENSION.
+ *
+ * This is the biggest single difference between what the app exported
+ * and what an architect's drawing looks like. Charlie was receiving a
+ * correctly-scaled outline with no numbers on it, which means the
+ * first thing he had to do with every survey was measure the drawing
+ * to find out what it said -- when the measurements were the entire
+ * point of the exercise.
+ *
+ * Lines and text, not a real DIMENSION entity. An R12 DIMENSION needs
+ * a dimension style table, a block definition for the arrowheads and a
+ * BLOCK/ENDBLK section per dimension, and if any of that is subtly
+ * wrong the whole file fails to open. Exploded geometry cannot fail to
+ * open, and Charlie is going to redraw over the top of it anyway.
+ *
+ * The trade: he cannot select one and retype it to move a wall. He was
+ * not able to do that before either, because they did not exist.
+ *
+ * Drawn as: two extension lines standing off the wall, a dimension
+ * line between them, tick marks at 45 degrees in the surveyor's
+ * convention rather than arrowheads, and the length in millimetres
+ * above the line. Millimetres because that is what the rest of the
+ * drawing is in and what the trade quotes in.
+ */
+/**
+ * One dimension, as an R12 DIMENSION entity plus its anonymous block.
+ *
+ * Charlie asked for these to be real dimensions rather than loose
+ * lines, so that moving a wall updates the number instead of leaving a
+ * stale one behind. That is the right thing to want and it is the
+ * riskier of the two options, because an R12 dimension is not one
+ * entity -- it is a DIMENSION that names a block, a block in the
+ * BLOCKS section holding the drawn representation, and a DIMSTYLE the
+ * DIMENSION refers to. Get any of the three subtly wrong and CAD
+ * refuses to open the file at all rather than drawing it badly.
+ *
+ * So it is built to fail safe. The block contains the fully exploded
+ * geometry -- extension lines, dimension line, ticks, text -- exactly
+ * as it was drawn before. A reader that regenerates dimensions gives
+ * Charlie a live one he can edit; a reader that does not still draws
+ * the right picture from the block. And the plain companion export
+ * carries no dimensions at all, so there is always one file in the
+ * email that cannot be affected by any of this.
+ *
+ * Returns null for anything under 300 mm, where the text would be
+ * longer than the thing it measures.
+ */
+type PlannedDim = {
+  blockName: string;
+  /** BLOCK ... ENDBLK, ready to drop into the BLOCKS section. */
+  block: string[];
+  /** The DIMENSION entity for the ENTITIES section. */
+  entity: string[];
+};
+
+function planDimension(
+  a: Pt,
+  b: Pt,
+  /** How far off the measured line to sit, in metres. Sign picks the side. */
+  offsetM: number,
+  index: number,
+): PlannedDim | null {
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const lenM = Math.hypot(dx, dz);
+  if (!Number.isFinite(lenM) || lenM < 0.3) return null;
+
+  const ux = dx / lenM;
+  const uz = dz / lenM;
+  // Normal, for the offset and the extension lines.
+  const nx = -uz;
+  const nz = ux;
+
+  const off = (p: Pt, d: number): Pt => ({ x: p.x + nx * d, z: p.z + nz * d });
+
+  const a1 = off(a, offsetM);
+  const b1 = off(b, offsetM);
+  const mid = { x: (a1.x + b1.x) / 2, z: (a1.z + b1.z) / 2 };
+
+  // Degrees in the app's frame. The text helper negates for CAD, and a
+  // dimension upside-down is the classic giveaway of a generated
+  // drawing, so flip anything that would read backwards.
+  let angle = (Math.atan2(dz, dx) * 180) / Math.PI;
+  if (angle > 90 || angle < -90) angle += 180;
+
+  const blockName = `*D${index}`;
+  const geom: string[] = [];
+
+  // Extension lines, starting slightly clear of the wall so they read
+  // as annotation rather than as part of the building.
+  const gap = 0.05 * Math.sign(offsetM || 1);
+  geom.push(line(LAYER.dims, off(a, gap), off(a, offsetM + gap * 2)));
+  geom.push(line(LAYER.dims, off(b, gap), off(b, offsetM + gap * 2)));
+  geom.push(line(LAYER.dims, a1, b1));
+
+  // Surveyor's ticks: short 45-degree strokes through each end.
+  const t = 0.08;
+  for (const p of [a1, b1]) {
+    geom.push(
+      line(
+        LAYER.dims,
+        { x: p.x - (ux + nx) * t, z: p.z - (uz + nz) * t },
+        { x: p.x + (ux + nx) * t, z: p.z + (uz + nz) * t },
+      ),
+    );
+  }
+
+  const textAt = off(mid, 0.12 * Math.sign(offsetM || 1));
+  geom.push(
+    text(LAYER.dims, textAt, 110, String(Math.round(lenM * MM)), true, angle),
+  );
+
+  const B = toMm(mid);
+  const T = toMm(textAt);
+  const A13 = toMm(a);
+  const A14 = toMm(b);
+
+  const block = [
+    pair(0, "BLOCK"),
+    pair(8, LAYER.dims),
+    pair(2, blockName),
+    // 1 = anonymous. Without it some readers list every dimension in
+    // the block palette as though it were reusable furniture.
+    pair(70, 1),
+    pair(10, "0.0"),
+    pair(20, "0.0"),
+    pair(30, "0.0"),
+    pair(3, blockName),
+    ...geom,
+    pair(0, "ENDBLK"),
+    pair(8, LAYER.dims),
+  ];
+
+  const entity = [
+    pair(0, "DIMENSION"),
+    pair(8, LAYER.dims),
+    pair(2, blockName),
+    // Definition point: where the dimension line sits.
+    pair(10, B.x.toFixed(2)),
+    pair(20, B.y.toFixed(2)),
+    pair(30, "0.0"),
+    // Middle of the dimension text.
+    pair(11, T.x.toFixed(2)),
+    pair(21, T.y.toFixed(2)),
+    pair(31, "0.0"),
+    // 0 = rotated / horizontal / vertical linear. 128 would say the
+    // text has been moved by hand, which it has not.
+    pair(70, 0),
+    // No group code 1 at all.
+    //
+    // Code 1 is the text override, and omitting it is how a DXF says
+    // "use the measurement" -- which is the entire point of writing a
+    // real dimension rather than drawing a number. An empty code 1 is
+    // legal and means the same thing, but it puts a blank line in the
+    // file where readers expect a value, and this is not the file to
+    // be clever in.
+    pair(3, "TM"),
+    // The two extension line origins -- the wall's actual ends, so the
+    // measurement is of the wall and not of the offset line.
+    pair(13, A13.x.toFixed(2)),
+    pair(23, A13.y.toFixed(2)),
+    pair(33, "0.0"),
+    pair(14, A14.x.toFixed(2)),
+    pair(24, A14.y.toFixed(2)),
+    pair(34, "0.0"),
+    pair(50, (-angle).toFixed(2)),
+  ];
+
+  return { blockName, block, entity };
 }
 
 /* ── openings ─────────────────────────────────────────────────────── */
@@ -314,6 +494,45 @@ export function buildDetailedPlanDxf(
   const walls = buildWalls(placed);
   const out: string[] = [];
 
+  /*
+   * Dimensions are planned before anything is written.
+   *
+   * An R12 dimension is three things in two different sections: the
+   * DIMENSION entity lives in ENTITIES, its drawn representation lives
+   * in a block in BLOCKS, and BLOCKS has to come first. So the walls
+   * cannot be dimensioned as they are drawn -- the blocks would need
+   * to be written into a section that has already been closed.
+   *
+   * Offset outwards, away from the room's centroid, so the numbers sit
+   * in the space around the building rather than across the furniture.
+   * Which side is "outwards" is decided per wall from the sign of the
+   * dot product with the vector from the centroid, which works for an
+   * L-shape and a bay as well as a rectangle -- a fixed offset would
+   * put the notch's dimensions inside the room they belong to.
+   */
+  const dims: PlannedDim[] = [];
+  if (detailed) {
+    for (const entry of placed) {
+      const corners = roomOutlineM(entry);
+      const ccx = corners.reduce((sum, c) => sum + c.x, 0) / corners.length;
+      const ccz = corners.reduce((sum, c) => sum + c.z, 0) / corners.length;
+      for (let i = 0; i < corners.length; i++) {
+        const a = corners[i];
+        const b = corners[(i + 1) % corners.length];
+        const midX = (a.x + b.x) / 2;
+        const midZ = (a.z + b.z) / 2;
+        const wx = b.x - a.x;
+        const wz = b.z - a.z;
+        const wl = Math.hypot(wx, wz) || 1;
+        const nx = -wz / wl;
+        const nz = wx / wl;
+        const outward = (midX - ccx) * nx + (midZ - ccz) * nz >= 0 ? 1 : -1;
+        const planned = planDimension(a, b, 0.45 * outward, dims.length + 1);
+        if (planned) dims.push(planned);
+      }
+    }
+  }
+
   out.push(pair(0, "SECTION"), pair(2, "HEADER"));
   out.push(pair(9, "$ACADVER"), pair(1, "AC1009"));
   out.push(pair(9, "$INSUNITS"), pair(70, 4));
@@ -329,6 +548,7 @@ export function buildDetailedPlanDxf(
         [LAYER.doors, 1],
         [LAYER.windows, 5],
         [LAYER.stairs, 3],
+        [LAYER.dims, 6],
         [LAYER.fixtures, 4],
         [LAYER.labels, 2],
         [LAYER.title, 7],
@@ -349,9 +569,80 @@ export function buildDetailedPlanDxf(
       pair(6, "CONTINUOUS"),
     );
   }
-  out.push(pair(0, "ENDTAB"), pair(0, "ENDSEC"));
+  out.push(pair(0, "ENDTAB"));
+
+  /*
+   * A text style and a dimension style, declared only when there are
+   * dimensions to need them.
+   *
+   * The DIMENSION entities name style "TM" at group code 3, and a
+   * dimension referring to a style the file does not define is one of
+   * the ways a DXF fails to open rather than failing to draw. The
+   * variables set here are the ones that change what a dimension looks
+   * like on paper: text height, how far the extension lines stand off
+   * the wall and overshoot the dimension line, and the tick.
+   */
+  if (dims.length > 0) {
+    out.push(pair(0, "TABLE"), pair(2, "STYLE"), pair(70, 1));
+    out.push(
+      pair(0, "STYLE"),
+      pair(2, "STANDARD"),
+      pair(70, 0),
+      pair(40, "0.0"),
+      pair(41, "1.0"),
+      pair(50, "0.0"),
+      pair(71, 0),
+      pair(42, "2.5"),
+      pair(3, "txt"),
+      pair(4, ""),
+    );
+    out.push(pair(0, "ENDTAB"));
+
+    out.push(pair(0, "TABLE"), pair(2, "DIMSTYLE"), pair(70, 1));
+    out.push(
+      pair(0, "DIMSTYLE"),
+      pair(2, "TM"),
+      pair(70, 0),
+      // DIMSCALE 1: the drawing is in millimetres at 1:1, so the
+      // annotation sizes below are already the sizes on paper.
+      pair(40, "1.0"),
+      // DIMASZ -- arrow/tick size.
+      pair(41, "80.0"),
+      // DIMEXO -- extension line offset from the wall it measures.
+      pair(42, "50.0"),
+      // DIMEXE -- extension line overshoot past the dimension line.
+      pair(44, "80.0"),
+      // DIMTXT -- text height. Matches the exploded text in the block.
+      pair(140, "110.0"),
+      // DIMTAD 1 -- text above the dimension line, not through it.
+      pair(77, 1),
+      // DIMTIH / DIMTOH 0 -- text runs along the dimension, inside and
+      // out, rather than snapping horizontal. A plan of a house with
+      // every vertical wall's number lying on its side is the look of
+      // a drawing nobody set up.
+      pair(73, 0),
+      pair(74, 0),
+      // DIMSAH/DIMTSZ: an oblique tick, which is the surveyor's
+      // convention and what the block already draws.
+      pair(142, "80.0"),
+      // DIMLFAC 1 -- no unit scaling; the geometry is already mm.
+      pair(144, "1.0"),
+    );
+    out.push(pair(0, "ENDTAB"));
+  }
+
+  out.push(pair(0, "ENDSEC"));
+
+  /*
+   * BLOCKS must sit between TABLES and ENTITIES, and must be present
+   * even when empty on some readers -- so it is always written.
+   */
+  out.push(pair(0, "SECTION"), pair(2, "BLOCKS"));
+  for (const d of dims) out.push(...d.block);
+  out.push(pair(0, "ENDSEC"));
 
   out.push(pair(0, "SECTION"), pair(2, "ENTITIES"));
+  for (const d of dims) out.push(...d.entity);
 
   const byRoom = new Map(placed.map((e) => [e.room.id, e]));
 

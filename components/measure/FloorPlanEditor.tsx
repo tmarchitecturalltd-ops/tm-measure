@@ -185,8 +185,43 @@ export default function FloorPlanEditor({
     return { x, z, w, h };
   }, [roomsOnFloor, placementFor]);
 
+  /**
+   * A room to zoom into for a moment after something is added to it.
+   *
+   * Placing a door on a plan that shows the whole house means dragging
+   * a 0.8 m object across a 12 m view: a wall is a couple of
+   * millimetres wide on screen, the finger covers the thing being
+   * moved, and quarter-metre snapping is most of the room. It was
+   * accurate enough to be worth doing and fiddly enough that nobody
+   * would.
+   *
+   * So the view goes to the room the feature just landed in, and
+   * comes back when the customer taps away. Automatic, because the
+   * moment you need it is the moment you have just pressed Add and
+   * have one hand on the phone.
+   */
+  const [zoomRoomId, setZoomRoomId] = useState<string | null>(null);
+
+  const zoomViewBox = useMemo(() => {
+    if (!zoomRoomId) return null;
+    const room = rooms.find((r) => r.id === zoomRoomId);
+    if (!room) return null;
+    const p = placementFor(zoomRoomId);
+    if (!p.positionM) return null;
+    const b = roomBoundingBox(p.positionM, roomFootprint(room), p.rotationDeg);
+    // A metre of margin: enough to see which wall is which and the
+    // rooms either side, without losing the detail that is the point.
+    const pad = 1;
+    return {
+      x: b.minX - pad,
+      z: b.minZ - pad,
+      w: Math.max(3, b.maxX - b.minX + pad * 2),
+      h: Math.max(3, b.maxZ - b.minZ + pad * 2),
+    };
+  }, [zoomRoomId, rooms, placementFor]);
+
   /** What the SVG actually renders — held still mid-drag. */
-  const activeViewBox = frozenViewBox ?? viewBox;
+  const activeViewBox = frozenViewBox ?? zoomViewBox ?? viewBox;
 
   // ── Pointer → SVG-coord helper (SVG units are metres) ────────────
   const svgCoordsFromEvent = useCallback(
@@ -477,6 +512,7 @@ export default function FloorPlanEditor({
           },
         ],
       });
+      setZoomRoomId(target);
       return;
     }
     const opening = { ...base, widthM: insertWidthM, note: "" };
@@ -486,6 +522,7 @@ export default function FloorPlanEditor({
         ? { doors: [...(room.doors ?? []), opening] }
         : { windows: [...(room.windows ?? []), opening] },
     );
+    setZoomRoomId(target);
   }, [
     onRoomChange,
     rooms,
@@ -1379,6 +1416,21 @@ export default function FloorPlanEditor({
             );
           })()}
         </svg>
+
+        {/* The way back out of the zoom.
+            Automatic on add, manual to leave: a view that snapped back
+            on its own would do it halfway through the drag it exists
+            to make possible. */}
+        {zoomRoomId && (
+          <button
+            type="button"
+            onClick={() => setZoomRoomId(null)}
+            style={{ minHeight: 44 }}
+            className="absolute right-3 top-3 z-10 rounded-full border border-[#b89650] bg-white/95 px-4 text-sm font-bold uppercase tracking-widest text-[#8a6f2f] shadow-sm"
+          >
+            Show whole floor
+          </button>
+        )}
 
         {roomsOnFloor.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">

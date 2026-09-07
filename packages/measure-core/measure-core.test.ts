@@ -183,6 +183,133 @@ test("a wrong ceiling height scales the whole room by the same proportion", () =
   assert.ok(right.wallsM[0] - wrong.wallsM[0] > 0.4);
 });
 
+test("nothing outside plain ASCII reaches the DXF", () => {
+  /*
+   * We write $ACADVER AC1009 -- R12 -- for the widest compatibility,
+   * and R12 predates Unicode. Any non-ASCII character goes in as raw
+   * UTF-8 bytes and comes out of BricsCAD as mojibake: a real drawing
+   * opened on 7 September showed "3.1 mÂ²" and "Survey data â€"".
+   *
+   * That had been true of every drawing the app had ever produced, and
+   * it is the first thing anyone sees on opening one -- so the export
+   * looked broken whether or not the geometry was right.
+   *
+   * A room name is the likeliest way for a stray character to get in,
+   * because the customer types it. This pins the whole file rather
+   * than one label.
+   */
+  const room = planRoom("k", "Séjour — 12m² café", 4, 3);
+  const dxf = buildDetailedPlanDxf([
+    { room, anchor: { x: 0, z: 0 }, rotationDeg: 0 },
+  ]);
+
+  const offenders = [...dxf].filter((ch) => ch.charCodeAt(0) > 126);
+  assert.equal(
+    offenders.length,
+    0,
+    `non-ASCII in the DXF: ${[...new Set(offenders)].join(" ")}`,
+  );
+  // Transliterated, not deleted: "12m2" still says what it meant, and
+  // the accented letters degrade to something legible.
+  assert.match(dxf, /Sjour - 12m2 caf/);
+});
+
+test("the DXF is structurally well-formed", () => {
+  /*
+   * The closest thing to opening the file that can be done without
+   * CAD, and it exists because of what real dimensions cost.
+   *
+   * An R12 DIMENSION is three coupled things -- the entity, an
+   * anonymous block holding its drawn form, and a DIMSTYLE it names --
+   * spread across two sections that must appear in the right order.
+   * Get any of it wrong and BricsCAD refuses to open the file at all
+   * rather than drawing it badly, which is a far worse failure than
+   * the loose lines this replaced. Nobody here has a copy of BricsCAD,
+   * so the structure is checked arithmetically instead.
+   */
+  const a = planRoom("a", "Kitchen", 4, 3);
+  const b = planRoom("b", "Hall", 2, 3);
+  const dxf = buildDetailedPlanDxf([
+    { room: a, anchor: { x: 0, z: 0 }, rotationDeg: 0 },
+    { room: b, anchor: { x: 4, z: 0 }, rotationDeg: 0 },
+  ]);
+  // trimEnd: the file ends with a newline, which is correct and would
+  // otherwise show up as a phantom final line.
+  const lines = dxf.trimEnd().split("\n");
+
+  // Every line is half of a group-code pair, so the count is even and
+  // every even-indexed line is a numeric code.
+  assert.equal(
+    lines.length % 2,
+    0,
+    "a DXF is code/value pairs, so the line count must be even",
+  );
+  for (let i = 0; i < lines.length; i += 2) {
+    assert.match(lines[i], /^\d+$/, `line ${i + 1} should be a group code`);
+  }
+
+  const count = (v: string) =>
+    lines.filter((l, i) => i % 2 === 1 && l === v).length;
+
+  // Sections, tables and blocks all balance.
+  assert.equal(count("SECTION"), count("ENDSEC"), "SECTION/ENDSEC");
+  assert.equal(count("TABLE"), count("ENDTAB"), "TABLE/ENDTAB");
+  assert.equal(count("BLOCK"), count("ENDBLK"), "BLOCK/ENDBLK");
+
+  // Order matters: HEADER, TABLES, BLOCKS, ENTITIES.
+  const at = (v: string) => lines.findIndex((l) => l === v);
+  assert.ok(at("HEADER") < at("TABLES"), "HEADER before TABLES");
+  assert.ok(at("TABLES") < at("BLOCKS"), "TABLES before BLOCKS");
+  assert.ok(at("BLOCKS") < at("ENTITIES"), "BLOCKS before ENTITIES");
+  assert.ok(dxf.trimEnd().endsWith("EOF"), "file ends with EOF");
+
+  // Every DIMENSION names a block that exists, and the style it names
+  // is defined. A dangling reference is the specific way this fails.
+  const blockNames = new Set(
+    lines.filter((l) => /^\*D\d+$/.test(l)),
+  );
+  assert.ok(blockNames.size > 0, "there should be dimension blocks");
+  const dimCount = count("DIMENSION");
+  assert.equal(
+    dimCount,
+    count("BLOCK"),
+    "one anonymous block per dimension entity",
+  );
+  assert.ok(dxf.includes("\n2\nTM\n"), "the TM dimension style is defined");
+  assert.ok(dxf.includes("DIMSTYLE"), "the DIMSTYLE table is present");
+});
+
+test("every wall of every room is dimensioned", () => {
+  /*
+   * Charlie was receiving a correctly-scaled outline with no numbers
+   * on it, so the first thing he had to do with each survey was
+   * measure the drawing to find out what it said -- when the
+   * measurements were the whole point of sending it.
+   *
+   * Dimensions are exploded lines and text rather than DXF DIMENSION
+   * entities: R12 dimensions need a style table and a block per
+   * dimension, and if any of it is subtly wrong the file will not open
+   * at all. This pins that the numbers are present and correct in
+   * millimetres, on their own layer so they can be switched off.
+   */
+  const room = planRoom("k", "Kitchen", 4.2, 3.1);
+  const dxf = buildDetailedPlanDxf([
+    { room, anchor: { x: 0, z: 0 }, rotationDeg: 0 },
+  ]);
+
+  assert.match(dxf, /TM-DIMS/, "dimensions need their own layer");
+  // 4.20 m and 3.10 m, in millimetres, as their own TEXT values.
+  assert.match(dxf, /\n1\n4200\n/, "the 4.2 m wall should read 4200");
+  assert.match(dxf, /\n1\n3100\n/, "the 3.1 m wall should read 3100");
+
+  // Not on the plain companion, which exists to be a clean shell.
+  const plain = buildDetailedPlanDxf(
+    [{ room, anchor: { x: 0, z: 0 }, rotationDeg: 0 }],
+    { detailed: false },
+  );
+  assert.ok(!plain.includes("TM-DIMS"));
+});
+
 // ── Calibration ──────────────────────────────────────────────────────
 
 test("calibration recovers a known focal length", () => {
@@ -565,7 +692,10 @@ test("an L-shaped room is drawn as an L, not as its bounding box", () => {
   assert.match(dxf, /TM-WALLS/);
   // 12 m² of floor, not the 16 m² of the bounding box. An area written
   // on a drawing gets used.
-  assert.match(dxf, /12\.0 m²/);
+  // "m2", not "m²". An R12 DXF has no Unicode, so the superscript went
+  // in as raw UTF-8 and came out of BricsCAD as "12.0 mÂ²" -- on every
+  // drawing this app has ever produced. See sanitiseDxfText.
+  assert.match(dxf, /12\.0 m2/);
 });
 
 test("a rectangular room still uses its bounding rectangle", () => {
