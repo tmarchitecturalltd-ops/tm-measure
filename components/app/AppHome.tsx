@@ -184,6 +184,83 @@ export default function AppHome() {
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  /**
+   * The "More" list.
+   *
+   * Each row gets a line of description, which the old pills had no
+   * room for -- "Status" and "Architect" sat next to each other with
+   * nothing to say that one is for the customer and the other is not.
+   *
+   * The architect console is still here and still shouldn't be. It is
+   * staff-only behind a shared secret, and listing it to homeowners
+   * invites them to try. Left in place for now because Charlie and
+   * Fabian reach it this way; it wants moving somewhere customers do
+   * not see before this goes to the App Store.
+   */
+  const moreItems: {
+    label: string;
+    blurb: string;
+    icon: string;
+    href?: string;
+    onClick?: () => void;
+  }[] = [
+    {
+      label: "How it works",
+      blurb: "The three steps, start to finish",
+      icon: "help",
+      onClick: () => setShowWelcome(true),
+    },
+    {
+      label: "Photo tips",
+      blurb: "What makes a photo we can work from",
+      icon: "photo_camera",
+      href: "/photo-tips",
+    },
+    {
+      label: "Project status",
+      blurb: "Check on a survey you've already sent",
+      icon: "fact_check",
+      href: "/status",
+    },
+    {
+      label: "Privacy",
+      blurb: "What we keep, and for how long",
+      icon: "shield",
+      href: "/privacy",
+    },
+    {
+      label: "Architect console",
+      blurb: "TM Designs staff only",
+      icon: "architecture",
+      href: "/architect",
+    },
+    ...(calib && process.env.NEXT_PUBLIC_ENABLE_SCAN === "1"
+      ? [
+          {
+            label: "Reset calibration",
+            blurb:
+              "Wipes a stale camera calibration that may be making rooms read tiny or huge",
+            icon: "restart_alt",
+            onClick: () => {
+              if (typeof window === "undefined") return;
+              const ks: string[] = [];
+              for (let i = 0; i < window.localStorage.length; i++) {
+                const k = window.localStorage.key(i);
+                if (k && k.startsWith("tm.calib.")) ks.push(k);
+              }
+              ks.forEach((k) => window.localStorage.removeItem(k));
+              setCalib(null);
+              alert(
+                ks.length
+                  ? "Stored camera calibration cleared. The next scan will re-calibrate."
+                  : "No stored calibration to clear.",
+              );
+            },
+          },
+        ]
+      : []),
+  ];
+
   const dismissWelcome = () => {
     try {
       window.sessionStorage.setItem(WELCOME_SEEN_KEY, "1");
@@ -230,12 +307,47 @@ export default function AppHome() {
       </header>
 
       <main className="mx-auto max-w-3xl px-4 pt-8 md:px-6 md:pt-12">
+        {/* ── Continue where you left off ────────────────────────
+            First, above the tiles, and only when there is something to
+            continue.
+
+            A customer with a half-finished survey opened this app for
+            exactly one reason, and it was underneath the question
+            "What are you building?" -- which they had already answered.
+            Being asked it again reads as the app having forgotten,
+            which is the impression a form that saves as you go can
+            least afford to give. */}
+        {draft && (
+          <section>
+            <Link
+              href="/measure"
+              className="block rounded-2xl border border-primary/40 bg-primary/5 p-5 transition-colors hover:bg-primary/10"
+            >
+              <p className="font-label text-sm font-bold uppercase tracking-[0.25em] text-primary">
+                Continue where you left off
+              </p>
+              <p className="mt-2 text-sm font-medium text-on-surface">
+                {draft.projectName?.trim() || "Untitled project"}
+              </p>
+              <p className="mt-1 text-[13px] text-on-surface-variant">
+                {draft.rooms?.length ?? 0} room
+                {(draft.rooms?.length ?? 0) === 1 ? "" : "s"} · saved{" "}
+                {formatSavedAt(draft.savedAt)}
+              </p>
+              <p className="mt-3 text-sm font-bold uppercase tracking-widest text-primary">
+                Resume →
+              </p>
+            </Link>
+          </section>
+        )}
+
+
         {/* ── Hero ───────────────────────────────────────────────
             Soft warm wash sits behind the hero copy and tile grid —
             a low-opacity gold radial that fades into the surface so
             the home feels warmer without saturating the brand. */}
         <section
-          className="tm-fade-up relative isolate"
+          className={`tm-fade-up relative isolate ${draft ? "mt-10" : ""}`}
           style={{
             backgroundImage:
               "radial-gradient(80% 60% at 0% 0%, rgba(184, 150, 80, 0.09) 0%, rgba(184, 150, 80, 0) 70%)",
@@ -312,31 +424,6 @@ export default function AppHome() {
             further down the page. The "How it works" button in the
             footer still opens the welcome screen for anyone who wants
             a reminder. */}
-
-        {/* ── Continue where you left off ──────────────────────── */}
-        {draft && (
-          <section className="mt-12">
-            <Link
-              href="/measure"
-              className="block rounded-2xl border border-primary/40 bg-primary/5 p-5 transition-colors hover:bg-primary/10"
-            >
-              <p className="font-label text-sm font-bold uppercase tracking-[0.25em] text-primary">
-                Continue where you left off
-              </p>
-              <p className="mt-2 text-sm font-medium text-on-surface">
-                {draft.projectName?.trim() || "Untitled project"}
-              </p>
-              <p className="mt-1 text-[13px] text-on-surface-variant">
-                {draft.rooms?.length ?? 0} room
-                {(draft.rooms?.length ?? 0) === 1 ? "" : "s"} · saved{" "}
-                {formatSavedAt(draft.savedAt)}
-              </p>
-              <p className="mt-3 text-sm font-bold uppercase tracking-widest text-primary">
-                Resume →
-              </p>
-            </Link>
-          </section>
-        )}
 
         {/* ── Recent submissions ───────────────────────────────── */}
         <section className="mt-12">
@@ -439,129 +526,84 @@ export default function AppHome() {
         </p>
       </main>
 
-      {/* ── Secondary links ──────────────────────────────────────────
-          These were a row of white pills directly under the hero copy,
-          above the thing the screen exists for. Six of them, before any
-          decision had been made, which reads as a menu of suggestions
-          rather than a way in — and looks like a chat assistant rather
-          than an architect's tool.
+      {/* ── More ─────────────────────────────────────────────────────
+          A list, not a row of pills.
 
-          They are all things a customer wants occasionally and nobody
-          wants first, so they belong at the bottom: reachable by anyone
-          looking for them, invisible to anyone who isn't. */}
-      <nav className="mx-auto w-full max-w-3xl px-5 pb-10 pt-2">
-        <div className="border-t border-outline-variant/30 pt-5">
+          These were six rounded chips wrapping across the bottom of
+          the screen, which is the shape a chat assistant uses to offer
+          suggestions -- and it read that way: a scatter of things to
+          try rather than a settings list to look something up in. The
+          chips also gave no room for a word of explanation, so
+          "Status" and "Architect" sat side by side with nothing to say
+          which of them a homeowner wanted.
+
+          Full-width rows with a label, a line of description and a
+          chevron. Slower to scan and far easier to use, which is the
+          right trade for a section nobody visits twice.
+
+          They stay at the bottom, below the tiles and the recent list,
+          for the same reason as before: all of it is wanted
+          occasionally and none of it first. */}
+      <nav className="mx-auto w-full max-w-3xl px-4 pb-10 pt-2 md:px-6">
+        <div className="border-t border-outline-variant/30 pt-6">
           <p className="mb-3 text-sm font-bold uppercase tracking-widest text-on-surface-variant">
             More
           </p>
-          <div className="flex flex-wrap gap-2">
-            {/* The welcome screen tells the customer they can revisit it
-                "any time from the home screen", but nothing here did
-                that — the flag was set on dismissal and there was no way
-                back. This is that way back. */}
-            <button
-              type="button"
-              onClick={() => setShowWelcome(true)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
-            >
-              <span
-                className="material-symbols-outlined text-primary"
-                style={{ fontSize: "14px" }}
-                aria-hidden
-              >
-                help
-              </span>
-              How it works
-            </button>
-            <Link
-              href="/photo-tips"
-              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
-            >
-              <span
-                className="material-symbols-outlined text-primary"
-                style={{ fontSize: "14px" }}
-                aria-hidden
-              >
-                photo_camera
-              </span>
-              Photo tips
-            </Link>
-            {/* Architect console — internal-use review page. Same app
-                shell on purpose so Harry can open it on any device with
-                the deployed URL; no login (URL-secret only). */}
-            <Link
-              href="/architect"
-              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
-            >
-              <span
-                className="material-symbols-outlined text-primary"
-                style={{ fontSize: "14px" }}
-                aria-hidden
-              >
-                fact_check
-              </span>
-              Architect console
-            </Link>
-            <Link
-              href="/status"
-              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
-            >
-              <span
-                className="material-symbols-outlined text-primary"
-                style={{ fontSize: "14px" }}
-                aria-hidden
-              >
-                fact_check_outlined
-              </span>
-              Project status
-            </Link>
-            <Link
-              href="/privacy"
-              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
-            >
-              <span
-                className="material-symbols-outlined text-primary"
-                style={{ fontSize: "14px" }}
-                aria-hidden
-              >
-                shield
-              </span>
-              Privacy
-            </Link>
-            {process.env.NEXT_PUBLIC_ENABLE_SCAN === "1" && (
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof window === "undefined") return;
-                // Wipe every per-device calibration we've cached. The
-                // tm.calib.<hash> keys are scoped to the user-agent, so
-                // we sweep anything matching that prefix in one go.
-                const ks: string[] = [];
-                for (let i = 0; i < window.localStorage.length; i++) {
-                  const k = window.localStorage.key(i);
-                  if (k && k.startsWith("tm.calib.")) ks.push(k);
-                }
-                ks.forEach((k) => window.localStorage.removeItem(k));
-                alert(
-                  ks.length
-                    ? "Stored camera calibration cleared. The next scan will re-calibrate."
-                    : "No stored calibration to clear.",
-                );
-              }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant/40 bg-surface-container-lowest px-3.5 py-1.5 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:border-primary/60 hover:text-primary"
-              title="Wipes a stale calibration that may be making rooms read tiny or huge"
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: "14px" }}
-                aria-hidden
-              >
-                restart_alt
-              </span>
-              Reset calibration
-            </button>
-            )}
-          </div>
+          <ul className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface-container-lowest">
+            {moreItems.map((item, i) => {
+              const inner = (
+                <>
+                  <span
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
+                    aria-hidden
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: "20px" }}
+                    >
+                      {item.icon}
+                    </span>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-headline text-[15px] font-semibold text-on-surface">
+                      {item.label}
+                    </span>
+                    <span className="mt-0.5 block text-sm leading-snug text-on-surface-variant">
+                      {item.blurb}
+                    </span>
+                  </span>
+                  <span
+                    className="material-symbols-outlined shrink-0 text-on-surface-variant/50"
+                    style={{ fontSize: "20px" }}
+                    aria-hidden
+                  >
+                    chevron_right
+                  </span>
+                </>
+              );
+              const cls = `flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-primary/5 ${
+                i > 0 ? "border-t border-outline-variant/20" : ""
+              }`;
+              return (
+                <li key={item.label}>
+                  {item.href ? (
+                    <Link href={item.href} className={cls} style={{ minHeight: 56 }}>
+                      {inner}
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={item.onClick}
+                      className={cls}
+                      style={{ minHeight: 56 }}
+                    >
+                      {inner}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       </nav>
     </div>

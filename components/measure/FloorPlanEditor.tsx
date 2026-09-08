@@ -98,6 +98,69 @@ export type FloorPlanEditorProps = {
   onRoomChange?: (roomId: string, patch: Partial<RoomDraft>) => void;
 };
 
+/**
+ * A collapsible block, closed by default.
+ *
+ * The plan step had grown to nine stacked things -- heading, floor
+ * tabs, the grid, the insert panel, ceiling height, controls, the
+ * rooms waiting to be placed, other floors -- so the two that matter,
+ * the grid and the rooms not yet on it, were separated by everything
+ * else and the customer had to scroll past the detail to reach them.
+ *
+ * Everything secondary now folds away. The point of this screen is
+ * arranging rooms; the rest is available and not in the road.
+ *
+ * A native <details> would do this with no JavaScript, but its
+ * open/closed state is not controllable, and the insert panel needs to
+ * open itself when a room is tapped.
+ */
+function Disclosure({
+  label,
+  hint,
+  open,
+  onToggle,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-[#e6dfd0]">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        style={{ minHeight: 52 }}
+        className="flex w-full items-center justify-between gap-3 px-4 text-left"
+      >
+        <span>
+          <span className="block text-sm font-bold uppercase tracking-[0.2em] text-on-surface-variant">
+            {label}
+          </span>
+          {hint && (
+            <span className="mt-0.5 block text-sm text-[#6e6a5f]">{hint}</span>
+          )}
+        </span>
+        <span
+          className="material-symbols-outlined shrink-0 text-[#8a6f2f]"
+          style={{
+            fontSize: "22px",
+            transform: open ? "rotate(180deg)" : "none",
+            transition: "transform 160ms",
+          }}
+          aria-hidden
+        >
+          expand_more
+        </span>
+      </button>
+      {open && <div className="border-t border-[#e6dfd0] p-3">{children}</div>}
+    </div>
+  );
+}
+
 /** Default placement for a room whose entry is missing from the map. */
 function defaultPlacement(floor: number = 0): RoomPlacement {
   return { positionM: null, rotationDeg: 0, floor };
@@ -201,6 +264,18 @@ export default function FloorPlanEditor({
    * have one hand on the phone.
    */
   const [zoomRoomId, setZoomRoomId] = useState<string | null>(null);
+
+  /**
+   * Which of the folded blocks are open.
+   *
+   * "Rooms to place" starts open, because rooms waiting to be placed
+   * are unfinished work rather than an option -- a plan with a room
+   * missing is the commonest way a survey arrives incomplete. The
+   * other two start shut.
+   */
+  const [palOpen, setPalOpen] = useState(true);
+  const [insertOpen, setInsertOpen] = useState(false);
+  const [ceilOpen, setCeilOpen] = useState(false);
 
   const zoomViewBox = useMemo(() => {
     if (!zoomRoomId) return null;
@@ -523,6 +598,9 @@ export default function FloorPlanEditor({
         : { windows: [...(room.windows ?? []), opening] },
     );
     setZoomRoomId(target);
+    // Keep the panel open after adding: the next thing anyone does is
+    // add the second window, and closing it would make that two taps.
+    setInsertOpen(true);
   }, [
     onRoomChange,
     rooms,
@@ -1441,6 +1519,83 @@ export default function FloorPlanEditor({
         )}
       </div>
 
+      {/* Controls */}
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <button
+          type="button"
+          onClick={applyAutoLayout}
+          className="rounded-full border border-[#b89650] px-3 py-1 font-semibold text-[#8a6f2f]"
+        >
+          Auto-layout this floor
+        </button>
+        <button
+          type="button"
+          onClick={clearFloor}
+          className="rounded-full border border-[#d9d3c8] px-3 py-1 font-semibold text-[#6e6a5f]"
+        >
+          Clear layout
+        </button>
+        <span className="text-sm text-on-surface-variant">
+          Grid = 25 cm · drag rooms · ↻ rotates 90° · × removes from plan
+        </span>
+      </div>
+
+      {/* ── Everything that is not arranging rooms ──────────────────
+          Folded away by default.
+
+          This screen exists to put rooms in the right places, and it
+          had grown to nine stacked blocks with the two that matter --
+          the grid, and the rooms not yet on it -- separated by all the
+          detail in between. Each of these is worth having and none of
+          them is worth scrolling past on the way to the plan.
+
+          "Rooms to place" opens itself whenever there are rooms
+          waiting, because that is unfinished work rather than an
+          option; the other two stay shut until asked for. */}
+      <div className="space-y-2">
+        <Disclosure
+          label={`Rooms to place${unplacedOnFloor.length ? ` (${unplacedOnFloor.length})` : ""}`}
+          hint={
+            unplacedOnFloor.length
+              ? `Waiting to go on ${floorLabel(currentFloor)}`
+              : "All placed on this floor"
+          }
+          open={palOpen}
+          onToggle={() => setPalOpen((o) => !o)}
+        >
+        {unplacedOnFloor.length === 0 ? (
+          <p className="text-sm text-on-surface-variant">
+            All rooms on this floor are placed. Switch floors or add a new one above.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {unplacedOnFloor.map((r) => {
+              const size = roomFootprint(r);
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => placeRoomOnCurrentFloor(r.id)}
+                  className="rounded-lg border border-[#b89650] bg-white px-3 py-2 text-left text-sm font-semibold text-[#1c1c1a] shadow-sm transition hover:bg-[#fff8ea]"
+                >
+                  <span className="block">{r.name || "Room"}</span>
+                  <span className="text-sm font-normal text-[#6e6a5f]">
+                    {size.widthM.toFixed(2)} × {size.lengthM.toFixed(2)} m
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        </Disclosure>
+
+        {onRoomChange && roomsOnFloor.length > 0 && (
+          <Disclosure
+            label="Add feature"
+            hint="A door, window or stairs"
+            open={insertOpen}
+            onToggle={() => setInsertOpen((o) => !o)}
+          >
 
       {/* ── Insert into the selected room ───────────────────────────
           Someone looking at the layout is the person best placed to
@@ -1455,14 +1610,7 @@ export default function FloorPlanEditor({
           "which of these is it closest to" is both easier to answer
           and closer to the truth. The width can still be corrected in
           the room questions if the door really is a one-off. */}
-      {onRoomChange && roomsOnFloor.length > 0 && (
-        <div
-          className="rounded-lg border border-[#b89650]/50 p-3"
-          style={{ backgroundColor: "#fffdf8" }}
-        >
-          <p className="mb-2 text-sm font-bold uppercase tracking-[0.2em] text-on-surface-variant">
-            Add feature
-          </p>
+      <>
           <div className="flex flex-wrap items-end gap-2">
             {/* The room is picked here rather than by tapping the plan.
                 The panel used to appear only once a room was selected,
@@ -1571,28 +1719,21 @@ export default function FloorPlanEditor({
           <p className="mt-2 text-sm text-[#6e6a5f]">
             It lands on the first wall — drag it to where it really is.
           </p>
-        </div>
-      )}
-      {/* Controls */}
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <button
-          type="button"
-          onClick={applyAutoLayout}
-          className="rounded-full border border-[#b89650] px-3 py-1 font-semibold text-[#8a6f2f]"
-        >
-          Auto-layout this floor
-        </button>
-        <button
-          type="button"
-          onClick={clearFloor}
-          className="rounded-full border border-[#d9d3c8] px-3 py-1 font-semibold text-[#6e6a5f]"
-        >
-          Clear layout
-        </button>
-        <span className="text-sm text-on-surface-variant">
-          Grid = 25 cm · drag rooms · ↻ rotates 90° · × removes from plan
-        </span>
-      </div>
+      </>
+          </Disclosure>
+        )}
+
+        {onRoomChange && roomsOnFloor.length > 0 && (
+          <Disclosure
+            label="Ceiling height"
+            hint={
+              ceilingIsMixed
+                ? "Rooms on this floor differ"
+                : `${floorCeiling || "2.40"} m on ${floorLabel(currentFloor)}`
+            }
+            open={ceilOpen}
+            onToggle={() => setCeilOpen((o) => !o)}
+          >
 
       {/* ── Ceiling height for this floor ──────────────────────────
           Asked here rather than once for the whole property, because
@@ -1606,8 +1747,7 @@ export default function FloorPlanEditor({
           have carried their own height all along; this sets them in
           one go rather than introducing a second place the number can
           live and disagree with itself. */}
-      {onRoomChange && roomsOnFloor.length > 0 && (
-        <div className="flex flex-wrap items-end gap-3 rounded-lg border border-[#e6dfd0] p-3">
+      <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">
             <span className="mb-1 block font-semibold text-[#6e6a5f]">
               Ceiling height on {floorLabel(currentFloor)} (m)
@@ -1626,39 +1766,8 @@ export default function FloorPlanEditor({
               : "Applies to every room on this floor. Change a single room in its own questions."}
           </p>
         </div>
-      )}
 
-      {/* Palette of unplaced rooms on current floor */}
-      <div
-        className="rounded-lg border border-dashed border-[#d9d3c8] p-3"
-        style={{ backgroundColor: "#fffdf8" }}
-      >
-        <p className="mb-2 text-sm font-bold uppercase tracking-[0.2em] text-on-surface-variant">
-          Rooms to place on {floorLabel(currentFloor)}
-        </p>
-        {unplacedOnFloor.length === 0 ? (
-          <p className="text-sm text-on-surface-variant">
-            All rooms on this floor are placed. Switch floors or add a new one above.
-          </p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {unplacedOnFloor.map((r) => {
-              const size = roomFootprint(r);
-              return (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => placeRoomOnCurrentFloor(r.id)}
-                  className="rounded-lg border border-[#b89650] bg-white px-3 py-2 text-left text-sm font-semibold text-[#1c1c1a] shadow-sm transition hover:bg-[#fff8ea]"
-                >
-                  <span className="block">{r.name || "Room"}</span>
-                  <span className="text-sm font-normal text-[#6e6a5f]">
-                    {size.widthM.toFixed(2)} × {size.lengthM.toFixed(2)} m
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          </Disclosure>
         )}
       </div>
 
