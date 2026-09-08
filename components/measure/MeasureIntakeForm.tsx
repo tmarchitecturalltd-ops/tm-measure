@@ -23,7 +23,7 @@ import {
 } from "@/lib/recentSubmissions";
 import {
   parseMeters,
-  scanPolygonIsUsable,
+  scanOutlineWorthKeeping,
   formatLengthDual,
   validateProject,
   scanOverallConfidence,
@@ -717,11 +717,7 @@ export default function MeasureIntakeForm() {
         irregularNotes: "",
         notes: stamp,
         photos: [],
-        shape:
-          !sr.rectangular &&
-          scanPolygonIsUsable(sr.floorPolygonM, sr.widthM, sr.lengthM)
-            ? "custom"
-            : "rectangle",
+        shape: scanOutlineWorthKeeping(sr.floorPolygonM, sr.widthM, sr.lengthM) ? "custom" : "rectangle",
         measuredByScan: true,
         // The real outline, translated from the shared frame into the
         // room's own coordinates — floorPolygonM is defined relative to
@@ -738,9 +734,7 @@ export default function MeasureIntakeForm() {
         // sliver drawn faithfully is worse than a rectangle drawn
         // approximately.
         floorPolygonM:
-          !sr.rectangular &&
-          sr.originM &&
-          scanPolygonIsUsable(sr.floorPolygonM, sr.widthM, sr.lengthM)
+          sr.originM && scanOutlineWorthKeeping(sr.floorPolygonM, sr.widthM, sr.lengthM)
             ? sr.floorPolygonM!.map((p) => ({
                 x: Number((p.x - sr.originM!.x).toFixed(3)),
                 z: Number((p.z - sr.originM!.z).toFixed(3)),
@@ -869,11 +863,7 @@ export default function MeasureIntakeForm() {
                   // "custom" only when a polygon is actually kept —
                   // a custom-shaped room with no polygon falls through
                   // to a rectangle anyway, but says otherwise on screen.
-                  shape:
-                    !sr.rectangular &&
-                    scanPolygonIsUsable(sr.floorPolygonM, sr.widthM, sr.lengthM)
-                      ? "custom"
-                      : "rectangle",
+                  shape: scanOutlineWorthKeeping(sr.floorPolygonM, sr.widthM, sr.lengthM) ? "custom" : "rectangle",
                   measuredByScan: true,
                   /*
                    * Outline, translated to the room's own corner.
@@ -891,9 +881,7 @@ export default function MeasureIntakeForm() {
                    * rough floor polygon is worse than the rectangle.
                    */
                   floorPolygonM:
-                    !sr.rectangular &&
-                    sr.originM &&
-                    scanPolygonIsUsable(sr.floorPolygonM, sr.widthM, sr.lengthM)
+                    sr.originM && scanOutlineWorthKeeping(sr.floorPolygonM, sr.widthM, sr.lengthM)
                       ? sr.floorPolygonM!.map((pt) => ({
                           x: Number((pt.x - sr.originM!.x).toFixed(3)),
                           z: Number((pt.z - sr.originM!.z).toFixed(3)),

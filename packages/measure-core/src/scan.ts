@@ -142,3 +142,35 @@ export function scanPolygonIsUsable(
   const fill = Math.abs(twiceArea) / 2 / (spanX * spanZ);
   return fill >= 0.45;
 }
+
+/**
+ * Is a scanned outline worth keeping over a plain rectangle?
+ *
+ * The app used to ask RoomPlan, which reports a `rectangular` flag --
+ * and anything flagged rectangular had its outline discarded. That
+ * flag is `area / boundingBoxArea > 0.90`, which is a fair description
+ * of a room and a poor filter for this decision, because the features
+ * that make an outline worth keeping are small. A chimney breast in a
+ * 9 m2 kitchen is roughly 0.4 m2: the room scores 96%, is called
+ * rectangular, and the chimney breast is thrown away.
+ *
+ * Charlie found it on a real kitchen -- "the 3d picks up all windows
+ * and little dog legs, the 2d floor plan shows it as a rectangle".
+ *
+ * Corner count is the better question, and the one we actually mean. A
+ * genuinely rectangular room comes back with four corners. Five or
+ * more means there is a feature in it: an alcove, a chimney breast, a
+ * dog leg, a bay. That feature is the reason someone is paying for a
+ * survey rather than pacing it out.
+ *
+ * scanPolygonIsUsable still has the final say, because a sliver drawn
+ * faithfully is worse than a rectangle drawn approximately.
+ */
+export function scanOutlineWorthKeeping(
+  polygon: { x: number; z: number }[] | null | undefined,
+  widthM: number,
+  lengthM: number,
+): boolean {
+  if (!polygon || polygon.length < 5) return false;
+  return scanPolygonIsUsable(polygon, widthM, lengthM);
+}

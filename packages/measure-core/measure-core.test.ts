@@ -31,7 +31,7 @@ import { buildFloorPlanDxf, roomCornersM } from "./src/dxf.ts";
 import { buildWalls, buildDetailedPlanDxf, roomOutlineM } from "./src/dxfPlan.ts";
 import { fixtureFootprintM } from "./src/types.ts";
 import { validateRoom } from "./src/validation.ts";
-import { scanPolygonIsUsable } from "./src/scan.ts";
+import { scanPolygonIsUsable, scanOutlineWorthKeeping } from "./src/scan.ts";
 import type { RoomDraft } from "./src/types.ts";
 import {
   normalizeConnections,
@@ -212,6 +212,83 @@ test("nothing outside plain ASCII reaches the DXF", () => {
   // Transliterated, not deleted: "12m2" still says what it meant, and
   // the accented letters degrade to something legible.
   assert.match(dxf, /Sjour - 12m2 caf/);
+});
+
+test("a chimney breast survives the scan instead of being flattened", () => {
+  /*
+   * Charlie, on a real kitchen: "the 3d picks up all windows and
+   * little dog legs, the 2d floor plan shows it as a rectangle".
+   *
+   * The outline was being discarded whenever RoomPlan flagged the room
+   * as rectangular, and that flag is area / boundingBoxArea > 0.90. A
+   * chimney breast is about 0.4 m2 in a 9 m2 kitchen -- 4% -- so the
+   * room scored 96%, was called rectangular, and the one feature the
+   * survey existed to record was thrown away. The bigger the room, the
+   * more certainly its features were lost.
+   *
+   * The test is now the corner count, which is what we meant all
+   * along: four corners is a rectangle, five or more is a room with
+   * something in it.
+   */
+  const w = 3.32;
+  const l = 2.84;
+  const breastW = 1.0;
+  const breastD = 0.4;
+
+  // The kitchen from the screenshot, with a chimney breast in the
+  // middle of the top wall.
+  const withBreast = [
+    { x: 0, z: 0 },
+    { x: (w - breastW) / 2, z: 0 },
+    { x: (w - breastW) / 2, z: breastD },
+    { x: (w + breastW) / 2, z: breastD },
+    { x: (w + breastW) / 2, z: 0 },
+    { x: w, z: 0 },
+    { x: w, z: l },
+    { x: 0, z: l },
+  ];
+
+  // What RoomPlan would call this: the breast is 0.4 m2 of 9.4 m2, so
+  // the area ratio is about 0.96 and the old gate dropped it.
+  const bboxArea = w * l;
+  const realArea = bboxArea - breastW * breastD;
+  assert.ok(
+    realArea / bboxArea > 0.9,
+    "this room is exactly the case RoomPlan calls rectangular",
+  );
+
+  assert.equal(
+    scanOutlineWorthKeeping(withBreast, w, l),
+    true,
+    "a room with a chimney breast must keep its outline",
+  );
+
+  // A genuine rectangle still collapses to a rectangle: four corners,
+  // and no second source of truth for the same shape.
+  const plain = [
+    { x: 0, z: 0 },
+    { x: w, z: 0 },
+    { x: w, z: l },
+    { x: 0, z: l },
+  ];
+  assert.equal(scanOutlineWorthKeeping(plain, w, l), false);
+
+  // And nonsense is still rejected, however many corners it has.
+  assert.equal(
+    scanOutlineWorthKeeping(
+      [
+        { x: 0, z: 0 },
+        { x: 0.1, z: 0 },
+        { x: 0.1, z: 0.05 },
+        { x: 0.05, z: 0.05 },
+        { x: 0, z: 0.05 },
+      ],
+      w,
+      l,
+    ),
+    false,
+    "a sliver is worse than a rectangle",
+  );
 });
 
 test("the DXF is structurally well-formed", () => {
