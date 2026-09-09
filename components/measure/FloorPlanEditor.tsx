@@ -1706,9 +1706,18 @@ export default function FloorPlanEditor({
             <>
         {unplacedOnFloor.length === 0 ? (
           <p className="text-sm text-on-surface-variant">
-            All rooms on this floor are placed. Switch floors or add a new one above.
+            Every room you have measured is on the plan.
           </p>
         ) : (
+          <>
+          {/* These are rooms that have already been measured. Tapping
+              one puts it on the plan -- it does not ask for anything
+              new. Said out loud because "add room" was read as "go and
+              measure another one", which is what the button next to it
+              used to do. */}
+          <p className="mb-2 text-sm text-[#6e6a5f]">
+            Tap a room to put it on the plan.
+          </p>
           <div className="flex flex-wrap gap-2">
             {unplacedOnFloor.map((r) => {
               const size = roomFootprint(r);
@@ -1716,7 +1725,12 @@ export default function FloorPlanEditor({
                 <button
                   key={r.id}
                   type="button"
-                  onClick={() => placeRoomOnCurrentFloor(r.id)}
+                  onClick={() => {
+                    placeRoomOnCurrentFloor(r.id);
+                    // Last one? Nothing left to choose from, so get the
+                    // panel off the plan.
+                    if (unplacedOnFloor.length === 1) setOpenPanel(null);
+                  }}
                   className="rounded-lg border border-[#b89650] bg-white px-3 py-2 text-left text-sm font-semibold text-[#1c1c1a] shadow-sm transition hover:bg-[#fff8ea]"
                 >
                   <span className="block">{r.name || "Room"}</span>
@@ -1727,6 +1741,7 @@ export default function FloorPlanEditor({
               );
             })}
           </div>
+          </>
         )}
             </>
           )}
@@ -2627,32 +2642,50 @@ export default function FloorPlanEditor({
             is in the control row next to Clear now -- both put the
             view back, and a button sitting on the drawing is one more
             thing between the customer and the plan. */}
-        {/* An empty floor offers the two things that fill it.
-            It used to state the problem -- "nothing here yet" -- and
-            leave the customer to work out that the answer was either
-            Auto-layout or opening To place and tapping rooms one at a
-            time. Buttons instead of a sentence. */}
+        {/* An empty floor, with the rooms that belong on it.
+            "Add room" was the wrong word here twice over: it created a
+            new room and sent the customer off to measure it, when what
+            they wanted -- and what the screen was telling them there
+            were five of -- was to put rooms they had *already*
+            measured onto the plan.
+
+            So the primary action places them. Measuring another room
+            is offered underneath, worded so it cannot be mistaken for
+            the other thing, and only really belongs here when there is
+            nothing waiting. */}
         {roomsOnFloor.length === 0 && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 px-6">
-            {unplacedOnFloor.length > 0 && (
-              <button
-                type="button"
-                onClick={applyAutoLayout}
-                style={{ minHeight: 48 }}
-                className="rounded-full bg-[#b89650] px-6 text-sm font-bold uppercase tracking-widest text-white shadow-lg"
-              >
-                Auto-layout
-              </button>
-            )}
-            {onAddRoom && (
-              <button
-                type="button"
-                onClick={onAddRoom}
-                style={{ minHeight: 48 }}
-                className="rounded-full border-2 border-[#b89650] bg-white/90 px-6 text-sm font-bold uppercase tracking-widest text-[#8a6f2f]"
-              >
-                Add room
-              </button>
+            {unplacedOnFloor.length > 0 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={applyAutoLayout}
+                  style={{ minHeight: 48 }}
+                  className="rounded-full bg-[#b89650] px-6 text-sm font-bold uppercase tracking-widest text-white shadow-lg"
+                >
+                  Put my {unplacedOnFloor.length} room
+                  {unplacedOnFloor.length === 1 ? "" : "s"} on the plan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpenPanel("rooms")}
+                  style={{ minHeight: 44 }}
+                  className="rounded-full border-2 border-[#b89650] bg-white/90 px-5 text-sm font-bold uppercase tracking-widest text-[#8a6f2f]"
+                >
+                  One at a time
+                </button>
+              </>
+            ) : (
+              onAddRoom && (
+                <button
+                  type="button"
+                  onClick={onAddRoom}
+                  style={{ minHeight: 48 }}
+                  className="rounded-full border-2 border-[#b89650] bg-white/90 px-6 text-sm font-bold uppercase tracking-widest text-[#8a6f2f]"
+                >
+                  Measure another room
+                </button>
+              )
             )}
           </div>
         )}
