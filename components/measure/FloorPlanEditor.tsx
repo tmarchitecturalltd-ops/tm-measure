@@ -827,7 +827,12 @@ export default function FloorPlanEditor({
     if (!room) return;
     const target = insertRoomId;
     const id = `${insertKind[0]}-${Date.now().toString(36)}`;
-    const base = {
+    const base: {
+      id: string;
+      wallIndex: number;
+      positionM: string;
+      positionApprox: boolean;
+    } = {
       id,
       wallIndex: 0,
       positionM: "0.50",
@@ -852,6 +857,55 @@ export default function FloorPlanEditor({
       setZoomRoomId(target);
       return;
     }
+    /*
+     * Put it on the wall facing the rest of the house.
+     *
+     * Everything landed on wall 0 -- the top edge of the room as drawn
+     * -- which for a room at the top of the plan is its outside wall,
+     * so a door added to connect two rooms appeared on the far side of
+     * the one it was added to and had to be dragged all the way round.
+     *
+     * The wall whose middle is nearest the centre of the other rooms
+     * is the one most likely to be shared, and it is one drag from any
+     * of the others regardless. Wall 0 stays the fallback when there
+     * is nothing else on the floor.
+     */
+    const others = roomsOnFloor.filter((rr) => rr.id !== target);
+    if (others.length) {
+      const pts = others
+        .map((rr) => placementFor(rr.id).positionM)
+        .filter((v): v is { x: number; z: number } => !!v);
+      if (pts.length) {
+        const hx = pts.reduce((a, p) => a + p.x, 0) / pts.length;
+        const hz = pts.reduce((a, p) => a + p.z, 0) / pts.length;
+        const p = placementFor(target);
+        const size = roomFootprint(room);
+        const local = worldToLocal({ x: hx, z: hz }, p);
+        if (local) {
+          // Midpoints of walls 0..3 in the room's own frame.
+          const mids = [
+            { x: size.widthM / 2, z: 0 },
+            { x: size.widthM, z: size.lengthM / 2 },
+            { x: size.widthM / 2, z: size.lengthM },
+            { x: 0, z: size.lengthM / 2 },
+          ];
+          let bestI = 0;
+          let bestD = Infinity;
+          mids.forEach((m, i) => {
+            const d = Math.hypot(local.x - m.x, local.z - m.z);
+            if (d < bestD) {
+              bestD = d;
+              bestI = i;
+            }
+          });
+          base.wallIndex = bestI;
+          base.positionM = (
+            (bestI % 2 === 0 ? size.widthM : size.lengthM) / 2
+          ).toFixed(2);
+        }
+      }
+    }
+
     const opening = { ...base, widthM: insertWidthM, note: "" };
     onRoomChange(
       target,
@@ -859,6 +913,7 @@ export default function FloorPlanEditor({
         ? { doors: [...(room.doors ?? []), opening] }
         : { windows: [...(room.windows ?? []), opening] },
     );
+    setSelected(id);
     setZoomRoomId(target);
     // Close the panel and say what to do next.
     //
@@ -1993,6 +2048,9 @@ export default function FloorPlanEditor({
                    * a 4px line is about a millimetre of screen and no
                    * thumb finds it.
                    */
+                  const isSel = selected === op.id;
+                  const mx = (px1 + px2) / 2;
+                  const my = (py1 + py2) / 2;
                   return (
                     <g key={`op-${oi}`}>
                       <line
@@ -2001,7 +2059,7 @@ export default function FloorPlanEditor({
                         x2={px2}
                         y2={py2}
                         stroke="transparent"
-                        strokeWidth={22}
+                        strokeWidth={40}
                         strokeLinecap="round"
                         vectorEffect="non-scaling-stroke"
                         style={{ cursor: "grab" }}
@@ -2024,13 +2082,45 @@ export default function FloorPlanEditor({
                         onPointerUp={onOpeningPointerUp}
                         onPointerCancel={onOpeningPointerUp}
                       />
+                      {/* The opening itself, and a handle to move it by.
+                          A 4px line the colour of the wall it sits in,
+                          on a plan of a whole house, is a couple of
+                          millimetres of glass -- findable if you know
+                          it is there and invisible if you do not. It is
+                          now drawn thicker, with white jambs either
+                          side so it reads as a gap in the wall rather
+                          than a mark on it, and a solid dot in the
+                          middle that is the thing to drag. The dot is
+                          sized off uiScale, so it stays thumb-sized
+                          however far in the plan is zoomed. */}
+                      <line
+                        x1={px1}
+                        y1={py1}
+                        x2={px2}
+                        y2={py2}
+                        stroke={CREAM}
+                        strokeWidth={9}
+                        strokeLinecap="butt"
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="none"
+                      />
                       <line
                         x1={px1}
                         y1={py1}
                         x2={px2}
                         y2={py2}
                         stroke={colour}
-                        strokeWidth={4}
+                        strokeWidth={isSel ? 7 : 5}
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="none"
+                      />
+                      <circle
+                        cx={mx}
+                        cy={my}
+                        r={(isSel ? 0.28 : 0.22) * uiScale}
+                        fill={colour}
+                        stroke={CREAM}
+                        strokeWidth={2}
                         vectorEffect="non-scaling-stroke"
                         pointerEvents="none"
                       />
