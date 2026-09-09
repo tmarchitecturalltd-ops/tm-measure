@@ -25,6 +25,8 @@ import {
   parseMeters,
   scanOutlineWorthKeeping,
   roomFootprint,
+  roomBoundingBox,
+  snapToGrid,
   validateProject,
   scanOverallConfidence,
   makeRoomConnectionDraft,
@@ -1843,6 +1845,64 @@ export default function MeasureIntakeForm() {
    * during testing on iPhone Safari (where the file picker can be
    * fiddly) we don't want the user stuck on the rooms step.
    */
+  /**
+   * A room with nothing in it is not a room.
+   *
+   * This is the fix for a loop that survived three attempts at fixing
+   * the navigation, because the navigation was never the cause.
+   *
+   * validateProject checks every room in the list, and a blank room
+   * fails three ways at once -- no name, no wall length, no ceiling
+   * height. Those failures never clear on their own, so Review stays
+   * blocked forever, and the app sends the customer to the room that
+   * needs filling in. Meanwhile every route that offered to "add a
+   * room" created another blank one, contributing three more errors.
+   * The survey became unsubmittable in proportion to how often
+   * somebody tried to unblock it.
+   *
+   * Blank rooms are accidents: a mis-tap, a back button, a button of
+   * mine that did the wrong thing. Nobody deliberately adds a room and
+   * enters nothing. So they are dropped rather than complained about.
+   *
+   * "Blank" is strict -- any name, any measurement, any photo, memo,
+   * opening, outline or scan and it is real work and stays. And the
+   * last room is never dropped, so the survey always has one.
+   */
+  const roomIsBlank = (r: RoomDraft): boolean =>
+    !r.name.trim() &&
+    !r.walls.some((w) => w.lengthM.trim()) &&
+    !r.ceilingHeightM.trim() &&
+    (r.photos?.length ?? 0) === 0 &&
+    (r.voiceMemos?.length ?? 0) === 0 &&
+    (r.doors?.length ?? 0) === 0 &&
+    (r.windows?.length ?? 0) === 0 &&
+    (r.stairs?.length ?? 0) === 0 &&
+    (r.floorPolygonM?.length ?? 0) === 0 &&
+    r.measuredByScan !== true &&
+    !r.notes.trim() &&
+    !r.irregularNotes.trim();
+
+  /**
+   * Drop the blank ones. Returns what is left, and fixes the active
+   * index if it pointed at something that has just gone.
+   */
+  const pruneBlankRooms = (): RoomDraft[] => {
+    const kept = rooms.filter((r) => !roomIsBlank(r));
+    if (kept.length === rooms.length) return rooms;
+    if (kept.length === 0) return rooms;
+    const goneIds = new Set(
+      rooms.filter((r) => roomIsBlank(r)).map((r) => r.id),
+    );
+    setRooms(kept);
+    setPlacements((prev) => {
+      const next = { ...prev };
+      for (const id of goneIds) delete next[id];
+      return next;
+    });
+    setActiveRoomIndex((i) => Math.min(i, kept.length - 1));
+    return kept;
+  };
+
   const nonBlockingIssues = (rooms: RoomDraft[]) =>
     validateProject(rooms).filter((i) => !/-photos$/.test(i.path));
 
@@ -1906,6 +1966,10 @@ export default function MeasureIntakeForm() {
   const [navBlock, setNavBlock] = useState<{
     message: string;
     roomIndex: number | null;
+    /** A warning to acknowledge rather than a fault to correct. */
+    allowAnyway?: boolean;
+    /** Offer to put every unplaced room on the plan. */
+    placeAll?: boolean;
   } | null>(null);
 
   /*
@@ -1921,8 +1985,48 @@ export default function MeasureIntakeForm() {
     setNavBlock(null);
   }, [rooms]);
 
+  /**
+   * Put a room on the plan, clear of the ones already there.
+   *
+   * Offered from the "not ready" message, because the commonest thing
+   * standing between a customer and Review is a room that exists and
+   * simply is not on the drawing yet -- and being told that, on the
+   * plan, with no way to act on it, is the sort of thing that sends
+   * people round in circles. One tap, and they stay where they are.
+   *
+   * Dropped to the right of everything else rather than guessed into
+   * place: visibly wrong beats invisibly wrong, and it is one drag
+   * from right.
+   */
+  const placeRoomOnPlan = useCallback(
+    (roomId: string) => {
+      const room = rooms.find((r) => r.id === roomId);
+      if (!room) return;
+      const floor = placements[roomId]?.floor ?? 0;
+      const boxes = rooms
+        .filter((r) => placements[r.id]?.positionM && placements[r.id]?.floor === floor)
+        .map((r) =>
+          roomBoundingBox(
+            placements[r.id]!.positionM!,
+            roomFootprint(r),
+            placements[r.id]!.rotationDeg,
+          ),
+        );
+      const x = boxes.length ? Math.max(...boxes.map((b) => b.maxX)) + 1 : 0;
+      const z = boxes.length ? Math.min(...boxes.map((b) => b.minZ)) : 0;
+      updatePlacement(roomId, {
+        positionM: { x: snapToGrid(x), z: snapToGrid(z) },
+        rotationDeg: 0,
+        floor,
+      });
+    },
+    [rooms, placements, updatePlacement],
+  );
+
   const advanceTo = (next: "plan" | "review") => {
-    const v = nonBlockingIssues(rooms);
+    // Blank rooms first, or the customer is asked to fill in rooms
+    // that were never theirs. See pruneBlankRooms.
+    const v = nonBlockingIssues(pruneBlankRooms());
     setIssues(v);
     if (v.length) {
       const ri = firstIssueRoomIndex(v);
@@ -1937,6 +2041,30 @@ export default function MeasureIntakeForm() {
         roomIndex: ri,
       });
       return;
+    }
+
+    /*
+     * Nothing wrong with the rooms, but none of them are on the plan.
+     *
+     * Worth saying, and worth saying here rather than letting the
+     * submission arrive with no drawing. It does not block -- an
+     * unplaced survey is still a survey, and the review screen already
+     * warns that no CAD file will be attached.
+     */
+    if (next === "review" && !rooms.some((r) => placements[r.id]?.positionM)) {
+      setNavBlock({
+        message:
+          "None of your rooms are on the plan yet — put them on it, or press Review again to send without a drawing",
+        roomIndex: null,
+        placeAll: true,
+        // Not a fault in a room, so no "Fix it" button: there is
+        // nothing to go and correct, only something to decide.
+        allowAnyway: true,
+      });
+      // Said once. Pressing Review again goes through -- the customer
+      // has now been told, and refusing twice would be the same
+      // dead end this whole change exists to remove.
+      if (!navBlock?.allowAnyway) return;
     }
     setNavBlock(null);
     // Checks pass, so clear any earlier "not ready to send" banner
@@ -4864,24 +4992,64 @@ export default function MeasureIntakeForm() {
               navBlock ? (
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span>{navBlock.message}</span>
-                  {/* The button, rather than "open Steps to go there".
-                      Naming a menu and asking the customer to find the
-                      right item in it is three taps and a guess, on the
-                      screen where they have just been stopped. */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (navBlock.roomIndex !== null) {
-                        setActiveRoomIndex(navBlock.roomIndex);
-                      }
-                      setNavBlock(null);
-                      setStep("rooms");
-                    }}
-                    style={{ minHeight: 36 }}
-                    className="shrink-0 rounded-full bg-amber-900 px-4 text-sm font-bold uppercase tracking-widest text-amber-50"
-                  >
-                    Fix it
-                  </button>
+                  <span className="flex shrink-0 gap-2">
+                    {/* Put it on the plan, without leaving the plan.
+                        The named room usually exists and is simply not
+                        on the drawing yet, and being told that on the
+                        plan with no way to act on it is what sent
+                        people round in circles. */}
+                    {navBlock.roomIndex !== null &&
+                      rooms[navBlock.roomIndex] &&
+                      !placements[rooms[navBlock.roomIndex].id]?.positionM && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            placeRoomOnPlan(rooms[navBlock.roomIndex!].id);
+                            setNavBlock(null);
+                          }}
+                          style={{ minHeight: 36 }}
+                          className="rounded-full bg-amber-900 px-4 text-sm font-bold uppercase tracking-widest text-amber-50"
+                        >
+                          Add to plan
+                        </button>
+                      )}
+
+                    {navBlock.placeAll && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          rooms
+                            .filter((r) => !placements[r.id]?.positionM)
+                            .forEach((r) => placeRoomOnPlan(r.id));
+                          setNavBlock(null);
+                        }}
+                        style={{ minHeight: 36 }}
+                        className="rounded-full bg-amber-900 px-4 text-sm font-bold uppercase tracking-widest text-amber-50"
+                      >
+                        Add to plan
+                      </button>
+                    )}
+
+                    {/* Only when there is somewhere to go. A warning
+                        about the plan itself has nothing to fix in a
+                        room, and a button that jumps into the room
+                        flow is precisely how this screen turned into a
+                        loop. */}
+                    {navBlock.roomIndex !== null && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveRoomIndex(navBlock.roomIndex!);
+                          setNavBlock(null);
+                          setStep("rooms");
+                        }}
+                        style={{ minHeight: 36 }}
+                        className="rounded-full border border-amber-900 px-4 text-sm font-bold uppercase tracking-widest text-amber-900"
+                      >
+                        Fix it
+                      </button>
+                    )}
+                  </span>
                 </div>
               ) : null
             }
@@ -5460,7 +5628,7 @@ export default function MeasureIntakeForm() {
               setActiveRoomIndex((i) => i + 1);
               return;
             }
-            const v = nonBlockingIssues(rooms);
+            const v = nonBlockingIssues(pruneBlankRooms());
             setIssues(v);
             if (v.length) {
               // Something is wrong in a room other than this one —
