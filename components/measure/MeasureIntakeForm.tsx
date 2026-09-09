@@ -1887,7 +1887,10 @@ export default function MeasureIntakeForm() {
    * they pressed the button from. Going to the room is then their
    * choice, from the Steps menu.
    */
-  const [navBlock, setNavBlock] = useState<string | null>(null);
+  const [navBlock, setNavBlock] = useState<{
+    message: string;
+    roomIndex: number | null;
+  } | null>(null);
 
   /*
    * The complaint clears when the rooms change.
@@ -1908,10 +1911,15 @@ export default function MeasureIntakeForm() {
     if (v.length) {
       const ri = firstIssueRoomIndex(v);
       if (ri !== null) setActiveRoomIndex(ri);
-      const where = ri !== null ? rooms[ri]?.name?.trim() : "";
-      setNavBlock(
-        `${v[0].message}${where ? ` — in ${where}` : ""}. Open Steps to go there.`,
-      );
+      const named = ri !== null ? rooms[ri]?.name?.trim() : "";
+      // Rooms with no name are the commonest thing to be stuck on, so
+      // "in " with nothing after it was the likeliest outcome. Number
+      // them when they have nothing else to be called.
+      const where = named || (ri !== null ? `room ${ri + 1}` : "");
+      setNavBlock({
+        message: `${v[0].message.replace(/\.$/, "")}${where ? ` — in ${where}` : ""}`,
+        roomIndex: ri,
+      });
       return;
     }
     setNavBlock(null);
@@ -4836,7 +4844,31 @@ export default function MeasureIntakeForm() {
             onBack={() => setStep("proposal")}
             onNext={goReview}
             nextLabel="Review"
-            blockMessage={navBlock}
+            blockMessage={
+              navBlock ? (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span>{navBlock.message}</span>
+                  {/* The button, rather than "open Steps to go there".
+                      Naming a menu and asking the customer to find the
+                      right item in it is three taps and a guess, on the
+                      screen where they have just been stopped. */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (navBlock.roomIndex !== null) {
+                        setActiveRoomIndex(navBlock.roomIndex);
+                      }
+                      setNavBlock(null);
+                      setStep("rooms");
+                    }}
+                    style={{ minHeight: 36 }}
+                    className="shrink-0 rounded-full bg-amber-900 px-4 text-sm font-bold uppercase tracking-widest text-amber-50"
+                  >
+                    Fix it
+                  </button>
+                </div>
+              ) : null
+            }
             wide
           >
           <div>

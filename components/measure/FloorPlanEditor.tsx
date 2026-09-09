@@ -1163,12 +1163,23 @@ export default function FloorPlanEditor({
         startSvg: svg,
         startAnchor: { x: p.positionM.x, z: p.positionM.z },
       };
-      // Pin the frame the drag is measured in, so moving the room can't
-      // rescale the canvas out from under the gesture.
-      setFrozenViewBox(viewBox);
+      /*
+       * Pin the frame the drag is measured in -- the one on screen.
+       *
+       * This froze `viewBox`, the auto-fit around every room on the
+       * floor, rather than `activeViewBox`, what the customer is
+       * actually looking at. So touching a room while zoomed in threw
+       * the view straight back out to the whole floor, mid-gesture,
+       * and the room they were about to move jumped somewhere else on
+       * the screen.
+       *
+       * settleView then keeps this frame afterwards, so the zoom
+       * survives the drag as well.
+       */
+      setFrozenViewBox(activeViewBox);
       (e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
     },
-    [placementFor, svgCoordsFromEvent, viewBox],
+    [placementFor, svgCoordsFromEvent, activeViewBox],
   );
 
   const onRoomPointerMove = useCallback(
@@ -2018,7 +2029,7 @@ export default function FloorPlanEditor({
                           startLocal: { x: 0, z: 0 },
                           startPos: { x: 0, z: 0 },
                         };
-                        setFrozenViewBox(viewBox);
+                        setFrozenViewBox(activeViewBox);
                         (e.currentTarget as SVGElement).setPointerCapture(
                           e.pointerId,
                         );
@@ -2248,7 +2259,7 @@ export default function FloorPlanEditor({
                             kind: op.kind,
                             pointerId: e.pointerId,
                           };
-                          setFrozenViewBox(viewBox);
+                          setFrozenViewBox(activeViewBox);
                           (e.currentTarget as SVGElement).setPointerCapture(
                             e.pointerId,
                           );
@@ -2405,7 +2416,7 @@ export default function FloorPlanEditor({
                             startLocal: local,
                             startPos: local,
                           };
-                          setFrozenViewBox(viewBox);
+                          setFrozenViewBox(activeViewBox);
                           (e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
                         }}
                         onPointerMove={onItemPointerMove}
@@ -2620,11 +2631,29 @@ export default function FloorPlanEditor({
             is in the control row next to Clear now -- both put the
             view back, and a button sitting on the drawing is one more
             thing between the customer and the plan. */}
+        {/* An empty floor with rooms waiting is a dead end unless the
+            way out is on it. "Nothing here yet" stated the problem and
+            left the customer to work out that the answer was either
+            Auto-layout or opening To place and tapping five rooms one
+            at a time. The button is the same auto-layout, said where
+            it is needed. */}
         {roomsOnFloor.length === 0 && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <p className="rounded-lg bg-white/80 px-4 py-2 text-sm font-semibold text-[#6e6a5f] shadow-sm">
-              Nothing on {floorLabel(currentFloor)} yet.
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
+            <p className="rounded-lg bg-white/85 px-4 py-2 text-sm font-semibold text-[#6e6a5f] shadow-sm">
+              {unplacedOnFloor.length
+                ? `${unplacedOnFloor.length} room${unplacedOnFloor.length === 1 ? "" : "s"} to put on ${floorLabel(currentFloor)}`
+                : `Nothing on ${floorLabel(currentFloor)} yet.`}
             </p>
+            {unplacedOnFloor.length > 0 && (
+              <button
+                type="button"
+                onClick={applyAutoLayout}
+                style={{ minHeight: 48 }}
+                className="rounded-full bg-[#b89650] px-6 text-sm font-bold uppercase tracking-widest text-white shadow-lg"
+              >
+                Lay them out for me
+              </button>
+            )}
           </div>
         )}
       </div>

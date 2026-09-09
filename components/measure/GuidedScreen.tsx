@@ -69,8 +69,13 @@ type Props = {
   onNext: () => void;
   nextLabel: string;
   nextDisabled?: boolean;
-  /** Why Next is unavailable. Shown above the buttons. */
-  blockMessage?: string | null;
+  /**
+   * Why Next is unavailable. Shown above the buttons.
+   *
+   * A node rather than a string, so a message that names something to
+   * go and fix can carry the button that goes there.
+   */
+  blockMessage?: ReactNode;
   /**
    * Let the content run edge to edge and fill the band.
    *
@@ -265,9 +270,9 @@ export default function GuidedScreen({
         nextDisabled={nextDisabled}
         message={
           blockMessage ? (
-            <p className="rounded-md bg-amber-100/60 px-3 py-2 text-sm text-amber-900">
+            <div className="rounded-md bg-amber-100/60 px-3 py-2 text-sm text-amber-900">
               {blockMessage}
-            </p>
+            </div>
           ) : undefined
         }
       />
