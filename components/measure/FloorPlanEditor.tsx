@@ -922,6 +922,22 @@ export default function FloorPlanEditor({
       positionApprox: true,
     };
     if (insertKind === "stairs") {
+      /*
+       * Placed in the middle of the room and already free.
+       *
+       * A flight used to arrive pinned to a wall, which meant the
+       * first drag walked it round the perimeter before it would go
+       * anywhere useful. Starting it loose in the middle means the
+       * first drag does what a drag looks like it will do.
+       */
+      const p = placementFor(target);
+      const size = roomFootprint(room);
+      const centre = p.positionM
+        ? {
+            x: snapM(p.positionM.x + size.widthM / 2),
+            z: snapM(p.positionM.z + size.lengthM / 2),
+          }
+        : undefined;
       onRoomChange(target, {
         stairs: [
           ...(room.stairs ?? []),
@@ -931,6 +947,9 @@ export default function FloorPlanEditor({
             direction: "up" as const,
             treads: insertTreads.trim() || "13",
             winders: insertWinders,
+            ...(centre
+              ? { worldM: centre, headingDeg: p.rotationDeg }
+              : {}),
           },
         ],
       });
@@ -1080,39 +1099,25 @@ export default function FloorPlanEditor({
        */
       const world = svgCoordsFromEvent(e);
       if (!world) return;
-      const target = roomAtPoint(world);
-
-      /*
-       * Dropped outside every room — leave it there.
-       *
-       * A stairwell in a hall, a flight on an open landing, a run
-       * between two rooms that belongs to neither: all real, and all
-       * impossible while a flight could only be pinned to a wall of
-       * the room it happened to be entered in. Dragging one clear now
-       * frees it, and dragging it back into a room re-anchors it to
-       * the nearest wall.
-       */
       setJustAdded(null);
-      if (!target) {
-        setStairsFree(st.roomId, st.itemId, {
-          x: snapM(world.x),
-          z: snapM(world.z),
-        });
-        return;
-      }
-
-      const local = worldToLocal(world, placementFor(target.id));
-      if (!local) return;
-
-      if (target.id !== st.roomId) {
-        moveStairsToRoom(st.roomId, target.id, st.itemId);
-        // The id is preserved by the move, so the drag keeps hold of
-        // the same flight and the next pointermove slides it.
-        itemDragRef.current = { ...st, roomId: target.id };
-      }
-      slideStairs(target.id, st.itemId, {
-        x: snapM(local.x),
-        z: snapM(local.z),
+      /*
+       * Stairs move freely. They do not snap to walls.
+       *
+       * They used to find the nearest wall of whichever room the
+       * finger was over and pin themselves to it, which is how a
+       * staircase is built and a miserable way to move one: dragging
+       * across a room walked the flight round the perimeter, jumping
+       * from wall to wall, and it was near impossible to put it in the
+       * middle of a hall or across a corner where plenty of stairs
+       * actually are.
+       *
+       * The DXF has taken a free position since the outline work, so
+       * nothing downstream needs the wall. The chip on the flight
+       * still snaps it back to one for anyone who wants that.
+       */
+      setStairsFree(st.roomId, st.itemId, {
+        x: snapM(world.x),
+        z: snapM(world.z),
       });
     },
     // slideStairs must be listed: it closes over `rooms`, so omitting it
@@ -1249,19 +1254,13 @@ export default function FloorPlanEditor({
     }
 
     if ((room.stairs ?? []).some((st) => st.id === selected)) {
+      // Free movement, same as the direct drag above -- see the note
+      // there. Stairs go where they are put.
       setJustAdded(null);
-      const target = roomAtPoint(world);
-      if (!target) {
-        setStairsFree(room.id, selected, {
-          x: snapM(world.x),
-          z: snapM(world.z),
-        });
-        return true;
-      }
-      const local = worldToLocal(world, placementFor(target.id));
-      if (!local) return false;
-      if (target.id !== room.id) moveStairsToRoom(room.id, target.id, selected);
-      slideStairs(target.id, selected, { x: snapM(local.x), z: snapM(local.z) });
+      setStairsFree(room.id, selected, {
+        x: snapM(world.x),
+        z: snapM(world.z),
+      });
       return true;
     }
 
