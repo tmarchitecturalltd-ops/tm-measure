@@ -45,19 +45,26 @@ import {
 } from "@tm-designs/measure-core";
 
 /**
- * Standard UK leaf widths, in metres, labelled the way a merchant
- * lists them. Imperial in brackets because that is what is written on
- * the door in most houses built before the 1980s, and because a
- * customer holding a tape will recognise 2'6" faster than 0.762.
+ * Door widths, in metres.
+ *
+ * 760 internal and 800 external first, because those are the two TM
+ * Designs draws to and between them they cover almost every door in a
+ * survey. The rest are there for the ones that are obviously neither.
+ *
+ * The imperial equivalents that used to be in these labels are gone.
+ * They were there on the theory that a customer would recognise 2'6"
+ * faster than 0.762 -- but the first thing anyone needs to know here
+ * is whether the door is an inside one or an outside one, and two
+ * numbers per row buried that.
  */
 const DOOR_WIDTHS = [
-  { value: "0.610", label: "610 mm · 2'0\" (cupboard)" },
-  { value: "0.686", label: "686 mm · 2'3\"" },
-  { value: "0.762", label: "762 mm · 2'6\" (common)" },
-  { value: "0.838", label: "838 mm · 2'9\" (common)" },
-  { value: "0.926", label: "926 mm · 3'0\" (wide / front)" },
-  { value: "1.200", label: "1200 mm (double / French)" },
-  { value: "1.800", label: "1800 mm (patio / bi-fold)" },
+  { value: "0.760", label: "760 mm — internal" },
+  { value: "0.800", label: "800 mm — external" },
+  { value: "0.610", label: "610 mm — cupboard" },
+  { value: "0.686", label: "686 mm — narrow" },
+  { value: "0.926", label: "926 mm — wide" },
+  { value: "1.200", label: "1200 mm — double / French" },
+  { value: "1.800", label: "1800 mm — patio / bi-fold" },
 ] as const;
 
 /** Windows vary far more than doors, so this is a ladder, not a list. */
@@ -888,7 +895,7 @@ export default function FloorPlanEditor({
    */
   const insertRoomId =
     roomsOnFloor.find((r) => r.id === selected)?.id ?? roomsOnFloor[0]?.id ?? "";
-  const [insertWidthM, setInsertWidthM] = useState("0.838");
+  const [insertWidthM, setInsertWidthM] = useState("0.760");
   const [insertTreads, setInsertTreads] = useState("13");
   const [insertWinders, setInsertWinders] = useState(false);
 
@@ -1524,7 +1531,7 @@ export default function FloorPlanEditor({
                 : "border-[#b89650] text-[#8a6f2f]"
             }`}
           >
-            Add connector
+            Add feature
           </button>
         )}
 
@@ -1789,7 +1796,7 @@ export default function FloorPlanEditor({
                   // this, switching to Window leaves 0.838 selected --
                   // a value the window list does not contain, so the
                   // dropdown shows 600 mm and inserts 838.
-                  if (next === "door") setInsertWidthM("0.838");
+                  if (next === "door") setInsertWidthM("0.760");
                   if (next === "window") setInsertWidthM("1.200");
                 }}
                 className="rounded-lg border border-[#d9d3c8] bg-white px-3 py-2 text-sm"
@@ -1998,15 +2005,64 @@ export default function FloorPlanEditor({
               .map((st: RoomStairs) => {
                 const wM = Number.parseFloat(st.widthM);
                 const width = Number.isFinite(wM) && wM > 0 ? wM : 0.9;
-                const run = 2.6;
                 const at = st.worldM!;
                 const heading = st.headingDeg ?? 0;
                 const treads = 8;
+                /*
+                 * A flight that turns is drawn as an L.
+                 *
+                 * "Turns a corner" was a tick box that changed a note
+                 * in the drawing and nothing on the plan, so a corner
+                 * staircase looked exactly like a straight one and
+                 * there was no way to show where the turn was. Most
+                 * UK stairs turn at least once.
+                 *
+                 * The long leg runs along the heading and the short
+                 * one turns left off its end -- a quarter-turn, which
+                 * is the common case. Rotating the flight in 90-degree
+                 * steps puts the turn on whichever side it needs.
+                 */
+                const turns = st.winders === true;
+                const run = turns ? 1.9 : 2.6;
+                const leg = turns ? 1.3 : 0;
                 return (
                   <g
                     key={st.id}
                     transform={`translate(${at.x} ${at.z}) rotate(${heading} 0 0)`}
                   >
+                    {turns && (
+                      <>
+                        {/* The second leg, and its treads. */}
+                        <rect
+                          x={run - width}
+                          y={-width / 2 - leg}
+                          width={width}
+                          height={leg}
+                          fill="#efe7d6"
+                          fillOpacity={0.95}
+                          stroke={DARK}
+                          strokeWidth={1.5}
+                          vectorEffect="non-scaling-stroke"
+                          pointerEvents="none"
+                        />
+                        {Array.from({ length: 3 }, (_, i) => {
+                          const y = -width / 2 - (leg * (i + 1)) / 4;
+                          return (
+                            <line
+                              key={`leg-${i}`}
+                              x1={run - width}
+                              y1={y}
+                              x2={run}
+                              y2={y}
+                              stroke={DARK}
+                              strokeWidth={0.5}
+                              vectorEffect="non-scaling-stroke"
+                              pointerEvents="none"
+                            />
+                          );
+                        })}
+                      </>
+                    )}
                     <rect
                       x={0}
                       y={-width / 2}

@@ -223,7 +223,32 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
      * coaching instructions below, and RoomCaptureView draws the live
      * model itself.
      */
-    func captureSession(_ session: RoomCaptureSession, didAdd room: CapturedRoom) {}
+    /**
+     * Nudge the customer to show us the doorways.
+     *
+     * RoomPlan finds walls readily and doors only if they are looked
+     * at -- a doorway swept past at an angle is often missed. Those
+     * doors are what tell us how the rooms join up, and without them
+     * the app has to ask the customer to arrange the rooms by hand on
+     * a floor plan afterwards. Every door the sensor sees is a step
+     * the customer does not have to do.
+     *
+     * Fired the first time a room is added with no doors on it, and
+     * not repeated -- a prompt that keeps reappearing while somebody
+     * is concentrating is worse than one they missed.
+     */
+    func captureSession(_ session: RoomCaptureSession, didAdd room: CapturedRoom) {
+        guard !doorPromptShown, room.doors.isEmpty else { return }
+        doorPromptShown = true
+        DispatchQueue.main.async { [weak self] in
+            self?.modalVC?.showCoaching(
+                "Point at each doorway as you pass it - it tells us how the rooms join up"
+            )
+        }
+    }
+
+    /// One doorway prompt per scan. See captureSession(_:didAdd:).
+    private var doorPromptShown = false
 
     /**
      * Apple's own scanning advice, in our words and our size.

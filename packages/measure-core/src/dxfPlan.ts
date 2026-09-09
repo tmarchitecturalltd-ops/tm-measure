@@ -142,7 +142,42 @@ export function wallsAreShared(
  */
 export function roomOutlineM(entry: PlanRoomInput): Pt[] {
   const { room, anchor, rotationDeg } = entry;
-  const poly = room.floorPolygonM;
+  let poly = room.floorPolygonM;
+
+  /*
+   * An L-shaped room is an L in the drawing too.
+   *
+   * "L-shape" is one of the three shapes the app offers, and picking
+   * it stores a notch width and length -- two numbers that were used
+   * to draw the L on screen and nowhere else. measure-core never
+   * looked at them, so roomOutlineM fell through to the rectangle and
+   * every L-shaped room reached CAD as a box.
+   *
+   * That is the worst way to be wrong: the customer chose the shape,
+   * watched the app draw it correctly, and the drawing that left the
+   * building disagreed. Six corners, same order as the editor's path.
+   */
+  if (
+    (!poly || poly.length < 3) &&
+    room.shape === "l-shape" &&
+    room.notchWidthM &&
+    room.notchLengthM
+  ) {
+    const { widthM: w, lengthM: h } = roomFootprint(room);
+    const nw = Math.min(Number.parseFloat(room.notchWidthM) || 0, w * 0.95);
+    const nl = Math.min(Number.parseFloat(room.notchLengthM) || 0, h * 0.95);
+    if (nw > 0 && nl > 0) {
+      poly = [
+        { x: 0, z: 0 },
+        { x: w, z: 0 },
+        { x: w, z: h - nl },
+        { x: w - nw, z: h - nl },
+        { x: w - nw, z: h },
+        { x: 0, z: h },
+      ];
+    }
+  }
+
   if (!poly || poly.length < 3) {
     return roomCornersM(anchor, roomFootprint(room), rotationDeg);
   }
@@ -911,6 +946,33 @@ function drawStairs(
   const back = p(start + runLen - 0.35, midOff);
   out.push(line(LAYER.stairs, tip, { x: back.x + n.x * 0.12, z: back.z + n.z * 0.12 }));
   out.push(line(LAYER.stairs, tip, { x: back.x - n.x * 0.12, z: back.z - n.z * 0.12 }));
+
+  /*
+   * A turning flight gets its second leg drawn.
+   *
+   * `winders` used to add "(WINDERS)" to the label and nothing else,
+   * so a quarter-turn staircase reached CAD as a straight run with a
+   * note beside it -- and the note is easy to miss when the geometry
+   * says otherwise. Most UK stairs turn at least once, and where the
+   * turn is decides what fits underneath.
+   *
+   * Drawn off the far end, turning left, matching the plan on screen.
+   */
+  if (s.winders) {
+    const legLen = 1.3;
+    const q = (d: number, off: number): Pt => ({
+      x: a.x + dir.x * d + n.x * off,
+      z: a.z + dir.z * d + n.z * off,
+    });
+    const endD = start + runLen;
+    out.push(line(LAYER.stairs, q(endD - w, w), q(endD - w, w + legLen)));
+    out.push(line(LAYER.stairs, q(endD, w), q(endD, w + legLen)));
+    out.push(line(LAYER.stairs, q(endD - w, w + legLen), q(endD, w + legLen)));
+    for (let i = 1; i < 4; i++) {
+      const off = w + (legLen * i) / 4;
+      out.push(line(LAYER.stairs, q(endD - w, off), q(endD, off)));
+    }
+  }
 
   out.push(
     text(

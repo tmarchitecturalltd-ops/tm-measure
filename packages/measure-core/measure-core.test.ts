@@ -31,7 +31,12 @@ import { buildFloorPlanDxf, roomCornersM } from "./src/dxf.ts";
 import { buildWalls, buildDetailedPlanDxf, roomOutlineM } from "./src/dxfPlan.ts";
 import { fixtureFootprintM } from "./src/types.ts";
 import { validateRoom } from "./src/validation.ts";
-import { scanPolygonIsUsable, scanOutlineWorthKeeping } from "./src/scan.ts";
+import {
+  scanPolygonIsUsable,
+  scanOutlineWorthKeeping,
+  looksLikeStrayCapture,
+  outlineThumbnail,
+} from "./src/scan.ts";
 import type { RoomDraft } from "./src/types.ts";
 import {
   normalizeConnections,
@@ -289,6 +294,103 @@ test("a chimney breast survives the scan instead of being flattened", () => {
     false,
     "a sliver is worse than a rectangle",
   );
+});
+
+test("a doorway caught in passing is not offered as a room", () => {
+  /*
+   * A whole-property scan captures whatever the sensor sees, including
+   * places nobody walked into: a hallway through an open door, a
+   * cupboard, half the room next door. Those arrive as rooms and the
+   * customer is asked to name and photograph them.
+   *
+   * Floor area is the honest test. Nothing anyone deliberately surveys
+   * is under a square metre and a half; the smallest real room in a
+   * British house -- a downstairs loo -- is comfortably above it.
+   */
+  // A doorway's worth of capture.
+  assert.equal(looksLikeStrayCapture(0.9, 1.0), true);
+  // A downstairs loo. Small, and a real room.
+  assert.equal(looksLikeStrayCapture(1.6, 1.2), false);
+  assert.equal(looksLikeStrayCapture(4.2, 3.1), false);
+  // Nonsense is treated as a stray rather than offered.
+  assert.equal(looksLikeStrayCapture(0, 0), true);
+  // An explicit floor area wins over width × length, because an
+  // L-shaped room's bounding box overstates it.
+  assert.equal(looksLikeStrayCapture(3, 3, 1.2), true);
+});
+
+test("an outline thumbnail keeps the room's proportions", () => {
+  /*
+   * The filter screen draws each room's own shape beside its size,
+   * because two numbers tell you a room is 4.2 by 3.1 and the shape
+   * tells you which room it is -- and whether the scan caught the
+   * chimney breast, which until now could only be checked by opening
+   * the DXF on a computer.
+   *
+   * A long thin hallway has to read as a long thin hallway. Stretching
+   * each shape to fill its box would make every room look the same,
+   * which is the one thing this must not do.
+   */
+  const hallway = [
+    { x: 0, z: 0 },
+    { x: 6, z: 0 },
+    { x: 6, z: 1 },
+    { x: 0, z: 1 },
+  ];
+  const t = outlineThumbnail(hallway, 40, 4);
+  assert.ok(t, "a rectangle is still a drawable outline");
+
+  const nums = t!.path.match(/-?\d+\.\d\d/g)!.map(Number);
+  const xs = nums.filter((_, i) => i % 2 === 0);
+  const zs = nums.filter((_, i) => i % 2 === 1);
+  const w = Math.max(...xs) - Math.min(...xs);
+  const h = Math.max(...zs) - Math.min(...zs);
+  assert.ok(
+    Math.abs(w / h - 6) < 0.01,
+    `6:1 room should stay 6:1, got ${(w / h).toFixed(2)}`,
+  );
+  // And it fits inside the box with its padding.
+  assert.ok(Math.min(...xs) >= 3.9 && Math.max(...xs) <= 36.1);
+
+  assert.equal(outlineThumbnail(null), null);
+  assert.equal(outlineThumbnail([{ x: 0, z: 0 }]), null);
+});
+
+test("an L-shaped room reaches the DXF as an L", () => {
+  /*
+   * "L-shape" is one of the three shapes the app offers, and choosing
+   * it stores a notch width and length. Those two numbers drew the L
+   * on screen and were read by nothing else -- measure-core never
+   * looked at them, so the drawing that left the building was a plain
+   * rectangle.
+   *
+   * The worst way to be wrong: the customer picked the shape, watched
+   * the app draw it correctly, and Charlie received a box.
+   */
+  const room = planRoom("l", "Lounge", 4, 4);
+  room.shape = "l-shape";
+  room.notchWidthM = "1.5";
+  room.notchLengthM = "1.5";
+  room.floorPolygonM = undefined;
+
+  const outline = roomOutlineM({
+    room,
+    anchor: { x: 0, z: 0 },
+    rotationDeg: 0,
+  });
+  assert.equal(outline.length, 6, "an L has six corners, not four");
+
+  // The bite is out of the bottom-right, so no corner sits at (4, 4).
+  assert.ok(
+    !outline.some((p) => Math.abs(p.x - 4) < 0.01 && Math.abs(p.z - 4) < 0.01),
+    "the notch corner must not be part of the outline",
+  );
+
+  // And the walls follow the L rather than the bounding box.
+  const dxf = buildDetailedPlanDxf([
+    { room, anchor: { x: 0, z: 0 }, rotationDeg: 0 },
+  ]);
+  assert.match(dxf, /\n1\n2500\n/, "the short walls either side of the notch");
 });
 
 test("the DXF is structurally well-formed", () => {

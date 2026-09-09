@@ -213,13 +213,27 @@ workflows:
       - name: Bump versionCode from build number
         script: |
           node -e "const fs=require('fs');const f='android/app/build.gradle';const s=fs.readFileSync(f,'utf8');const cur=parseInt((s.match(/versionCode\s+(\d+)/)||[])[1]||'0',10);const fromCounter=parseInt(process.env.BUILD_NUMBER||'0',10)+1000;const c=Math.max(fromCounter,cur+1);fs.writeFileSync(f,s.replace(/versionCode\s+\d+/,'versionCode '+c));console.log('versionCode = '+c+' (file had '+cur+', counter suggested '+fromCounter+')');"
-      - name: Build & sign release AAB
+      # Both an AAB and an APK.
+      #
+      # The AAB is what Google Play wants and the only thing this
+      # workflow used to produce -- which meant there was no way to get
+      # the app onto an Android phone at all. An .aab cannot be
+      # installed on a device; it is a bundle Play splits into APKs at
+      # download time. So every Android build so far has been
+      # untestable by anyone without a Play Console listing.
+      #
+      # assembleRelease produces an installable, signed APK from the
+      # same code and the same signing key. Download it from the build
+      # artifacts, send it to the phone, and open it -- Android will
+      # ask permission to install from that source the first time.
+      - name: Build & sign release AAB and APK
         script: |
           cd android
           chmod +x ./gradlew
-          ./gradlew bundleRelease
+          ./gradlew bundleRelease assembleRelease
     artifacts:
       - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/*.apk
       - android/app/build/outputs/**/mapping.txt
     # publishing block deferred until the Google Play service-account
     # credentials are configured in Codemagic env vars. Builds produce

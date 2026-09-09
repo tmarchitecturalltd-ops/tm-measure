@@ -60,6 +60,7 @@ import GuidedRoomFlow from "@/components/measure/GuidedRoomFlow";
 import GuidedProjectFlow from "@/components/measure/GuidedProjectFlow";
 import GuidedExtrasFlow from "@/components/measure/GuidedExtrasFlow";
 import HowItWorksOverlay from "@/components/measure/HowItWorksOverlay";
+import ScanResultFilter from "@/components/measure/ScanResultFilter";
 import GuidedScreen from "@/components/measure/GuidedScreen";
 import LengthHint from "@/components/measure/LengthHint";
 import {
@@ -835,6 +836,15 @@ export default function MeasureIntakeForm() {
      */
     setForcedAllView(false);
     setGuidedMode(true);
+    /*
+     * Confirm what the scan found before naming any of it.
+     *
+     * Straight into "What's this room called?" for Room 1 of 6 asks
+     * the customer to name six things they have not been shown. The
+     * filter screen lists them with their shapes first; anything they
+     * untick never reaches the room flow.
+     */
+    setScanReviewIds(built.map((b) => b.id));
     setStep("rooms");
 
     // Write it out now rather than waiting for the debounce.
@@ -1973,6 +1983,15 @@ export default function MeasureIntakeForm() {
    */
   const [planSeeded, setPlanSeeded] = useState(false);
 
+  /**
+   * Room ids from a whole-property scan, awaiting the customer's
+   * confirmation that they are all rooms.
+   *
+   * Non-empty puts ScanResultFilter on screen. Emptied either by
+   * confirming or by dropping the unwanted ones.
+   */
+  const [scanReviewIds, setScanReviewIds] = useState<string[]>([]);
+
   const [navBlock, setNavBlock] = useState<{
     message: string;
     roomIndex: number | null;
@@ -2086,6 +2105,26 @@ export default function MeasureIntakeForm() {
     }
     setStep(next);
   };
+
+  /**
+   * Every room already has a position, put there by the sensor.
+   *
+   * A whole-property LiDAR scan reports each room in one shared frame,
+   * and applyHouseScan writes those positions straight into
+   * `placements`. So the floor plan step, for that survey, asks the
+   * customer to arrange by hand something the sensor has already
+   * arranged properly -- and any dragging they do can only make it
+   * less accurate.
+   *
+   * The step is skipped when every room is placed. Room-by-room scans
+   * and typed surveys still get it, because nothing in those knows
+   * where one room sits relative to another.
+   *
+   * Reachable from the Steps menu on the review screen either way, so
+   * a customer who wants to move something still can.
+   */
+  const planAlreadyDone =
+    rooms.length > 0 && rooms.every((r) => placements[r.id]?.positionM);
 
   const goPlan = () => advanceTo("plan");
 
@@ -5155,12 +5194,21 @@ export default function MeasureIntakeForm() {
               {
                 items: [
                   { label: "Back to the rooms", onClick: () => setStep("rooms") },
-                  { label: "Back to the floor plan", onClick: () => setStep("plan") },
+                  {
+                    label: planAlreadyDone
+                      ? "Move rooms on the floor plan"
+                      : "Back to the floor plan",
+                    onClick: () => setStep("plan"),
+                  },
                 ],
               },
             ]}
             scrollKey="review"
-            onBack={() => setStep("plan")}
+            /* Back to where they actually came from. A LiDAR survey
+               skipped the plan, so sending them "back" to a step they
+               never saw would be the same wrong-footing the room flow
+               used to do. */
+            onBack={() => setStep(planAlreadyDone ? "proposal" : "plan")}
             onNext={submitToBackend}
             nextDisabled={submitStatus === "submitting"}
             nextLabel={
@@ -5188,6 +5236,32 @@ export default function MeasureIntakeForm() {
               <h2 className="font-headline mb-1 text-xl text-on-surface">
                 Submission summary
               </h2>
+
+              {/* One verdict on the scan, in plain words.
+                  A LiDAR survey no longer passes through the floor
+                  plan step, so the review screen is the only place the
+                  customer sees whether the sensor did a good job. Per
+                  room it would be six lines of HIGH and LOW that
+                  nobody can act on; one line about the whole scan is
+                  something they can. */}
+              {(() => {
+                const scanned = rooms.filter((r) => r.measuredByScan);
+                if (!scanned.length) return null;
+                const shaped = scanned.filter(
+                  (r) => (r.floorPolygonM?.length ?? 0) >= 5,
+                ).length;
+                return (
+                  <p className="mb-3 rounded-lg bg-primary/10 px-3 py-2 text-sm text-on-surface">
+                    <span className="font-semibold">
+                      Scanned {scanned.length} room
+                      {scanned.length === 1 ? "" : "s"} with the sensor
+                    </span>
+                    {shaped > 0
+                      ? ` — ${shaped} with alcoves or corners picked up. The layout came from the scan, so there is nothing to arrange.`
+                      : " — all measured as straight-sided rooms. The layout came from the scan, so there is nothing to arrange."}
+                  </p>
+                );
+              })()}
               <p className="mb-4 text-sm text-on-surface-variant">
                 {customerName} · {email} · {projectName}
               </p>
@@ -5578,7 +5652,36 @@ export default function MeasureIntakeForm() {
           onAddSketches={attachProposalSketches}
           onRemoveSketch={removeProposalSketch}
           onBackToRooms={() => setStep("rooms")}
-          onDone={() => setStep("plan")}
+          /*
+           * Straight to review when the sensor has already placed
+           * every room -- see planAlreadyDone. Otherwise the plan,
+           * because nothing else knows where the rooms go.
+           */
+          onDone={() => setStep(planAlreadyDone ? "review" : "plan")}
+        />
+      )}
+
+      {/* What the scan found, before anything is named.
+          Sits above the room flow because it has to be answered first;
+          its own takeover, so the questions behind it are not visible
+          under it. */}
+      {scanReviewIds.length > 0 && (
+        <ScanResultFilter
+          rooms={rooms.filter((r) => scanReviewIds.includes(r.id))}
+          onBack={() => setScanReviewIds([])}
+          onConfirm={(keepIds) => {
+            const drop = scanReviewIds.filter((id) => !keepIds.includes(id));
+            if (drop.length) {
+              setRooms((prev) => prev.filter((r) => !drop.includes(r.id)));
+              setPlacements((prev) => {
+                const next = { ...prev };
+                for (const id of drop) delete next[id];
+                return next;
+              });
+            }
+            setActiveRoomIndex(0);
+            setScanReviewIds([]);
+          }}
         />
       )}
 

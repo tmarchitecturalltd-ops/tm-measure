@@ -138,7 +138,32 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionDe
      * coaching instructions below, and RoomCaptureView draws the live
      * model itself.
      */
-    func captureSession(_ session: RoomCaptureSession, didAdd room: CapturedRoom) {}
+    /**
+     * Nudge the customer to show us the doorways.
+     *
+     * RoomPlan finds walls readily and doors only if they are looked
+     * at -- a doorway swept past at an angle is often missed. Those
+     * doors are what tell us how the rooms join up, and without them
+     * the app has to ask the customer to arrange the rooms by hand on
+     * a floor plan afterwards. Every door the sensor sees is a step
+     * the customer does not have to do.
+     *
+     * Fired the first time a room is added with no doors on it, and
+     * not repeated -- a prompt that keeps reappearing while somebody
+     * is concentrating is worse than one they missed.
+     */
+    func captureSession(_ session: RoomCaptureSession, didAdd room: CapturedRoom) {
+        guard !doorPromptShown, room.doors.isEmpty else { return }
+        doorPromptShown = true
+        DispatchQueue.main.async { [weak self] in
+            self?.modalVC?.showCoaching(
+                "Point at each doorway as you pass it - it tells us how the rooms join up"
+            )
+        }
+    }
+
+    /// One doorway prompt per scan. See captureSession(_:didAdd:).
+    private var doorPromptShown = false
 
     /**
      * Apple's own scanning advice, in our words and our size.
@@ -495,7 +520,35 @@ enum CaptureSerializer {
         // stepped ceilings.
         let heightM = captured.walls.map { Double($0.dimensions.y) }.max() ?? 2.4
 
-        let roomDict: [String: Any] = [
+        // The outline, and the corner it is measured from.
+        //
+        // This path computed the floor polygon, used it to derive a
+        // width and a length, and then dropped it -- so a single-room
+        // scan reached the app as a plain rectangle no matter what
+        // shape the room was. Alcoves, chimney breasts and dog legs
+        // were captured by the sensor, used to work out two numbers,
+        // and discarded. The whole-property path has sent the polygon
+        // for some time; this one never has.
+        //
+        // Reported as "lidar doesn't catch alcoves". The app-side fix
+        // for the same complaint was necessary and not sufficient:
+        // there was nothing arriving for it to keep.
+        //
+        // originM is the polygon's minimum corner, because the app
+        // stores an outline relative to the room's own anchor and the
+        // points here are in the capture's world frame. Without it the
+        // shape is drawn at ARKit coordinates, far from the room.
+        var polygonDicts: [[String: Any]] = []
+        var originDict: [String: Any]? = nil
+        let outline = floorPoly.isEmpty ? fallbackPts : floorPoly
+        if outline.count >= 3 {
+            let minX = outline.map { $0.0 }.min() ?? 0
+            let minZ = outline.map { $0.1 }.min() ?? 0
+            polygonDicts = outline.map { ["x": $0.0, "z": $0.1] }
+            originDict = ["x": minX, "z": minZ]
+        }
+
+        var roomDict: [String: Any] = [
             "id": UUID().uuidString,
             "widthM": widthM,
             "lengthM": lengthM,
@@ -507,6 +560,10 @@ enum CaptureSerializer {
             "windows": windowDicts,
             "openings": openingDicts,
         ]
+        if !polygonDicts.isEmpty {
+            roomDict["floorPolygonM"] = polygonDicts
+            if let o = originDict { roomDict["originM"] = o }
+        }
         return [
             "rooms": [roomDict],
             "durationS": durationS,

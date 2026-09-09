@@ -174,3 +174,78 @@ export function scanOutlineWorthKeeping(
   if (!polygon || polygon.length < 5) return false;
   return scanPolygonIsUsable(polygon, widthM, lengthM);
 }
+
+/**
+ * Is this capture a room, or something glimpsed on the way past?
+ *
+ * A whole-property scan picks up whatever the sensor sees, and that
+ * includes places nobody walked into: a hallway through an open door,
+ * a cupboard, half the room next door. They arrive as rooms, get
+ * numbered like rooms, and the customer is then asked to name and
+ * photograph them.
+ *
+ * Floor area is the honest test. Nothing anyone deliberately surveys
+ * is under a square metre and a half -- that is a doorway or a broom
+ * cupboard -- while the smallest real room in a British house, a
+ * downstairs loo, is comfortably above it.
+ *
+ * Used to pre-untick rows on the review screen, not to delete
+ * anything. A cupboard genuinely being surveyed is one tap away.
+ */
+export const STRAY_CAPTURE_MAX_M2 = 1.5;
+
+export function looksLikeStrayCapture(
+  widthM: number,
+  lengthM: number,
+  floorAreaM2?: number,
+): boolean {
+  const area =
+    Number.isFinite(floorAreaM2) && (floorAreaM2 as number) > 0
+      ? (floorAreaM2 as number)
+      : widthM * lengthM;
+  if (!Number.isFinite(area) || area <= 0) return true;
+  return area < STRAY_CAPTURE_MAX_M2;
+}
+
+/**
+ * A room outline scaled into a small box, for a thumbnail.
+ *
+ * Returns an SVG path and the viewBox to draw it in, or null when
+ * there is no outline worth drawing. Lives here rather than in the
+ * component because it is geometry, and because the review screen and
+ * anything else that wants to show a room's shape should agree.
+ *
+ * The aspect ratio is preserved and the shape is centred, so a long
+ * thin hallway reads as a long thin hallway rather than being
+ * stretched to fill the square.
+ */
+export function outlineThumbnail(
+  polygon: { x: number; z: number }[] | null | undefined,
+  boxPx = 40,
+  padPx = 3,
+): { path: string; size: number } | null {
+  if (!polygon || polygon.length < 3) return null;
+  const xs = polygon.map((p) => p.x);
+  const zs = polygon.map((p) => p.z);
+  const minX = Math.min(...xs);
+  const minZ = Math.min(...zs);
+  const w = Math.max(...xs) - minX;
+  const h = Math.max(...zs) - minZ;
+  if (!(w > 0) || !(h > 0)) return null;
+
+  const inner = boxPx - padPx * 2;
+  const scale = Math.min(inner / w, inner / h);
+  const offX = padPx + (inner - w * scale) / 2;
+  const offZ = padPx + (inner - h * scale) / 2;
+
+  const path =
+    polygon
+      .map((p, i) => {
+        const x = offX + (p.x - minX) * scale;
+        const z = offZ + (p.z - minZ) * scale;
+        return `${i === 0 ? "M" : "L"} ${x.toFixed(2)} ${z.toFixed(2)}`;
+      })
+      .join(" ") + " Z";
+
+  return { path, size: boxPx };
+}
