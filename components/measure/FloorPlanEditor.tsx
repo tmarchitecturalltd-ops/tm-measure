@@ -1154,6 +1154,9 @@ export default function FloorPlanEditor({
        * pin one line before it was set.
        */
       e.stopPropagation();
+      // Selecting is what reveals the room's own chips, and what makes
+      // a later drag anywhere on the plan move this room.
+      setSelected(roomId);
       dragRef.current = {
         roomId,
         pointerId: e.pointerId,
@@ -2216,6 +2219,13 @@ export default function FloorPlanEditor({
                   const isSel = selected === op.id;
                   const mx = (px1 + px2) / 2;
                   const my = (py1 + py2) / 2;
+                  // Unit vector from the opening towards the middle of
+                  // the room, for placing the delete chip.
+                  const towardX = w / 2 - mx;
+                  const towardZ = h / 2 - my;
+                  const towardLen = Math.hypot(towardX, towardZ) || 1;
+                  const inX = towardX / towardLen;
+                  const inZ = towardZ / towardLen;
                   return (
                     <g key={`op-${oi}`}>
                       <line
@@ -2289,6 +2299,59 @@ export default function FloorPlanEditor({
                         vectorEffect="non-scaling-stroke"
                         pointerEvents="none"
                       />
+                      {/* Delete, on the thing itself.
+                          Getting rid of a door meant tapping it, then
+                          finding the Delete button in the control row
+                          above the plan and reading which of the eight
+                          things on screen it was going to remove. The
+                          x appears on the selected opening, just
+                          inside the room so it never sits over the
+                          wall, and there is no doubt what it applies
+                          to. */}
+                      {isSel && onRoomChange && (
+                        <g
+                          transform={`translate(${mx + inX * 0.55 * uiScale} ${my + inZ * 0.55 * uiScale})`}
+                          style={{ cursor: "pointer" }}
+                          onPointerDown={(ev) => ev.stopPropagation()}
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            setSelected(null);
+                            onRoomChange(
+                              r.id,
+                              op.kind === "door"
+                                ? {
+                                    doors: (r.doors ?? []).filter(
+                                      (d) => d.id !== op.id,
+                                    ),
+                                  }
+                                : {
+                                    windows: (r.windows ?? []).filter(
+                                      (wn) => wn.id !== op.id,
+                                    ),
+                                  },
+                            );
+                          }}
+                        >
+                          <circle r={0.55 * uiScale} fill="transparent" />
+                          <circle
+                            r={0.3 * uiScale}
+                            fill="#8a2f2f"
+                            stroke={CREAM}
+                            strokeWidth={2}
+                            vectorEffect="non-scaling-stroke"
+                          />
+                          <text
+                            x={0}
+                            y={0.11 * uiScale}
+                            fontSize={0.36 * uiScale}
+                            textAnchor="middle"
+                            fill={CREAM}
+                            pointerEvents="none"
+                          >
+                            ×
+                          </text>
+                        </g>
+                      )}
                     </g>
                   );
                 })}
@@ -2393,9 +2456,24 @@ export default function FloorPlanEditor({
                   );
                 })}
 
-                {/* Rotate chip — top-right of the unrotated rectangle */}
+                {/* ── Room chips, only on the selected room ──────────
+                    These were on every room all the time, in the two
+                    corners -- which is exactly where a door on the top
+                    or right wall sits, so tapping a door near a corner
+                    hit "rotate" or "remove from plan" instead. Four
+                    rooms meant eight chips permanently over the
+                    drawing, and none of them was wanted until a room
+                    had been chosen.
+
+                    They now appear on the selected room only, and they
+                    have moved inside it -- a third of the way in from
+                    the corner rather than sitting on the wall, so they
+                    no longer overlap anything drawn in the wall
+                    itself. */}
+                {selected === r.id && (
+                <>
                 <g
-                  transform={`translate(${size.widthM - 0.4 * uiScale} ${0.4 * uiScale})`}
+                  transform={`translate(${size.widthM - 0.9 * uiScale} ${0.9 * uiScale})`}
                   style={{ cursor: "pointer" }}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
@@ -2426,7 +2504,7 @@ export default function FloorPlanEditor({
 
                 {/* Unplace chip — bottom-right */}
                 <g
-                  transform={`translate(${size.widthM - 0.4 * uiScale} ${size.lengthM - 0.4 * uiScale})`}
+                  transform={`translate(${size.widthM - 0.9 * uiScale} ${size.lengthM - 0.9 * uiScale})`}
                   style={{ cursor: "pointer" }}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
@@ -2454,6 +2532,8 @@ export default function FloorPlanEditor({
                     ×
                   </text>
                 </g>
+                </>
+                )}
               </g>
             );
           })}
