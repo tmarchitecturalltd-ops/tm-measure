@@ -235,9 +235,14 @@ export default function GuidedScreen({
               {eyebrow}
             </p>
           )}
-          <h2 className="font-headline mb-5 text-3xl leading-tight text-on-surface">
-            {title}
-          </h2>
+          {/* An empty title renders nothing at all rather than an
+              empty heading holding open five rems of margin. The floor
+              plan step uses this: the grid is the heading. */}
+          {title && (
+            <h2 className="font-headline mb-5 text-3xl leading-tight text-on-surface">
+              {title}
+            </h2>
+          )}
 
           {children}
         </div>

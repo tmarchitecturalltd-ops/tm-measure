@@ -229,10 +229,26 @@ export default function FloorPlanEditor({
   const [openPanel, setOpenPanel] = useState<
     null | "rooms" | "feature" | "ceiling"
   >(null);
+
   /** What was just added, so the plan can say to drag it. */
   const [justAdded, setJustAdded] = useState<
     null | "door" | "window" | "stairs"
   >(null);
+
+  /*
+   * And it goes away by itself.
+   *
+   * It cleared on the first drag, which is fine for someone who drags
+   * and useless for someone who does not -- the banner then sat over
+   * the top of the plan for the rest of the session, covering the
+   * thing it was pointing at. Six seconds is long enough to read
+   * twice.
+   */
+  useEffect(() => {
+    if (!justAdded) return;
+    const t = setTimeout(() => setJustAdded(null), 6000);
+    return () => clearTimeout(t);
+  }, [justAdded]);
 
   const zoomViewBox = useMemo(() => {
     if (!zoomRoomId) return null;
@@ -287,6 +303,74 @@ export default function FloorPlanEditor({
    * collected from the room questions later without rebuilding it.
    */
   const [selected, setSelected] = useState<string | null>(null);
+
+  /**
+   * What the bin would delete, and what to call it.
+   *
+   * `selected` holds whichever id was last tapped -- a room, an
+   * opening or a flight of stairs -- so this works out which of the
+   * three it is and produces a label the customer can check before
+   * pressing. "Delete" on its own, next to a plan with eight things on
+   * it, is not a question anyone should have to answer from memory.
+   */
+  const selectedThing = useMemo(() => {
+    if (!selected) return null;
+    /*
+     * Features only -- not rooms.
+     *
+     * The Room dropdown sets `selected`, so a customer who picked a
+     * room in order to add a door to it was then offered "Delete
+     * kitchen" in the same row as the Add connector button. Pressing
+     * it only unplaced the room, which is recoverable, but the trap is
+     * obvious and the label was two words from being catastrophic.
+     *
+     * A room comes off the plan with its own x chip and is deleted
+     * properly from the Steps menu, which names it and sits next to
+     * the undo.
+     */
+    for (const r of rooms) {
+      if ((r.doors ?? []).some((d) => d.id === selected)) {
+        return { kind: "door" as const, roomId: r.id, label: "door" };
+      }
+      if ((r.windows ?? []).some((w) => w.id === selected)) {
+        return { kind: "window" as const, roomId: r.id, label: "window" };
+      }
+      if ((r.stairs ?? []).some((st) => st.id === selected)) {
+        return { kind: "stairs" as const, roomId: r.id, label: "stairs" };
+      }
+    }
+    return null;
+  }, [selected, rooms]);
+
+  /**
+   * Remove it.
+   *
+   * A room is only unplaced, not deleted -- the measurements are the
+   * expensive part and this is the plan screen, not the rooms list.
+   * Deleting a room outright lives in the Steps menu, where it names
+   * the room and the undo is nearby. Openings and stairs are deleted
+   * properly, because they were added here and nowhere else.
+   */
+  const deleteSelected = useCallback(() => {
+    const t = selectedThing;
+    if (!t || !onRoomChange) return;
+    const room = rooms.find((r) => r.id === t.roomId);
+    if (!room) return;
+    setSelected(null);
+    if (t.kind === "door") {
+      onRoomChange(room.id, {
+        doors: (room.doors ?? []).filter((d) => d.id !== selected),
+      });
+    } else if (t.kind === "window") {
+      onRoomChange(room.id, {
+        windows: (room.windows ?? []).filter((w) => w.id !== selected),
+      });
+    } else {
+      onRoomChange(room.id, {
+        stairs: (room.stairs ?? []).filter((st) => st.id !== selected),
+      });
+    }
+  }, [selectedThing, selected, rooms, onRoomChange, onPlacementChange, placementFor]);
 
   /**
    * Pointer → room-local metres.
@@ -1117,7 +1201,32 @@ export default function FloorPlanEditor({
                 : "border-[#b89650] text-[#8a6f2f]"
             }`}
           >
-            Add feature
+            Add connector
+          </button>
+        )}
+
+        {/* Delete whatever is selected.
+            Rooms had an x chip on the plan; a door, window or flight of
+            stairs had nothing at all -- add one by mistake and it was
+            there for good, because the panel that created it has no
+            list of what it has created. One bin, acting on the thing
+            the customer last touched, is the smallest way to say
+            "that one, get rid of it". */}
+        {onRoomChange && selectedThing && (
+          <button
+            type="button"
+            onClick={deleteSelected}
+            style={{ minHeight: 40 }}
+            className="ml-auto flex items-center gap-1.5 rounded-full border border-[#a33] px-3.5 font-semibold text-[#a33]"
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "18px" }}
+              aria-hidden
+            >
+              delete
+            </span>
+            Delete {selectedThing.label}
           </button>
         )}
       </div>
@@ -1162,13 +1271,16 @@ export default function FloorPlanEditor({
             + Room
           </button>
         )}
+        {/* Only what is left over.
+            Rooms now place themselves, so "To place" appears only when
+            something genuinely could not be, and Auto-layout and Clear
+            are recovery tools rather than steps -- they sit at the end
+            of the row, quieter than the three that matter. */}
         {([
           {
             key: "rooms" as const,
-            label: unplacedOnFloor.length
-              ? `To place (${unplacedOnFloor.length})`
-              : "All placed",
-            show: true,
+            label: `To place (${unplacedOnFloor.length})`,
+            show: unplacedOnFloor.length > 0,
           },
           {
             key: "ceiling" as const,

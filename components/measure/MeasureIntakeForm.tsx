@@ -1836,15 +1836,47 @@ export default function MeasureIntakeForm() {
    *
    * So: go to the rooms step *and* page to the room at fault.
    */
+  /**
+   * Say what is wrong; do not silently go somewhere else.
+   *
+   * Pressing Review with an outstanding issue used to set the active
+   * room and jump straight back into the room flow -- so the customer
+   * pressed "Review" and landed on "What's this room called?", which
+   * reads as the app deciding they need another room. Nothing said
+   * why, and nothing said how to get back.
+   *
+   * The message names the room and the problem, and stays on the step
+   * they pressed the button from. Going to the room is then their
+   * choice, from the Steps menu.
+   */
+  const [navBlock, setNavBlock] = useState<string | null>(null);
+
+  /*
+   * The complaint clears when the rooms change.
+   *
+   * Without this it survived being fixed: press Review, read that the
+   * kitchen needs a wall length, go and enter it, come back to the
+   * plan -- and the message is still sitting there saying the kitchen
+   * needs a wall length. A warning that outlives the fault teaches
+   * people to ignore warnings.
+   */
+  useEffect(() => {
+    setNavBlock(null);
+  }, [rooms]);
+
   const advanceTo = (next: "plan" | "review") => {
     const v = nonBlockingIssues(rooms);
     setIssues(v);
     if (v.length) {
       const ri = firstIssueRoomIndex(v);
       if (ri !== null) setActiveRoomIndex(ri);
-      setStep("rooms");
+      const where = ri !== null ? rooms[ri]?.name?.trim() : "";
+      setNavBlock(
+        `${v[0].message}${where ? ` — in ${where}` : ""}. Open Steps to go there.`,
+      );
       return;
     }
+    setNavBlock(null);
     // Checks pass, so clear any earlier "not ready to send" banner
     // rather than leaving a stale complaint on a step the customer has
     // just satisfied.
@@ -4742,7 +4774,10 @@ export default function MeasureIntakeForm() {
              bar, so it does not read as a different application. */
           <GuidedScreen
             eyebrow="Floor plan"
-            title="Where do the rooms sit?"
+            /* No title. "Where do the rooms sit?" was a question the
+               grid underneath answers by existing, taking a line of a
+               screen whose whole point is the grid. */
+            title=""
             progress={0.85}
             menuOpen={extraMenuOpen}
             onMenuOpenChange={setExtraMenuOpen}
@@ -4751,6 +4786,11 @@ export default function MeasureIntakeForm() {
                 items: [
                   { label: "Back to the rooms", onClick: () => setStep("rooms") },
                   { label: "Exterior and proposal", onClick: () => setStep("proposal") },
+                  /* Review, in the menu as well as on the button. The
+                     bottom-bar Review refuses when something is wrong,
+                     and a customer who has just read why wants a second
+                     way to try it. */
+                  { label: "Review and send", onClick: goReview },
                 ],
               },
             ]}
@@ -4758,6 +4798,7 @@ export default function MeasureIntakeForm() {
             onBack={() => setStep("proposal")}
             onNext={goReview}
             nextLabel="Review"
+            blockMessage={navBlock}
             wide
           >
           <div>

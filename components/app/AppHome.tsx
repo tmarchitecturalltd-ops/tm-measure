@@ -42,8 +42,6 @@ function formatSavedAt(iso: string): string {
 }
 import {
   getRecentSubmissions,
-  projectTypeLabel,
-  type ProjectType,
   type RecentSubmission,
 } from "@/lib/recentSubmissions";
 
@@ -203,8 +201,13 @@ export default function AppHome() {
   // pb-2, not pb-20. Eighty pixels of bottom padding meant the screen
   // scrolled past the footer into nothing, which reads as a page that
   // has failed to load the rest of itself.
+  //
+  // overscroll-none kills the rubber band as well. On iOS a page that
+  // fits still drags away from the top and springs back, which looks
+  // exactly like a screen with something above it that failed to
+  // arrive -- and there is nothing up there to find.
   return (
-    <div className="min-h-screen bg-surface pb-2">
+    <div className="min-h-screen overscroll-none bg-surface pb-2">
       {/* Brand header — slimmer than the marketing nav, no menu links.
           Logo mark + wordmark on the left, tiny outbound link on the
           right. The hairline gold rule under the header echoes the
