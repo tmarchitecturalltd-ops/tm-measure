@@ -64,7 +64,17 @@ const DOOR_WIDTHS = [
   { value: "0.686", label: "686 mm — narrow" },
   { value: "0.926", label: "926 mm — wide" },
   { value: "1.200", label: "1200 mm — double / French" },
-  { value: "1.800", label: "1800 mm — patio / bi-fold" },
+  { value: "1.800", label: "1800 mm — patio" },
+  /*
+   * Bi-folds have no standard width.
+   *
+   * They are made to the opening: three leaves is about 1.8 m, six is
+   * nearer 4, and a wide rear elevation can run to 5. A dropdown
+   * cannot hold that, and picking the nearest listed size would put a
+   * 1.8 m door where a 4.5 m opening is -- which on a rear extension
+   * is most of the wall.
+   */
+  { value: "custom", label: "Bi-fold or other — type the width" },
 ] as const;
 
 /** Windows vary far more than doors, so this is a ladder, not a list. */
@@ -75,6 +85,7 @@ const WINDOW_WIDTHS = [
   { value: "1.500", label: "1500 mm" },
   { value: "1.800", label: "1800 mm (large)" },
   { value: "2.400", label: "2400 mm (bay / picture)" },
+  { value: "custom", label: "Something else — type the width" },
 ] as const;
 
 const GOLD = "#b89650";
@@ -246,6 +257,9 @@ export default function FloorPlanEditor({
     null | "rooms" | "feature" | "ceiling"
   >(null);
 
+  /** Dismisses the "no doors yet" nudge for this visit. */
+  const [doorPromptOff, setDoorPromptOff] = useState(false);
+
   /** What was just added, so the plan can say to drag it. */
   const [justAdded, setJustAdded] = useState<
     null | "door" | "window" | "stairs"
@@ -313,6 +327,25 @@ export default function FloorPlanEditor({
 
   const activeViewBox =
     frozenViewBox ?? manualViewBox ?? zoomViewBox ?? viewBox;
+
+  /**
+   * The first room on this floor with no doors on it.
+   *
+   * A room-by-room survey measures each room in isolation, so nothing
+   * says how they join up -- and a plan of six rooms with no doors is
+   * six boxes, which is not a floor plan. A whole-property scan gets
+   * this for free because RoomPlan sees the doorways; measuring one
+   * room at a time does not.
+   *
+   * So the plan asks, one room at a time, until every room has at
+   * least one. It never blocks: a customer who genuinely has a room
+   * with no door in it, or who cannot face the question, presses on
+   * and the survey still sends.
+   */
+  const roomNeedingDoor = useMemo(
+    () => roomsOnFloor.find((r) => (r.doors?.length ?? 0) === 0) ?? null,
+    [roomsOnFloor],
+  );
 
   /** Metres per unit of "constant screen size". See the note above. */
   const uiScale = activeViewBox.w / 10;
@@ -896,6 +929,13 @@ export default function FloorPlanEditor({
   const insertRoomId =
     roomsOnFloor.find((r) => r.id === selected)?.id ?? roomsOnFloor[0]?.id ?? "";
   const [insertWidthM, setInsertWidthM] = useState("0.760");
+  /**
+   * A typed width, in metres, for anything the list cannot hold.
+   *
+   * Bi-folds are the reason: made to the opening, anywhere from about
+   * 1.8 m to 5 m, so there is no standard size to offer.
+   */
+  const [customWidthM, setCustomWidthM] = useState("3.00");
   const [insertTreads, setInsertTreads] = useState("13");
   const [insertWinders, setInsertWinders] = useState(false);
 
@@ -1012,7 +1052,11 @@ export default function FloorPlanEditor({
       }
     }
 
-    const opening = { ...base, widthM: insertWidthM, note: "" };
+    const widthM =
+      insertWidthM === "custom"
+        ? (Number.parseFloat(customWidthM) || 0).toFixed(3)
+        : insertWidthM;
+    const opening = { ...base, widthM, note: "" };
     onRoomChange(
       target,
       insertKind === "door"
@@ -1035,6 +1079,7 @@ export default function FloorPlanEditor({
     insertRoomId,
     insertKind,
     insertWidthM,
+    customWidthM,
     insertTreads,
     insertWinders,
   ]);
@@ -1825,6 +1870,27 @@ export default function FloorPlanEditor({
                     ),
                   )}
                 </select>
+              </label>
+            )}
+
+            {/* The typed width, shown only when the list cannot help.
+                Metres, to two decimals, because that is what every
+                other measurement in this app is in -- asking for
+                millimetres here and metres everywhere else is how a
+                4.5 m bi-fold gets entered as 4500 m. */}
+            {insertKind !== "stairs" && insertWidthM === "custom" && (
+              <label className="text-sm">
+                <span className="mb-1 block font-semibold text-[#6e6a5f]">
+                  Width in metres
+                </span>
+                <input
+                  inputMode="decimal"
+                  value={customWidthM}
+                  onChange={(e) => setCustomWidthM(e.target.value)}
+                  placeholder="4.20"
+                  style={{ minHeight: 40 }}
+                  className="w-24 rounded-lg border border-[#d9d3c8] bg-white px-3 text-sm"
+                />
               </label>
             )}
 
@@ -2676,6 +2742,46 @@ export default function FloorPlanEditor({
           >
             {justAdded === "stairs" ? "Stairs" : justAdded === "door" ? "Door" : "Window"}{" "}
             added — drag it to where it goes
+          </div>
+        )}
+
+        {/* Ask for the doors, one room at a time.
+            Same slot as the "added" banner and only when that is not
+            showing, so the plan never has two things talking over it.
+            Dismissable, and it comes back next time the step is
+            opened -- a nudge, not a gate. */}
+        {!justAdded && !doorPromptOff && roomNeedingDoor && onRoomChange && (
+          <div
+            className="absolute inset-x-3 bottom-3 z-10 flex items-center gap-2 rounded-xl px-3 py-2 shadow-sm"
+            style={{ backgroundColor: "#1c1c1ae8", color: "#fff8ea" }}
+          >
+            <span className="min-w-0 flex-1 text-sm font-semibold">
+              {roomNeedingDoor.name?.trim() || "This room"} has no doors yet —
+              they tell us how the rooms join up
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setSelected(roomNeedingDoor.id);
+                setZoomRoomId(roomNeedingDoor.id);
+                setInsertKind("door");
+                setInsertWidthM("0.760");
+                setOpenPanel("feature");
+              }}
+              style={{ minHeight: 36 }}
+              className="shrink-0 rounded-full bg-[#b89650] px-3.5 text-sm font-bold uppercase tracking-widest text-white"
+            >
+              Add
+            </button>
+            <button
+              type="button"
+              onClick={() => setDoorPromptOff(true)}
+              aria-label="Stop asking"
+              style={{ minHeight: 36, minWidth: 36 }}
+              className="shrink-0 rounded-full text-white/60"
+            >
+              ✕
+            </button>
           </div>
         )}
 

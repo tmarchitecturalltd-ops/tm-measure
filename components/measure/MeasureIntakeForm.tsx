@@ -27,6 +27,7 @@ import {
   roomFootprint,
   roomBoundingBox,
   snapToGrid,
+  autoLayoutRooms,
   validateProject,
   scanOverallConfidence,
   makeRoomConnectionDraft,
@@ -2125,6 +2126,47 @@ export default function MeasureIntakeForm() {
    */
   const planAlreadyDone =
     rooms.length > 0 && rooms.every((r) => placements[r.id]?.positionM);
+
+  /**
+   * A phone with the sensor never sees the floor plan step.
+   *
+   * On a whole-property scan that is simply true: RoomPlan reports
+   * every room in one frame and the positions are already right, so
+   * the step is asking someone to redo by hand what the sensor did
+   * properly.
+   *
+   * Room by room it is a decision rather than a fact. Those scans
+   * carry no relationship between rooms, so something has to say
+   * where they go -- and the choice is between a homeowner dragging
+   * boxes on a phone and Charlie moving them in CAD, where he is
+   * quicker, better at it, and has to open the drawing anyway. The
+   * app lays them out in a row and he arranges them.
+   *
+   * The measurements, the shapes, the doors and the photographs are
+   * all unaffected. Only the arrangement is deferred.
+   */
+  const skipPlanStep = arSupport === "yes" || planAlreadyDone;
+
+  /**
+   * Give every room a position, so a drawing can be produced.
+   *
+   * buildDxfAttachment needs placements; without them the submission
+   * arrives with no CAD file at all. Called on the way to review
+   * whenever the plan step has been skipped.
+   */
+  const ensureEveryRoomPlaced = useCallback(() => {
+    const unplaced = rooms.filter((r) => !placements[r.id]?.positionM);
+    if (!unplaced.length) return;
+    const seed = autoLayoutRooms(unplaced);
+    if (!seed.size) return;
+    setPlacements((prev) => {
+      const next = { ...prev };
+      for (const [id, placement] of seed.entries()) {
+        if (!next[id]?.positionM) next[id] = placement;
+      }
+      return next;
+    });
+  }, [rooms, placements]);
 
   const goPlan = () => advanceTo("plan");
 
@@ -5194,12 +5236,20 @@ export default function MeasureIntakeForm() {
               {
                 items: [
                   { label: "Back to the rooms", onClick: () => setStep("rooms") },
-                  {
-                    label: planAlreadyDone
-                      ? "Move rooms on the floor plan"
-                      : "Back to the floor plan",
-                    onClick: () => setStep("plan"),
-                  },
+                  /* No floor plan entry on a LiDAR phone. The step is
+                     not part of that journey, and a menu item leading
+                     to a screen the customer has never seen is a way
+                     to get lost rather than a shortcut. */
+                  ...(arSupport === "yes"
+                    ? []
+                    : [
+                        {
+                          label: planAlreadyDone
+                            ? "Move rooms on the floor plan"
+                            : "Back to the floor plan",
+                          onClick: () => setStep("plan"),
+                        },
+                      ]),
                 ],
               },
             ]}
@@ -5208,7 +5258,7 @@ export default function MeasureIntakeForm() {
                skipped the plan, so sending them "back" to a step they
                never saw would be the same wrong-footing the room flow
                used to do. */
-            onBack={() => setStep(planAlreadyDone ? "proposal" : "plan")}
+            onBack={() => setStep(skipPlanStep ? "proposal" : "plan")}
             onNext={submitToBackend}
             nextDisabled={submitStatus === "submitting"}
             nextLabel={
@@ -5657,7 +5707,14 @@ export default function MeasureIntakeForm() {
            * every room -- see planAlreadyDone. Otherwise the plan,
            * because nothing else knows where the rooms go.
            */
-          onDone={() => setStep(planAlreadyDone ? "review" : "plan")}
+          onDone={() => {
+            if (skipPlanStep) {
+              ensureEveryRoomPlaced();
+              setStep("review");
+              return;
+            }
+            setStep("plan");
+          }}
         />
       )}
 
@@ -5758,8 +5815,11 @@ export default function MeasureIntakeForm() {
               if (ri !== null) setActiveRoomIndex(ri);
               return;
             }
-            // Back where they came from -- see roomsReturnTo.
-            setStep(roomsReturnTo);
+            // Back where they came from -- see roomsReturnTo. A LiDAR
+            // phone never returns to the plan, because it never went.
+            setStep(
+              roomsReturnTo === "plan" && skipPlanStep ? "review" : roomsReturnTo,
+            );
             setRoomsReturnTo("exterior");
           }}
           onExitGuided={() => setGuidedMode(false)}
@@ -5829,7 +5889,8 @@ export default function MeasureIntakeForm() {
            * room that is missing something; it reports the problem and
            * stays put, exactly as "Done with the rooms" does.
            */
-          onGoToPlan={() => setStep("plan")}
+          /* Not offered on a LiDAR phone -- see skipPlanStep. */
+          onGoToPlan={arSupport === "yes" ? undefined : () => setStep("plan")}
           doneLabel={
             roomsReturnTo === "plan" ? "Back to the floor plan" : undefined
           }

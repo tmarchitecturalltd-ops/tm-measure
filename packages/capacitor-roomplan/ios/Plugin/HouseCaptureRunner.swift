@@ -238,6 +238,31 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
      * is concentrating is worse than one they missed.
      */
     func captureSession(_ session: RoomCaptureSession, didAdd room: CapturedRoom) {
+        roomsSeen += 1
+
+        /*
+         * Half a room is worse than no room.
+         *
+         * RoomPlan reports a room as soon as it is confident enough to
+         * call it one, which on a quick sweep through a doorway can be
+         * two walls and a guess. That room reaches the drawing looking
+         * like every other, and nothing about it says it was captured
+         * from the threshold rather than walked round.
+         *
+         * Four walls is the ordinary case. Fewer than three and the
+         * customer is told, while they are still standing in it and can
+         * do something about it.
+         */
+        if room.walls.count < 3 && !partialPromptShown {
+            partialPromptShown = true
+            DispatchQueue.main.async { [weak self] in
+                self?.modalVC?.showCoaching(
+                    "Only part of that room was captured - walk round the walls you missed"
+                )
+            }
+            return
+        }
+
         guard !doorPromptShown, room.doors.isEmpty else { return }
         doorPromptShown = true
         DispatchQueue.main.async { [weak self] in
@@ -249,6 +274,10 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
 
     /// One doorway prompt per scan. See captureSession(_:didAdd:).
     private var doorPromptShown = false
+    /// One partial-room prompt per scan, for the same reason.
+    private var partialPromptShown = false
+    /// How many rooms this scan has produced so far.
+    private var roomsSeen = 0
 
     /**
      * Apple's own scanning advice, in our words and our size.

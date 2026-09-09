@@ -80,6 +80,19 @@ export default function ScanResultFilter({ rooms, onConfirm, onBack }: Props) {
         doorway or the room next door in passing.
       </p>
 
+      {/* One room back from a whole-property scan usually means it
+          stopped early -- the sensor lost tracking, or Done was pressed
+          in the first room. Said here, where going back and scanning
+          again costs nothing, rather than discovered by Charlie when
+          the drawing turns out to be one box. */}
+      {rooms.length === 1 && (
+        <p className="mb-3 rounded-lg bg-amber-100/70 px-3 py-2 text-sm text-amber-900">
+          Only one room came back. If you meant to scan more of the
+          house, go back and scan again — walk through each room and
+          press Done at the end, not in between.
+        </p>
+      )}
+
       <ul className="overflow-hidden rounded-2xl border border-outline-variant/40">
         {rooms.map((r, i) => {
           const kept = !dropped.has(r.id);
