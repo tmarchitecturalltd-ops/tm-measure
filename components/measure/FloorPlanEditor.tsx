@@ -375,7 +375,16 @@ export default function FloorPlanEditor({
         return;
       }
 
-      // One finger on the background: pan.
+      /*
+       * One finger on the background: pan.
+       *
+       * Ignored under three pixels of travel. Fingers are not still,
+       * and without a threshold every tap on the plan shifted the view
+       * a little -- which on a screen where the customer is trying to
+       * line a door up against a wall is worse than not panning at
+       * all.
+       */
+      if (Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < 3) return;
       const dx = (e.clientX - prev.x) * perPx;
       const dy = (e.clientY - prev.y) * perPx;
       setManualViewBox((cur) => {
@@ -1070,6 +1079,19 @@ export default function FloorPlanEditor({
       if (!p.positionM) return;
       const svg = svgCoordsFromEvent(e);
       if (!svg) return;
+      /*
+       * Stop here. The canvas behind this listens for the same
+       * pointerdown to pan the view, and without this both ran on one
+       * finger: the room moved under the drag while the whole plan
+       * slid the other way, so the room came away from the fingertip
+       * at roughly double speed. The canvas pan is for the background
+       * only.
+       *
+       * It also protected the freeze below -- the canvas handler
+       * clears frozenViewBox on pointerdown, which was undoing the
+       * pin one line before it was set.
+       */
+      e.stopPropagation();
       dragRef.current = {
         roomId,
         pointerId: e.pointerId,
@@ -2232,6 +2254,7 @@ export default function FloorPlanEditor({
                 <g
                   transform={`translate(${size.widthM - 0.4 * uiScale} ${0.4 * uiScale})`}
                   style={{ cursor: "pointer" }}
+                  onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
                     rotateRoom(r.id);
@@ -2262,6 +2285,7 @@ export default function FloorPlanEditor({
                 <g
                   transform={`translate(${size.widthM - 0.4 * uiScale} ${size.lengthM - 0.4 * uiScale})`}
                   style={{ cursor: "pointer" }}
+                  onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
                     unplaceRoom(r.id);

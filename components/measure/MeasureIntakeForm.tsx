@@ -196,6 +196,52 @@ function notesForCustomer(notes: string): string {
   return notes.replace(/\[Auto-scan[^\]]*\]/g, "").trim();
 }
 
+/**
+ * Turn a scanned opening into one the plan can draw.
+ *
+ * The plugin has always reported `parentWallId` and
+ * `offsetFromWallStartM` for every door and window it finds -- which
+ * wall it is in, and how far along that wall it sits. The app kept the
+ * width and threw both away.
+ *
+ * So every opening a LiDAR scan detected arrived with no position, and
+ * an opening with no position is drawn centred on wall 0. A room with
+ * three windows produced three identical marks stacked on top of each
+ * other in the middle of the top wall -- which reads, correctly, as
+ * the windows not being there at all.
+ *
+ * Reported as "no window insertion on lidar".
+ *
+ * positionApprox stays false: this is where the sensor measured it,
+ * not where somebody dragged it, and that distinction is the whole
+ * point of the flag.
+ */
+function scannedOpening(
+  o: { widthM: number; parentWallId?: string; offsetFromWallStartM?: number },
+  walls: { id?: string }[] | undefined,
+  id: string,
+): {
+  id: string;
+  widthM: string;
+  note: string;
+  wallIndex?: number;
+  positionM?: string;
+} {
+  const wallIndex =
+    o.parentWallId && walls
+      ? walls.findIndex((w) => w.id === o.parentWallId)
+      : -1;
+  return {
+    id,
+    widthM: o.widthM.toFixed(2),
+    note: "Detected by scan",
+    ...(wallIndex >= 0 ? { wallIndex } : {}),
+    ...(Number.isFinite(o.offsetFromWallStartM)
+      ? { positionM: (o.offsetFromWallStartM as number).toFixed(2) }
+      : {}),
+  };
+}
+
 export default function MeasureIntakeForm() {
   const [step, setStep] = useState<Step>("project");
   /**
@@ -727,16 +773,12 @@ export default function MeasureIntakeForm() {
         ceilingHeightM: sr.heightM
           ? sr.heightM.toFixed(2)
           : defaultCeilingHeightM.trim(),
-        doors: (sr.doors ?? []).map((d) => ({
-          id: newId(),
-          widthM: d.widthM.toFixed(2),
-          note: "Detected by scan",
-        })),
-        windows: (sr.windows ?? []).map((w) => ({
-          id: newId(),
-          widthM: w.widthM.toFixed(2),
-          note: "Detected by scan",
-        })),
+        doors: (sr.doors ?? []).map((d) =>
+          scannedOpening(d, sr.walls, newId()),
+        ),
+        windows: (sr.windows ?? []).map((w) =>
+          scannedOpening(w, sr.walls, newId()),
+        ),
         irregularNotes: "",
         notes: stamp,
         photos: [],
@@ -873,16 +915,12 @@ export default function MeasureIntakeForm() {
                   ceilingHeightM: sr.heightM
                     ? sr.heightM.toFixed(2)
                     : r.ceilingHeightM || defaultCeilingHeightM.trim(),
-                  doors: (sr.doors ?? []).map((d) => ({
-                    id: newId(),
-                    widthM: d.widthM.toFixed(2),
-                    note: "Detected by scan",
-                  })),
-                  windows: (sr.windows ?? []).map((w) => ({
-                    id: newId(),
-                    widthM: w.widthM.toFixed(2),
-                    note: "Detected by scan",
-                  })),
+                  doors: (sr.doors ?? []).map((d) =>
+                    scannedOpening(d, sr.walls, newId()),
+                  ),
+                  windows: (sr.windows ?? []).map((w) =>
+                    scannedOpening(w, sr.walls, newId()),
+                  ),
                   // "custom" only when a polygon is actually kept —
                   // a custom-shaped room with no polygon falls through
                   // to a rectangle anyway, but says otherwise on screen.
