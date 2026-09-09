@@ -245,24 +245,40 @@ export default function AppHome() {
             least afford to give. */}
         {draft && (
           <section>
+            {/* Two rows, not five.
+                This was a label, the project name, the room count and
+                a "Resume →" line, in a card with 20px of padding --
+                five rows to say "you left something half done". The
+                whole card was already a link, so the Resume row was
+                telling the customer they could do the thing they were
+                already about to do by tapping it. */}
             <Link
               href="/measure"
-              className="block rounded-2xl border border-primary/40 bg-primary/5 p-5 transition-colors hover:bg-primary/10"
+              className="flex items-center gap-3 rounded-2xl border border-primary/40 bg-primary/5 p-4 transition-colors hover:bg-primary/10"
             >
-              <p className="font-label text-sm font-bold uppercase tracking-[0.25em] text-primary">
-                Continue where you left off
-              </p>
-              <p className="mt-2 text-sm font-medium text-on-surface">
-                {draft.projectName?.trim() || "Untitled project"}
-              </p>
-              <p className="mt-1 text-[13px] text-on-surface-variant">
-                {draft.rooms?.length ?? 0} room
-                {(draft.rooms?.length ?? 0) === 1 ? "" : "s"} · saved{" "}
-                {formatSavedAt(draft.savedAt)}
-              </p>
-              <p className="mt-3 text-sm font-bold uppercase tracking-widest text-primary">
-                Resume →
-              </p>
+              <span className="min-w-0 flex-1">
+                <span className="font-label block text-sm font-bold uppercase tracking-[0.15em] text-primary">
+                  Continue where you left off
+                </span>
+                <span className="mt-1 block truncate text-sm text-on-surface">
+                  <span className="font-medium">
+                    {draft.projectName?.trim() || "Untitled project"}
+                  </span>
+                  <span className="text-on-surface-variant">
+                    {" · "}
+                    {draft.rooms?.length ?? 0} room
+                    {(draft.rooms?.length ?? 0) === 1 ? "" : "s"} · saved{" "}
+                    {formatSavedAt(draft.savedAt)}
+                  </span>
+                </span>
+              </span>
+              <span
+                className="material-symbols-outlined shrink-0 text-primary"
+                style={{ fontSize: "24px" }}
+                aria-hidden
+              >
+                chevron_right
+              </span>
             </Link>
           </section>
         )}
@@ -281,29 +297,14 @@ export default function AppHome() {
             padding: "8px 4px 0",
           }}
         >
-          <p className="font-label text-sm font-bold uppercase tracking-[0.25em] text-primary">
-            Self-measure your project
-          </p>
-          <h2
-            className="font-headline mt-2 text-on-surface"
-            style={{
-              fontSize: "clamp(1.85rem, 6vw, 2.6rem)",
-              lineHeight: 1.1,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            What are you building?
-          </h2>
-          {/* One line, down from four.
-              The paragraph described the whole process -- walls, doors,
-              windows, floor plan, a photo per room -- to someone who has
-              not agreed to do any of it yet, and the How it works screen
-              now says the same thing at the moment they have. Four lines
-              of it sat between the question and the button that answers
-              it. */}
-          <p className="mt-2 text-sm text-on-surface-variant">
-            Room by room. We&apos;ll guide you.
-          </p>
+          {/* "Self-measure your project" and "What are you building?"
+              used to sit here, above a paragraph, above the button.
+
+              The heading asked a question the screen no longer offers
+              an answer to -- the three tiles that answered it are gone,
+              and the project step asks the same thing properly. So it
+              was a large question followed by a single button that did
+              not appear to answer it. The button says what it does. */}
 
           {/* One button, not three tiles.
               Extension / Loft / Not sure yet went to the same place and
@@ -319,7 +320,7 @@ export default function AppHome() {
           <Link
             href="/measure"
             style={{ minHeight: 60 }}
-            className="tm-fade-up-late mt-6 flex w-full items-center justify-center gap-2.5 rounded-full bg-primary px-6 text-base font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 transition-all hover:bg-surface-tint active:scale-[0.99]"
+            className="tm-fade-up-late flex w-full items-center justify-center gap-2.5 rounded-full bg-primary px-6 text-base font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 transition-all hover:bg-surface-tint active:scale-[0.99]"
           >
             Start a project
             <span
@@ -393,10 +394,12 @@ export default function AppHome() {
 
         {/* Calibration used to be stated here as its own line. It is
             a developer's number on a customer's home screen, and the
-            one action attached to it -- resetting it -- is in More. */}
-        <p className="mt-6 text-center text-sm uppercase tracking-widest text-on-surface-variant/70">
-          © {year} TM Architectural Designs Ltd · UK wide
-        </p>
+            one action attached to it -- resetting it -- is in More.
+
+            The copyright line used to be here too, above the More
+            list, which put the end of the page in the middle of it. It
+            is now the last thing on the screen, which is where a
+            footer goes. */}
       </main>
 
       {/* ── More ─────────────────────────────────────────────────────
@@ -475,6 +478,9 @@ export default function AppHome() {
               );
             })}
           </ul>
+          <p className="mt-5 text-center text-sm uppercase tracking-widest text-on-surface-variant/70">
+            © {year} TM Architectural Designs Ltd · UK wide
+          </p>
         </div>
       </nav>
     </div>

@@ -866,44 +866,96 @@ export default function FloorPlanEditor({
   // ── Render ───────────────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-3">
-      {/* Floor tabs */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-bold uppercase tracking-[0.2em] text-on-surface-variant">
-          Floor
-        </span>
-        {usedFloors.map((f) => {
-          const active = f === currentFloor;
-          return (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setCurrentFloor(f)}
-              className="rounded-full border px-3 py-1 text-sm font-semibold transition"
-              style={{
-                borderColor: active ? GOLD : "#d9d3c8",
-                backgroundColor: active ? GOLD : "transparent",
-                color: active ? DARK : "#5a5750",
+      {/* ── Floor, room, feature ────────────────────────────────────
+          Three controls in one line.
+
+          The floor used to be a row of tabs plus "+ Floor up" and
+          "+ Basement" buttons, which is fine for a house with three
+          storeys and a whole line of the screen for a bungalow. It is
+          a select now, with adding a floor as an option inside it.
+
+          The room select is new, and it is what the Add feature panel
+          used to ask for on its own. Choosing the room first means the
+          panel opens already pointed at somewhere, and it doubles as a
+          way to find a room on a busy plan -- picking one highlights
+          it and zooms to it. */}
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <label className="flex items-center gap-1.5">
+          <span className="font-bold uppercase tracking-[0.15em] text-on-surface-variant">
+            Floor
+          </span>
+          <select
+            value={currentFloor}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "__up") {
+                const next = Math.max(...usedFloors) + 1;
+                setExtraFloors((prev) => [...prev, next]);
+                setCurrentFloor(next);
+                return;
+              }
+              if (v === "__down") {
+                const next = Math.min(...usedFloors) - 1;
+                setExtraFloors((prev) => [...prev, next]);
+                setCurrentFloor(next);
+                return;
+              }
+              setCurrentFloor(Number(v));
+            }}
+            style={{ minHeight: 40 }}
+            className="rounded-full border border-[#b89650] bg-white px-3 font-semibold text-[#8a6f2f]"
+          >
+            {usedFloors.map((f) => (
+              <option key={f} value={f}>
+                {floorLabel(f)}
+              </option>
+            ))}
+            <option value="__up">+ Add floor above</option>
+            <option value="__down">+ Add basement</option>
+          </select>
+        </label>
+
+        {roomsOnFloor.length > 0 && (
+          <label className="flex min-w-0 items-center gap-1.5">
+            <span className="font-bold uppercase tracking-[0.15em] text-on-surface-variant">
+              Room
+            </span>
+            <select
+              value={insertRoomId}
+              onChange={(e) => {
+                setSelected(e.target.value);
+                setZoomRoomId(e.target.value);
               }}
+              style={{ minHeight: 40 }}
+              className="min-w-0 max-w-[10rem] truncate rounded-full border border-[#b89650] bg-white px-3 font-semibold text-[#8a6f2f]"
             >
-              {floorLabel(f)}
-            </button>
-          );
-        })}
-        <button
-          type="button"
-          onClick={addFloor}
-          className="rounded-full border border-dashed border-[#b89650]/60 px-3 py-1 text-sm font-semibold text-[#8a6f2f]"
-        >
-          + Floor up
-        </button>
-        <button
-          type="button"
-          onClick={addBasement}
-          className="rounded-full border border-dashed border-[#b89650]/60 px-3 py-1 text-sm font-semibold text-[#8a6f2f]"
-        >
-          + Basement
-        </button>
+              {roomsOnFloor.map((r, i) => (
+                <option key={r.id} value={r.id}>
+                  {r.name?.trim() || `Room ${i + 1}`}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {onRoomChange && roomsOnFloor.length > 0 && (
+          <button
+            type="button"
+            onClick={() =>
+              setOpenPanel((cur) => (cur === "feature" ? null : "feature"))
+            }
+            style={{ minHeight: 40 }}
+            className={`rounded-full border px-3.5 font-semibold ${
+              openPanel === "feature"
+                ? "border-[#b89650] bg-[#b89650] text-white"
+                : "border-[#b89650] text-[#8a6f2f]"
+            }`}
+          >
+            Add feature
+          </button>
+        )}
       </div>
+
 
       {/* ── Controls and the folded detail, above the plan ─────────
           The plan is the point of this screen, so it gets the space
@@ -952,7 +1004,6 @@ export default function FloorPlanEditor({
               : "All placed",
             show: true,
           },
-          { key: "feature" as const, label: "Add feature", show: !!onRoomChange && roomsOnFloor.length > 0 },
           {
             key: "ceiling" as const,
             label: ceilingIsMixed ? "Ceiling: mixed" : `Ceiling ${floorCeiling || "2.40"} m`,

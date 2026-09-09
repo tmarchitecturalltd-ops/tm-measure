@@ -24,7 +24,7 @@ import {
 import {
   parseMeters,
   scanOutlineWorthKeeping,
-  formatLengthDual,
+  roomFootprint,
   validateProject,
   scanOverallConfidence,
   makeRoomConnectionDraft,
@@ -4759,20 +4759,19 @@ export default function MeasureIntakeForm() {
             onNext={goReview}
             nextLabel="Review"
           >
-          <div className="space-y-8">
-            <section className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 md:p-8">
-              <header className="mb-4">
-                <h2 className="font-headline text-2xl text-on-surface">
-                  Arrange your floor plan
-                </h2>
-                <p className="mt-2 max-w-prose text-sm text-on-surface-variant">
-                  Drag each room into place to show how they fit together.
-                  Rooms snap to a 25&nbsp;cm grid. Use the ↻ chip to rotate
-                  in 90° steps, and the × chip to send a room back to the
-                  palette. Add extra floors or a basement for multi-storey
-                  homes.
-                </p>
-              </header>
+          <div className="space-y-4">
+            <section className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-3 md:p-5">
+              {/* One word.
+                  This was a 2rem heading and a five-line paragraph
+                  explaining dragging, the 25cm grid, the rotate chip,
+                  the remove chip and adding floors -- above the grid
+                  that demonstrates all five the moment anyone touches
+                  it. On a phone the instructions took more room than
+                  the thing they described. The legend under the grid
+                  still says what the chips do. */}
+              <h2 className="font-headline mb-3 text-lg text-on-surface">
+                Floor plan
+              </h2>
               {/* The "How do the rooms connect?" section used to sit
                   here.
 
@@ -4833,7 +4832,6 @@ export default function MeasureIntakeForm() {
              button moves into the bottom bar, where it is both the
              primary action and in reach of a thumb. */
           <GuidedScreen
-            eyebrow="Last look"
             title="Ready to send?"
             progress={1}
             menuOpen={extraMenuOpen}
@@ -4922,58 +4920,47 @@ export default function MeasureIntakeForm() {
                         marked OK is not a check, it is a wall of green
                         that trains you to scroll past the one that
                         isn't. The ones that need looking at are still
-                        here, on their own, where they can be seen. */}
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {room.walls.map((w, wi) => {
-                        const wallIssue = issueFor(`room-${ri}-wall-${wi}`);
-                        if (!wallIssue) return null;
-                        const m = parseMeters(w.lengthM);
-                        const dual = formatLengthDual(m, unit);
-                        return (
-                          <div
-                            key={w.id}
-                            className="flex items-center justify-between rounded-lg bg-surface-container-lowest p-4 editorial-shadow"
-                          >
-                            <div>
-                              <p className="text-sm font-bold uppercase tracking-wider text-on-surface-variant">
-                                {w.label}
-                              </p>
-                              <p className="font-headline text-2xl text-on-surface">
-                                {dual.primary}
-                              </p>
-                              <p className="text-sm text-on-surface-variant">
-                                {dual.secondary}
-                              </p>
-                            </div>
-                            <span
-                              className="text-sm font-bold text-error"
-                              title={wallIssue}
-                            >
-                              CHECK
-                            </span>
-                          </div>
-                        );
-                      })}
-                      {(() => {
-                        const m = parseMeters(room.ceilingHeightM);
-                        const dual = formatLengthDual(m, unit);
-                        return (
-                          <div className="flex items-center justify-between rounded-lg bg-surface-container-lowest p-4 editorial-shadow">
-                            <div>
-                              <p className="text-sm font-bold uppercase tracking-wider text-on-surface-variant">
-                                Ceiling height
-                              </p>
-                              <p className="font-headline text-2xl text-on-surface">
-                                {dual.primary}
-                              </p>
-                              <p className="text-sm text-on-surface-variant">
-                                {dual.secondary}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
+                    {/* Height, length, width. One line, metric only.
+                        This was a grid of cards: one per wall that had
+                        a problem, plus a ceiling-height card, each with
+                        a label, a 2rem number and its imperial
+                        equivalent underneath. The imperial line was
+                        there so someone who measured in feet could
+                        sense-check -- but the app has been metric-only
+                        since the units question was dropped, so it was
+                        converting metres nobody entered in feet into
+                        feet nobody asked for, at three lines a room.
+
+                        The three numbers a customer can actually check
+                        against the room they are standing in are its
+                        height, length and width. Anything genuinely
+                        wrong still gets called out below. */}
+                    {(() => {
+                      const size = roomFootprint(room);
+                      const h = parseMeters(room.ceilingHeightM);
+                      const fmt = (n: number | null) =>
+                        n && Number.isFinite(n) ? n.toFixed(2) : "—";
+                      return (
+                        <p className="font-headline text-lg text-on-surface">
+                          {fmt(h)}
+                          <span className="text-on-surface-variant"> h · </span>
+                          {fmt(size.lengthM)}
+                          <span className="text-on-surface-variant"> l · </span>
+                          {fmt(size.widthM)}
+                          <span className="text-on-surface-variant"> w · m</span>
+                        </p>
+                      );
+                    })()}
+                    {/* Anything the validator flags, said plainly. */}
+                    {room.walls.map((w, wi) => {
+                      const wallIssue = issueFor(`room-${ri}-wall-${wi}`);
+                      if (!wallIssue) return null;
+                      return (
+                        <p key={w.id} className="mt-1 text-sm text-error">
+                          {w.label}: {wallIssue}
+                        </p>
+                      );
+                    })}
                     {(room.doors.length > 0 || room.windows.length > 0) && (
                       <ul className="mt-2 list-inside list-disc text-sm text-on-surface-variant">
                         {room.doors.map((d) =>
@@ -5200,11 +5187,11 @@ export default function MeasureIntakeForm() {
                     </p>
                   </div>
                 )}
-                <p className="text-sm text-on-surface-variant">
-                  Photo binaries are not uploaded yet — the JSON backup includes
-                  filenames only. Attach images manually if your project needs
-                  them.
-                </p>
+                {/* A note about photo binaries and a JSON backup used
+                    to sit here. The JSON backup was removed some time
+                    ago, so it described a file that no longer exists,
+                    in words a homeowner would not recognise, on the
+                    screen where they decide whether to press send. */}
               </>
             )}
           </div>
