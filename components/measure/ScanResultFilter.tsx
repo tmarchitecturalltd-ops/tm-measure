@@ -168,9 +168,23 @@ export default function ScanResultFilter({ rooms, onConfirm, onBack }: Props) {
                   <span className="block truncate font-headline text-base text-on-surface">
                     {r.name?.trim() || `Room ${i + 1}`}
                   </span>
+                  {/* Say why a room is a rectangle.
+                      Three rounds of "it is still coming back square"
+                      cost a day between us, because the only visible
+                      symptom was the same whatever the cause: no
+                      polygon sent, too few corners, or one rejected as
+                      unusable all look identical on the plan. The row
+                      now says which, so the next report names the
+                      stage rather than the symptom. */}
                   <span className="mt-0.5 block text-sm text-on-surface-variant">
                     {w.toFixed(2)} × {l.toFixed(2)} m
-                    {thumb ? " · shape captured" : ""}
+                    {thumb
+                      ? ` · ${r.floorPolygonM!.length} corners`
+                      : (r.scanCornerCount ?? 0) === 0
+                        ? " · no outline from the sensor"
+                        : (r.scanCornerCount ?? 0) < 5
+                          ? ` · ${r.scanCornerCount} corners, so a rectangle`
+                          : ` · ${r.scanCornerCount} corners, outline not usable`}
                   </span>
                 </span>
               </button>

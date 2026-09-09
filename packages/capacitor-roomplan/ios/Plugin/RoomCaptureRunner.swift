@@ -521,9 +521,12 @@ enum CaptureSerializer {
         // off-by-25% bug field-testers reported.
         let floorPoly: [(Double, Double)]
         if #available(iOS 17.0, *) {
-            floorPoly = captured.floors.flatMap { floor in
-                floor.polygonCorners.map { (Double($0.x), Double($0.z)) }
-            }
+            // One surface only. Concatenating the corners of several
+            // floor surfaces produces a polygon that jumps between
+            // them, which is worse than the rectangle it replaces.
+            floorPoly = captured.floors
+                .max(by: { $0.polygonCorners.count < $1.polygonCorners.count })
+                .map { floorOutlineXZ($0) } ?? []
         } else {
             // `floors`/`polygonCorners` are iOS 17+. On iOS 16 fall back to
             // the wall-endpoint bounding box computed below.
@@ -694,6 +697,61 @@ enum CaptureSerializer {
         return (Double(m.columns.0.x), Double(m.columns.0.z))
     }
 
+    /**
+     * A floor surface's outline, in world plan coordinates.
+     *
+     * `polygonCorners` is expressed in the surface's own space, not the
+     * world's. A floor is a flat surface, so in its own space one of
+     * its three axes is nearly constant -- and reading `.x` and `.z`
+     * straight off it, as this did, can land on that flat axis and
+     * produce a polygon squashed onto a line: metres wide and
+     * millimetres deep.
+     *
+     * Which is a candidate for why every scanned room came back a
+     * rectangle. The outline was captured, sent, received -- and then
+     * discarded by scanPolygonIsUsable, correctly, because a 4 m by
+     * 2 mm sliver is not a room.
+     *
+     * I could not verify Apple's exact convention here without a
+     * device, so this does not assume it. It builds both readings --
+     * the corners as given, and the corners put through the surface
+     * transform -- and returns whichever is actually a shape. A
+     * polygon whose shorter side is under 10 cm is not a room outline
+     * under any convention.
+     *
+     * If the original reading was right all along, this returns it
+     * unchanged.
+     */
+    @available(iOS 17.0, *)
+    private static func floorOutlineXZ(_ floor: CapturedRoom.Surface) -> [(Double, Double)] {
+        let asGiven: [(Double, Double)] = floor.polygonCorners.map {
+            (Double($0.x), Double($0.z))
+        }
+        let transformed: [(Double, Double)] = floor.polygonCorners.map { corner in
+            let world = floor.transform * simd_float4(corner.x, corner.y, corner.z, 1)
+            return (Double(world.x), Double(world.z))
+        }
+
+        // The shorter side of the bounding box. A real room outline has
+        // both sides well clear of zero; a squashed one does not.
+        func shortestSide(_ pts: [(Double, Double)]) -> Double {
+            guard pts.count >= 3 else { return 0 }
+            let xs = pts.map { $0.0 }
+            let zs = pts.map { $0.1 }
+            let w = (xs.max() ?? 0) - (xs.min() ?? 0)
+            let h = (zs.max() ?? 0) - (zs.min() ?? 0)
+            return min(w, h)
+        }
+
+        let a = shortestSide(asGiven)
+        let b = shortestSide(transformed)
+        // Prefer the untransformed reading when it is a real shape, so
+        // a device where the original was correct is unaffected.
+        if a >= 0.10 { return asGiven }
+        if b >= 0.10 { return transformed }
+        return []
+    }
+
     /// Oriented bounding box + shoelace area + rectangularity test.
     ///
     /// Projects the floor polygon onto a `principal` axis (the
@@ -794,9 +852,9 @@ enum CaptureSerializer {
             let windowDicts = room.windows.map { openingToDict($0, walls: room.walls) }
             let openingDicts = room.openings.map { openingToDict($0, walls: room.walls) }
 
-            let floorPoly: [(Double, Double)] = room.floors.flatMap { floor in
-                floor.polygonCorners.map { (Double($0.x), Double($0.z)) }
-            }
+            let floorPoly: [(Double, Double)] = room.floors
+                .max(by: { $0.polygonCorners.count < $1.polygonCorners.count })
+                .map { floorOutlineXZ($0) } ?? []
             let fallbackPts: [(Double, Double)] = room.walls.flatMap { wallEndpoints(for: $0) }
             let pts = floorPoly.count >= 3 ? floorPoly : fallbackPts
 

@@ -296,6 +296,17 @@ export type RoomDraft = {
    */
   measuredByScan?: boolean;
   /**
+   * How many corners the sensor reported for this room, before any of
+   * our own judgement was applied.
+   *
+   * Diagnostic only, and it earns its place. "Still coming back
+   * square" is the same symptom whether the plugin sent no outline,
+   * sent a four-corner one, or sent one we rejected as unusable -- and
+   * three rounds of guessing which cost the best part of a day.
+   * Recording the raw count lets the app say which stage lost it.
+   */
+  scanCornerCount?: number;
+  /**
    * Customer's assertion that every corner in this room is a right
    * angle. Optional; absent means "not stated", which is different from
    * "no" — we should not infer squareness from silence.

@@ -788,6 +788,9 @@ export default function MeasureIntakeForm() {
         photos: [],
         shape: scanOutlineWorthKeeping(sr.floorPolygonM, sr.widthM, sr.lengthM) ? "custom" : "rectangle",
         measuredByScan: true,
+        // Raw count from the sensor, kept whether or not the outline
+        // survived our checks. See RoomDraft.scanCornerCount.
+        scanCornerCount: sr.floorPolygonM?.length ?? 0,
         // The real outline, translated from the shared frame into the
         // room's own coordinates — floorPolygonM is defined relative to
         // the room's anchor, while the scan reports it relative to the
@@ -939,6 +942,9 @@ export default function MeasureIntakeForm() {
                   // to a rectangle anyway, but says otherwise on screen.
                   shape: scanOutlineWorthKeeping(sr.floorPolygonM, sr.widthM, sr.lengthM) ? "custom" : "rectangle",
                   measuredByScan: true,
+                  // Raw count from the sensor, kept whether or not the
+                  // outline survived our checks. See scanCornerCount.
+                  scanCornerCount: sr.floorPolygonM?.length ?? 0,
                   /*
                    * Outline, translated to the room's own corner.
                    *
@@ -5549,14 +5555,21 @@ export default function MeasureIntakeForm() {
                   >
                     Edit measurements
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setStep("plan")}
-                    disabled={submitStatus === "submitting"}
-                    className="rounded-full border border-outline px-6 py-3 text-sm font-bold uppercase tracking-widest transition-colors hover:border-primary/60 hover:bg-surface-container-low disabled:opacity-50"
-                  >
-                    Edit floor plan
-                  </button>
+                  {/* The last way into the floor plan on a LiDAR
+                      phone. The step is skipped, the Steps menu entry
+                      is gone, and this button was still sitting on the
+                      review screen -- so the one route left was the
+                      one nobody had thought to remove. */}
+                  {arSupport !== "yes" && (
+                    <button
+                      type="button"
+                      onClick={() => setStep("plan")}
+                      disabled={submitStatus === "submitting"}
+                      className="rounded-full border border-outline px-6 py-3 text-sm font-bold uppercase tracking-widest transition-colors hover:border-primary/60 hover:bg-surface-container-low disabled:opacity-50"
+                    >
+                      Edit floor plan
+                    </button>
+                  )}
                   {/* The JSON backup download used to sit here. It asked a
                       homeowner to look after a file they cannot read, to
                       guard against a failure they have no way to act on,
