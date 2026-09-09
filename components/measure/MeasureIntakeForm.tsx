@@ -173,6 +173,29 @@ type Step = "project" | "rooms" | "exterior" | "proposal" | "plan" | "review";
  */
 const SCAN_ENABLED = process.env.NEXT_PUBLIC_ENABLE_SCAN === "1";
 
+/**
+ * Room notes with the scanner's audit stamp taken out.
+ *
+ * applyHouseScan appends something like
+ *   [Auto-scan 2026-09-08T22:14:03Z - 4.20 x 3.10 m - overall LOW]
+ * to every scanned room, which is genuinely useful: it tells the
+ * draughtsman when the scan was taken and how much the sensor trusted
+ * itself, and it travels with the submission.
+ *
+ * It is not for the customer. On the review screen -- the last thing
+ * they read before sending -- "overall LOW" is alarming, unexplained,
+ * and not actionable: there is no button that makes it say HIGH. It
+ * reads as the app admitting the survey is bad, at the exact moment
+ * someone is deciding whether to press send.
+ *
+ * So it is hidden there and kept everywhere else. The stamp still goes
+ * to Charlie in the payload and the email, which is where a confidence
+ * figure means something to the person reading it.
+ */
+function notesForCustomer(notes: string): string {
+  return notes.replace(/\[Auto-scan[^\]]*\]/g, "").trim();
+}
+
 export default function MeasureIntakeForm() {
   const [step, setStep] = useState<Step>("project");
   /**
@@ -4750,209 +4773,46 @@ export default function MeasureIntakeForm() {
                   homes.
                 </p>
               </header>
-              {/* Connections, moved here from the bottom of the rooms
-                  step. They exist to lay the plan out, so they belong
-                  beside the plan rather than at the end of a long list
-                  of rooms where they were the last thing on the page
-                  and easy to never reach. */}
-            {/* ── Room connectivity graph ───────────────────────────── */}
-            <section className="rounded-xl border border-outline bg-surface-container-low p-6">
-              <header className="mb-2 flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-lg font-bold text-on-surface">
-                    How do the rooms connect?
-                  </h3>
-                  <p className="mt-1 max-w-prose text-sm text-on-surface-variant">
-                    Tell us which rooms open onto each other. This lets us
-                    lay out the floor plan without guesswork. You can add
-                    one row per door, opening, or shared wall.
-                  </p>
-                </div>
-              </header>
+              {/* The "How do the rooms connect?" section used to sit
+                  here.
 
-              {rooms.length < 2 && (
-                <p className="rounded-lg bg-surface p-3 text-sm text-on-surface-variant">
-                  Add a second room above, then come back here to link them.
-                </p>
-              )}
+                  It asked the customer to list, row by row, which rooms
+                  open onto which -- one entry per door, opening or
+                  shared wall. The idea was that the connections would
+                  let us lay the plan out without guesswork.
 
-              {rooms.length >= 2 && (
-                <div className="space-y-3">
-                  {connections.length === 0 && (
-                    <p className="text-sm text-on-surface-variant">
-                      No connections yet — tap{" "}
-                      <span className="font-semibold">Add connection</span> below.
-                    </p>
-                  )}
+                  In practice the plan is laid out by dragging rooms
+                  around, which says the same thing far better: two
+                  rooms that touch on the grid are adjacent, and no
+                  homeowner had to describe their house as a graph to
+                  tell us so. It was a second way to say something the
+                  drag already said, in the least natural language
+                  available, on the screen where the easier method was
+                  sitting directly underneath it.
 
-                  {connections.map((c, idx) => {
-                    const kindLabel: Record<ConnectionKind, string> = {
-                      door: "Door",
-                      opening: "Open archway",
-                      "shared-wall": "Shared wall (no opening)",
-                      stairs: "Stairs (different floors)",
-                      external: "External wall",
-                    };
-                    return (
-                      <div
-                        key={c.id}
-                        className="grid grid-cols-1 gap-3 rounded-lg border border-outline bg-surface p-4 md:grid-cols-12"
-                      >
-                        <label className="md:col-span-3">
-                          <span className="block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
-                            Room A
-                          </span>
-                          <select
-                            value={c.roomAId}
-                            onChange={(e) =>
-                              updateConnection(c.id, { roomAId: e.target.value })
-                            }
-                            className="mt-1 w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-2 py-2 text-sm text-on-surface outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
-                          >
-                            <option value="">— pick a room —</option>
-                            {rooms.map((r, i) => (
-                              <option key={r.id} value={r.id}>
-                                {roomDisplayLabel(r, i)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        <label className="md:col-span-3">
-                          <span className="block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
-                            Connection
-                          </span>
-                          <select
-                            value={c.kind}
-                            onChange={(e) =>
-                              updateConnection(c.id, {
-                                kind: e.target.value as ConnectionKind,
-                              })
-                            }
-                            className="mt-1 w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-2 py-2 text-sm text-on-surface outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
-                          >
-                            {(
-                              [
-                                "door",
-                                "opening",
-                                "shared-wall",
-                                "stairs",
-                                "external",
-                              ] as ConnectionKind[]
-                            ).map((k) => (
-                              <option key={k} value={k}>
-                                {kindLabel[k]}
-                              </option>
-                            ))}
-                          </select>
-                          {c.kind === "stairs" && (
-                            <select
-                              value={c.stairsShape ?? "straight"}
-                              onChange={(e) =>
-                                updateConnection(c.id, {
-                                  stairsShape: e.target.value as StairsShape,
-                                })
-                              }
-                              className="mt-2 w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-2 py-2 text-sm text-on-surface outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
-                              aria-label="Stair shape"
-                            >
-                              <option value="straight">Straight flight</option>
-                              <option value="winder-l">L-winder (90° turn)</option>
-                              <option value="winder-single">Single winder step</option>
-                            </select>
-                          )}
-                        </label>
-
-                        {c.kind !== "external" && (
-                          <label className="md:col-span-3">
-                            <span className="block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
-                              Room B
-                            </span>
-                            <select
-                              value={c.roomBId}
-                              onChange={(e) =>
-                                updateConnection(c.id, { roomBId: e.target.value })
-                              }
-                              className="mt-1 w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-2 py-2 text-sm text-on-surface outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
-                            >
-                              <option value="">— pick a room —</option>
-                              {rooms
-                                .filter((r) => r.id !== c.roomAId)
-                                .map((r) => {
-                                  const i = rooms.indexOf(r);
-                                  return (
-                                    <option key={r.id} value={r.id}>
-                                      {roomDisplayLabel(r, i)}
-                                    </option>
-                                  );
-                                })}
-                            </select>
-                          </label>
-                        )}
-
-                        {(c.kind === "door" || c.kind === "opening") && (
-                          <label className="md:col-span-2">
-                            <span className="block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
-                              Width (m)
-                            </span>
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              value={c.widthM}
-                              onChange={(e) =>
-                                updateConnection(c.id, { widthM: e.target.value })
-                              }
-                              placeholder="0.80"
-                              className="mt-1 w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-2 py-2 text-sm text-on-surface outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
-                            />
-                          </label>
-                        )}
-
-                        <div className="flex items-end justify-end md:col-span-1">
-                          <button
-                            type="button"
-                            onClick={() => removeConnection(c.id)}
-                            aria-label={`Remove connection ${idx + 1}`}
-                            className="rounded-lg border border-outline px-3 py-2 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-colors hover:bg-surface-container-low"
-                          >
-                            ✕
-                          </button>
-                        </div>
-
-                        <label className="md:col-span-12">
-                          <span className="block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
-                            Notes (optional)
-                          </span>
-                          <input
-                            type="text"
-                            value={c.notes}
-                            onChange={(e) =>
-                              updateConnection(c.id, { notes: e.target.value })
-                            }
-                            placeholder="e.g. door is double, opens into kitchen"
-                            className="mt-1 w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-2 py-2 text-sm text-on-surface outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
-                          />
-                        </label>
-                      </div>
-                    );
-                  })}
-
-                  <button
-                    type="button"
-                    onClick={addConnection}
-                    className="w-full rounded-xl border border-dashed border-outline py-3 text-sm font-bold uppercase tracking-widest text-primary transition-colors hover:bg-surface-container-low"
-                  >
-                    + Add connection
-                  </button>
-                </div>
-              )}
-            </section>
+                  normalizeConnections and its tests stay in
+                  measure-core: connections are still derived and still
+                  submitted, they are simply no longer typed in. */}
 
               <FloorPlanEditor
                 rooms={rooms}
                 placements={placements}
                 onPlacementChange={updatePlacement}
                 onRoomChange={setRoom}
+                /*
+                 * Add a room without leaving the plan behind.
+                 *
+                 * Looking at the layout is when a forgotten room gets
+                 * noticed -- the utility, the downstairs loo, the
+                 * cupboard under the stairs -- and until now the only
+                 * way back to measuring one was through the Steps
+                 * menu. It measures the new room and returns here.
+                 */
+                onAddRoom={() => {
+                  addRoom();
+                  setActiveRoomIndex(rooms.length);
+                  setStep("rooms");
+                }}
               />
             </section>
 
@@ -5130,9 +4990,9 @@ export default function MeasureIntakeForm() {
                         <strong>Irregular:</strong> {room.irregularNotes}
                       </p>
                     )}
-                    {room.notes.trim() && (
+                    {notesForCustomer(room.notes) && (
                       <p className="mt-2 text-sm text-on-surface-variant">
-                        {room.notes}
+                        {notesForCustomer(room.notes)}
                       </p>
                     )}
                     {room.photos.length > 0 && (

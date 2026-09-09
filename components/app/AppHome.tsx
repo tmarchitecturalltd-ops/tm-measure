@@ -47,90 +47,17 @@ import {
   type RecentSubmission,
 } from "@/lib/recentSubmissions";
 
-type Tile = {
-  type: ProjectType;
-  title: string;
-  blurb: string;
-  /** Inline SVG kept tiny so the tile stays compact and the icon
-   *  inherits its colour from the wrapping span via currentColor. */
-  icon: React.ReactNode;
-  /** Subtle accent applied to the icon-pill background and (at very low
-   *  opacity) the tile background. Hand-picked to sit close to the
-   *  cream/gold palette — never pure red/blue, always a desaturated
-   *  earth/architectural tone so the home still reads on-brand. */
-  tint: { bg: string; pillBg: string; iconColor: string };
-};
-
-/**
- * Three tiles, down from six.
+/*
+ * The TILES array used to live here -- Extension, Loft conversion and
+ * Not sure yet, each with its own icon and tint.
  *
- * The type a customer picks changes nothing about what the app then
- * asks — it is one word in the notification email. Six choices on the
- * first screen is six decisions before anyone has learned what the app
- * does, in exchange for information we could get by replying to them.
- *
- * New build, renovation and garage conversions land under "Something
- * else"; the project name and the photographs describe those better
- * than a category does. ProjectType still defines all six so older
- * drafts and past submissions keep their labels.
+ * All three linked to the same place and produced the same survey. The
+ * choice set one word in the notification email and changed nothing
+ * the app then did, so it was three decisions on the first screen in
+ * exchange for something the project step asks anyway. ProjectType
+ * still defines all six values so older drafts and past submissions
+ * keep their labels.
  */
-const TILES: Tile[] = [
-  {
-    type: "extension",
-    title: "Extension",
-    blurb: "Single or double storey, side or rear",
-    // Brand gold — the anchor tile, stays on-brand.
-    tint: {
-      bg: "rgba(184, 150, 80, 0.04)",
-      pillBg: "rgba(184, 150, 80, 0.14)",
-      iconColor: "#8a6f3a",
-    },
-    icon: (
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" />
-        <path d="M14 9h6" />
-        <path d="M17 6v6" />
-      </svg>
-    ),
-  },
-  {
-    type: "loft",
-    title: "Loft conversion",
-    blurb: "Dormer, hip-to-gable, mansard or rooflight",
-    // Slate blue — sky/roof line.
-    tint: {
-      bg: "rgba(110, 130, 150, 0.05)",
-      pillBg: "rgba(110, 130, 150, 0.16)",
-      iconColor: "#5a6a80",
-    },
-    icon: (
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <path d="M2 12L12 4l10 8" />
-        <path d="M5 11v9h14v-9" />
-        <rect x="10" y="13" width="4" height="4" />
-      </svg>
-    ),
-  },
-  {
-    type: "other",
-    title: "Not sure yet",
-    blurb: "Pick the type later — start measuring now",
-    // Neutral — undecided.
-    tint: {
-      bg: "rgba(120, 115, 105, 0.04)",
-      pillBg: "rgba(120, 115, 105, 0.13)",
-      iconColor: "#615b53",
-    },
-    icon: (
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7" />
-        <circle cx="12" cy="17" r="0.6" fill="currentColor" />
-      </svg>
-    ),
-  },
-];
-
 
 export default function AppHome() {
   const [recents, setRecents] = useState<RecentSubmission[]>([]);
@@ -374,45 +301,31 @@ export default function AppHome() {
             room, then it&apos;s in our hands.
           </p>
 
-          {/* Tile grid — each tile keeps the cream surface base but
-              adds a hairline of its own architectural-tone tint on
-              the icon pill and a barely-there body wash. The hover
-              state still lifts to gold for brand cohesion. */}
-          <div className="tm-fade-up-late mt-6 grid gap-3 sm:grid-cols-2">
-            {TILES.map((t) => (
-              <Link
-                key={t.type}
-                href={`/measure?type=${t.type}`}
-                className="tm-lift group flex items-start gap-3.5 rounded-2xl border border-outline-variant/40 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/70 hover:shadow-lg hover:shadow-primary/10 active:translate-y-0 active:scale-[0.99]"
-                style={{ backgroundColor: t.tint.bg }}
-              >
-                <span
-                  className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105"
-                  style={{
-                    backgroundColor: t.tint.pillBg,
-                    color: t.tint.iconColor,
-                  }}
-                >
-                  {t.icon}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-headline text-[15px] font-semibold leading-snug text-on-surface">
-                    {t.title}
-                  </span>
-                  <span className="mt-1 block text-sm leading-snug text-on-surface-variant">
-                    {t.blurb}
-                  </span>
-                </span>
-                <span
-                  className="material-symbols-outlined shrink-0 self-center text-on-surface-variant/60 transition-all group-hover:translate-x-0.5 group-hover:text-primary"
-                  style={{ fontSize: "20px" }}
-                  aria-hidden
-                >
-                  arrow_forward
-                </span>
-              </Link>
-            ))}
-          </div>
+          {/* One button, not three tiles.
+              Extension / Loft / Not sure yet went to the same place and
+              produced the same survey -- the answer was one word in the
+              notification email and nothing in the app behaved
+              differently. So it was three decisions on the first screen,
+              before anyone had learned what the app does, to collect
+              something we ask again inside the flow anyway.
+
+              The type question still exists on the project step, where
+              it is one tap among questions the customer is already
+              answering rather than a toll gate in front of them. */}
+          <Link
+            href="/measure"
+            style={{ minHeight: 60 }}
+            className="tm-fade-up-late mt-6 flex w-full items-center justify-center gap-2.5 rounded-full bg-primary px-6 text-base font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 transition-all hover:bg-surface-tint active:scale-[0.99]"
+          >
+            Start a project
+            <span
+              className="material-symbols-outlined"
+              style={{ fontSize: "20px" }}
+              aria-hidden
+            >
+              arrow_forward
+            </span>
+          </Link>
         </section>
 
         {/* The "How it works" cards used to sit here.
@@ -527,19 +440,20 @@ export default function AppHome() {
       </main>
 
       {/* ── More ─────────────────────────────────────────────────────
-          A list, not a row of pills.
+          An index, not a menu of suggestions.
 
-          These were six rounded chips wrapping across the bottom of
-          the screen, which is the shape a chat assistant uses to offer
-          suggestions -- and it read that way: a scatter of things to
-          try rather than a settings list to look something up in. The
-          chips also gave no room for a word of explanation, so
-          "Status" and "Architect" sat side by side with nothing to say
-          which of them a homeowner wanted.
+          This started as six rounded chips wrapping across the bottom
+          of the screen -- the shape a chat assistant uses to offer
+          prompts, and it read as one: a scatter of things to try. The
+          first fix made them full-width rows, which was better and
+          still wrong, because each row had a gold circle with an icon
+          in it and a card around the lot. Coloured bubbles in a
+          rounded card is the same visual language.
 
-          Full-width rows with a label, a line of description and a
-          chevron. Slower to scan and far easier to use, which is the
-          right trade for a section nobody visits twice.
+          Now it is set like the contents page of a drawing pack:
+          small caps, hairline rules, no card, no icons, a thin chevron
+          to say it goes somewhere. Nothing decorative -- the section
+          is a reference list and should look like one.
 
           They stay at the bottom, below the tiles and the recent list,
           for the same reason as before: all of it is wanted
@@ -549,23 +463,12 @@ export default function AppHome() {
           <p className="mb-3 text-sm font-bold uppercase tracking-widest text-on-surface-variant">
             More
           </p>
-          <ul className="overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface-container-lowest">
+          <ul>
             {moreItems.map((item, i) => {
               const inner = (
                 <>
-                  <span
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
-                    aria-hidden
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: "20px" }}
-                    >
-                      {item.icon}
-                    </span>
-                  </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block font-headline text-[15px] font-semibold text-on-surface">
+                    <span className="block text-sm font-bold uppercase tracking-[0.18em] text-on-surface">
                       {item.label}
                     </span>
                     <span className="mt-0.5 block text-sm leading-snug text-on-surface-variant">
@@ -573,16 +476,16 @@ export default function AppHome() {
                     </span>
                   </span>
                   <span
-                    className="material-symbols-outlined shrink-0 text-on-surface-variant/50"
-                    style={{ fontSize: "20px" }}
+                    className="material-symbols-outlined shrink-0 text-on-surface-variant/40"
+                    style={{ fontSize: "18px" }}
                     aria-hidden
                   >
                     chevron_right
                   </span>
                 </>
               );
-              const cls = `flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors hover:bg-primary/5 ${
-                i > 0 ? "border-t border-outline-variant/20" : ""
+              const cls = `flex w-full items-baseline gap-4 py-3.5 text-left transition-colors hover:text-primary ${
+                i > 0 ? "border-t border-outline-variant/25" : ""
               }`;
               return (
                 <li key={item.label}>
