@@ -4863,12 +4863,19 @@ export default function MeasureIntakeForm() {
                 : null
             }
           >
-          <div className="space-y-10">
-            <section className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-6 md:p-8">
-              <h2 className="font-headline mb-2 text-2xl text-on-surface">
+          {/* Tightened throughout.
+              This screen is a list of facts to check, and it was set
+              like a brochure: a 2 rem card inset inside a 2.5 rem
+              stack, 2 rem between rooms, 1 rem under every heading. On
+              a phone that is a lot of scrolling past nothing, and the
+              customer is scrolling to find something wrong -- gaps
+              make that harder, not easier. */}
+          <div className="space-y-5">
+            <section className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-4 md:p-6">
+              <h2 className="font-headline mb-1 text-xl text-on-surface">
                 Submission summary
               </h2>
-              <p className="mb-6 text-sm text-on-surface-variant">
+              <p className="mb-4 text-sm text-on-surface-variant">
                 {customerName} · {email} · {projectName}
               </p>
 
@@ -4900,10 +4907,10 @@ export default function MeasureIntakeForm() {
                   </div>
                 );
               })()}
-              <div className="space-y-8">
+              <div className="space-y-4">
                 {rooms.map((room, ri) => (
                   <div key={room.id}>
-                    <h3 className="font-headline mb-4 text-lg text-primary">
+                    <h3 className="font-headline mb-2 text-base text-primary">
                       {room.name}
                     </h3>
                     {/* Only the walls with something wrong.
@@ -4968,7 +4975,7 @@ export default function MeasureIntakeForm() {
                       })()}
                     </div>
                     {(room.doors.length > 0 || room.windows.length > 0) && (
-                      <ul className="mt-4 list-inside list-disc text-sm text-on-surface-variant">
+                      <ul className="mt-2 list-inside list-disc text-sm text-on-surface-variant">
                         {room.doors.map((d) =>
                           d.widthM.trim() ? (
                             <li key={d.id}>
@@ -4996,13 +5003,13 @@ export default function MeasureIntakeForm() {
                       </p>
                     )}
                     {room.photos.length > 0 && (
-                      <div className="mt-4 flex flex-wrap gap-2">
+                      <div className="mt-2 flex flex-wrap gap-1.5">
                         {room.photos.map((p) => (
                           <img
                             key={p.id}
                             src={p.uri}
                             alt=""
-                            className="h-20 w-20 rounded object-cover ring-1 ring-outline-variant/30"
+                            className="h-14 w-14 rounded object-cover ring-1 ring-outline-variant/30"
                           />
                         ))}
                       </div>
@@ -5018,7 +5025,7 @@ export default function MeasureIntakeForm() {
               {(Object.values(exteriorPhotos).some((p) => p.length > 0) ||
                 proposalDescription.trim() ||
                 proposalSketches.length > 0) && (
-                <div className="mt-8 space-y-6 border-t border-outline-variant/30 pt-8">
+                <div className="mt-5 space-y-4 border-t border-outline-variant/30 pt-5">
                   {Object.values(exteriorPhotos).some((p) => p.length > 0) && (
                     <div>
                       <h3 className="font-headline mb-4 text-lg text-primary">

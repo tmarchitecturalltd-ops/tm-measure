@@ -105,69 +105,15 @@ export type FloorPlanEditorProps = {
   onAddRoom?: () => void;
 };
 
-/**
- * A collapsible block, closed by default.
+/*
+ * A Disclosure component used to live here.
  *
- * The plan step had grown to nine stacked things -- heading, floor
- * tabs, the grid, the insert panel, ceiling height, controls, the
- * rooms waiting to be placed, other floors -- so the two that matter,
- * the grid and the rooms not yet on it, were separated by everything
- * else and the customer had to scroll past the detail to reach them.
- *
- * Everything secondary now folds away. The point of this screen is
- * arranging rooms; the rest is available and not in the road.
- *
- * A native <details> would do this with no JavaScript, but its
- * open/closed state is not controllable, and the insert panel needs to
- * open itself when a room is tapped.
+ * It was the right idea one step too early: three collapsible rows
+ * above the plan were still three rows of heading, subtitle and
+ * chevron, and on a phone that left the grid a strip in the middle of
+ * the screen. The controls are now chips in a single line, opening one
+ * shared panel -- same content, one row of chrome instead of three.
  */
-function Disclosure({
-  label,
-  hint,
-  open,
-  onToggle,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="overflow-hidden rounded-lg border border-[#e6dfd0]">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        style={{ minHeight: 52 }}
-        className="flex w-full items-center justify-between gap-3 px-4 text-left"
-      >
-        <span>
-          <span className="block text-sm font-bold uppercase tracking-[0.2em] text-on-surface-variant">
-            {label}
-          </span>
-          {hint && (
-            <span className="mt-0.5 block text-sm text-[#6e6a5f]">{hint}</span>
-          )}
-        </span>
-        <span
-          className="material-symbols-outlined shrink-0 text-[#8a6f2f]"
-          style={{
-            fontSize: "22px",
-            transform: open ? "rotate(180deg)" : "none",
-            transition: "transform 160ms",
-          }}
-          aria-hidden
-        >
-          expand_more
-        </span>
-      </button>
-      {open && <div className="border-t border-[#e6dfd0] p-3">{children}</div>}
-    </div>
-  );
-}
-
 /** Default placement for a room whose entry is missing from the map. */
 function defaultPlacement(floor: number = 0): RoomPlacement {
   return { positionM: null, rotationDeg: 0, floor };
@@ -274,16 +220,15 @@ export default function FloorPlanEditor({
   const [zoomRoomId, setZoomRoomId] = useState<string | null>(null);
 
   /**
-   * Which of the folded blocks are open.
+   * Which control panel is showing, if any.
    *
-   * "Rooms to place" starts open, because rooms waiting to be placed
-   * are unfinished work rather than an option -- a plan with a room
-   * missing is the commonest way a survey arrives incomplete. The
-   * other two start shut.
+   * One at a time, and closed by default. Three panels that could all
+   * be open at once is three panels that eventually all are, and the
+   * grid ends up a letterbox at the bottom of the screen.
    */
-  const [palOpen, setPalOpen] = useState(true);
-  const [insertOpen, setInsertOpen] = useState(false);
-  const [ceilOpen, setCeilOpen] = useState(false);
+  const [openPanel, setOpenPanel] = useState<
+    null | "rooms" | "feature" | "ceiling"
+  >(null);
 
   const zoomViewBox = useMemo(() => {
     if (!zoomRoomId) return null;
@@ -608,7 +553,7 @@ export default function FloorPlanEditor({
     setZoomRoomId(target);
     // Keep the panel open after adding: the next thing anyone does is
     // add the second window, and closing it would make that two taps.
-    setInsertOpen(true);
+    setOpenPanel("feature");
   }, [
     onRoomChange,
     rooms,
@@ -972,7 +917,23 @@ export default function FloorPlanEditor({
           the actions are where you look first and the grid fills what
           is left. */}
       {/* Controls */}
-      <div className="flex flex-wrap items-center gap-2 text-sm">
+      {/* ── One strip of controls, one panel at a time ──────────────
+          The plan is the page. Everything else is a chip along the
+          top that opens a single panel beneath it, and opening one
+          closes the others -- so the controls take one line of height
+          when nothing is open and never more than one panel's worth
+          when something is.
+
+          Three stacked disclosures were better than three stacked
+          cards and still wrong: even shut they were three rows of
+          heading, subtitle and chevron above the grid, which on a
+          phone left the plan a strip in the middle of the screen. The
+          grid is the thing being worked on and should have the space.
+
+          Each chip carries its own state in its label -- the number of
+          rooms still to place, the ceiling height in metres -- so the
+          floor can be read without opening anything. */}
+      <div className="flex flex-wrap items-center gap-1.5 text-sm">
         {onAddRoom && (
           <button
             type="button"
@@ -980,51 +941,62 @@ export default function FloorPlanEditor({
             style={{ minHeight: 40 }}
             className="rounded-full bg-[#b89650] px-4 font-bold uppercase tracking-widest text-white"
           >
-            + Add room
+            + Room
           </button>
         )}
+        {([
+          {
+            key: "rooms" as const,
+            label: unplacedOnFloor.length
+              ? `To place (${unplacedOnFloor.length})`
+              : "All placed",
+            show: true,
+          },
+          { key: "feature" as const, label: "Add feature", show: !!onRoomChange && roomsOnFloor.length > 0 },
+          {
+            key: "ceiling" as const,
+            label: ceilingIsMixed ? "Ceiling: mixed" : `Ceiling ${floorCeiling || "2.40"} m`,
+            show: !!onRoomChange && roomsOnFloor.length > 0,
+          },
+        ] as const)
+          .filter((c) => c.show)
+          .map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => setOpenPanel((cur) => (cur === c.key ? null : c.key))}
+              style={{ minHeight: 40 }}
+              className={`rounded-full border px-3.5 font-semibold ${
+                openPanel === c.key
+                  ? "border-[#b89650] bg-[#b89650] text-white"
+                  : "border-[#b89650] text-[#8a6f2f]"
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
         <button
           type="button"
           onClick={applyAutoLayout}
-          className="rounded-full border border-[#b89650] px-3 py-1 font-semibold text-[#8a6f2f]"
+          style={{ minHeight: 40 }}
+          className="rounded-full border border-[#d9d3c8] px-3.5 font-semibold text-[#6e6a5f]"
         >
-          Auto-layout this floor
+          Auto-layout
         </button>
         <button
           type="button"
           onClick={clearFloor}
-          className="rounded-full border border-[#d9d3c8] px-3 py-1 font-semibold text-[#6e6a5f]"
+          style={{ minHeight: 40 }}
+          className="rounded-full border border-[#d9d3c8] px-3.5 font-semibold text-[#6e6a5f]"
         >
-          Clear layout
+          Clear
         </button>
-        <span className="text-sm text-on-surface-variant">
-          Grid = 25 cm · drag rooms · ↻ rotates 90° · × removes from plan
-        </span>
       </div>
 
-      {/* ── Everything that is not arranging rooms ──────────────────
-          Folded away by default.
-
-          This screen exists to put rooms in the right places, and it
-          had grown to nine stacked blocks with the two that matter --
-          the grid, and the rooms not yet on it -- separated by all the
-          detail in between. Each of these is worth having and none of
-          them is worth scrolling past on the way to the plan.
-
-          "Rooms to place" opens itself whenever there are rooms
-          waiting, because that is unfinished work rather than an
-          option; the other two stay shut until asked for. */}
-      <div className="space-y-2">
-        <Disclosure
-          label={`Rooms to place${unplacedOnFloor.length ? ` (${unplacedOnFloor.length})` : ""}`}
-          hint={
-            unplacedOnFloor.length
-              ? `Waiting to go on ${floorLabel(currentFloor)}`
-              : "All placed on this floor"
-          }
-          open={palOpen}
-          onToggle={() => setPalOpen((o) => !o)}
-        >
+      {openPanel && (
+        <div className="rounded-lg border border-[#b89650]/50 p-3" style={{ backgroundColor: "#fffdf8" }}>
+          {openPanel === "rooms" && (
+            <>
         {unplacedOnFloor.length === 0 ? (
           <p className="text-sm text-on-surface-variant">
             All rooms on this floor are placed. Switch floors or add a new one above.
@@ -1049,16 +1021,10 @@ export default function FloorPlanEditor({
             })}
           </div>
         )}
-        </Disclosure>
-
-        {onRoomChange && roomsOnFloor.length > 0 && (
-          <Disclosure
-            label="Add feature"
-            hint="A door, window or stairs"
-            open={insertOpen}
-            onToggle={() => setInsertOpen((o) => !o)}
-          >
-
+            </>
+          )}
+          {openPanel === "feature" && (
+            <>
       {/* ── Insert into the selected room ───────────────────────────
           Someone looking at the layout is the person best placed to
           notice a missing staircase or a door they walked through and
@@ -1182,21 +1148,10 @@ export default function FloorPlanEditor({
             It lands on the first wall — drag it to where it really is.
           </p>
       </>
-          </Disclosure>
-        )}
-
-        {onRoomChange && roomsOnFloor.length > 0 && (
-          <Disclosure
-            label="Ceiling height"
-            hint={
-              ceilingIsMixed
-                ? "Rooms on this floor differ"
-                : `${floorCeiling || "2.40"} m on ${floorLabel(currentFloor)}`
-            }
-            open={ceilOpen}
-            onToggle={() => setCeilOpen((o) => !o)}
-          >
-
+            </>
+          )}
+          {openPanel === "ceiling" && (
+            <>
       {/* ── Ceiling height for this floor ──────────────────────────
           Asked here rather than once for the whole property, because
           here is the only place the floors exist. One number for a
@@ -1228,10 +1183,11 @@ export default function FloorPlanEditor({
               : "Applies to every room on this floor. Change a single room in its own questions."}
           </p>
         </div>
+            </>
+          )}
+        </div>
+      )}
 
-          </Disclosure>
-        )}
-      </div>
 
 
       {/* Canvas */}

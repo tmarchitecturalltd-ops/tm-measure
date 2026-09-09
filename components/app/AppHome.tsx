@@ -133,25 +133,25 @@ export default function AppHome() {
   }[] = [
     {
       label: "How it works",
-      blurb: "The three steps, start to finish",
+      blurb: "",
       icon: "help",
       onClick: () => setShowWelcome(true),
     },
     {
       label: "Photo tips",
-      blurb: "What makes a photo we can work from",
+      blurb: "",
       icon: "photo_camera",
       href: "/photo-tips",
     },
     {
       label: "Project status",
-      blurb: "Check on a survey you've already sent",
+      blurb: "",
       icon: "fact_check",
       href: "/status",
     },
     {
       label: "Privacy",
-      blurb: "What we keep, and for how long",
+      blurb: "",
       icon: "shield",
       href: "/privacy",
     },
@@ -165,8 +165,7 @@ export default function AppHome() {
       ? [
           {
             label: "Reset calibration",
-            blurb:
-              "Wipes a stale camera calibration that may be making rooms read tiny or huge",
+            blurb: "",
             icon: "restart_alt",
             onClick: () => {
               if (typeof window === "undefined") return;
@@ -233,7 +232,7 @@ export default function AppHome() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 pt-8 md:px-6 md:pt-12">
+      <main className="mx-auto max-w-3xl px-4 pt-5 md:px-6 md:pt-8">
         {/* ── Continue where you left off ────────────────────────
             First, above the tiles, and only when there is something to
             continue.
@@ -274,7 +273,7 @@ export default function AppHome() {
             a low-opacity gold radial that fades into the surface so
             the home feels warmer without saturating the brand. */}
         <section
-          className={`tm-fade-up relative isolate ${draft ? "mt-10" : ""}`}
+          className={`tm-fade-up relative isolate ${draft ? "mt-6" : ""}`}
           style={{
             backgroundImage:
               "radial-gradient(80% 60% at 0% 0%, rgba(184, 150, 80, 0.09) 0%, rgba(184, 150, 80, 0) 70%)",
@@ -295,10 +294,15 @@ export default function AppHome() {
           >
             What are you building?
           </h2>
-          <p className="mt-3 max-w-prose text-sm leading-relaxed text-on-surface-variant md:text-base">
-            Pick the type below to start. We&apos;ll guide you through walls,
-            doors, windows and a quick floor plan. One reference photo per
-            room, then it&apos;s in our hands.
+          {/* One line, down from four.
+              The paragraph described the whole process -- walls, doors,
+              windows, floor plan, a photo per room -- to someone who has
+              not agreed to do any of it yet, and the How it works screen
+              now says the same thing at the moment they have. Four lines
+              of it sat between the question and the button that answers
+              it. */}
+          <p className="mt-2 text-sm text-on-surface-variant">
+            Room by room. We&apos;ll guide you.
           </p>
 
           {/* One button, not three tiles.
@@ -338,103 +342,59 @@ export default function AppHome() {
             footer still opens the welcome screen for anyone who wants
             a reminder. */}
 
-        {/* ── Recent submissions ───────────────────────────────── */}
-        <section className="mt-12">
-          <div className="flex items-center justify-between">
+        {/* ── Recent submissions ─────────────────────────────────
+            Hidden entirely when there is nothing in it.
+
+            The empty state was a dashed box the height of a phone
+            screen: an illustration, a paragraph explaining that
+            submissions appear here once you send one, and a second
+            "Start your first measurement" button duplicating the one
+            directly above it. All of that to tell a first-time
+            customer that a list they have never used is empty -- and
+            it pushed everything else off the screen.
+
+            Three at most. Someone who wants the fourth is looking for
+            a submission ID, and that is what Project status is for. */}
+        {recents.length > 0 && (
+          <section className="mt-8">
             <h3 className="font-label text-sm font-bold uppercase tracking-[0.25em] text-primary">
               Recent submissions
             </h3>
-            {recents.length > 0 && (
-              <span className="text-sm font-semibold uppercase tracking-widest text-on-surface-variant">
-                {recents.length} on this device
-              </span>
-            )}
-          </div>
-
-          {recents.length === 0 ? (
-            <div className="mt-3 rounded-2xl border border-dashed border-outline-variant/50 bg-surface-container-low p-8 text-center">
-              {/* Tiny "drafted floor plan" illustration — inline SVG so it
-                  inherits the brand gold via currentColor and costs no
-                  network fetch. Purely decorative. */}
-              <svg
-                viewBox="0 0 64 48"
-                width="64"
-                height="48"
-                className="mx-auto text-primary"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <rect x="8" y="6" width="48" height="36" rx="2" opacity="0.9" />
-                <path d="M8 24h20M28 6v18M28 24v8M28 40v2" opacity="0.55" />
-                <path d="M42 6v14M42 28v14" opacity="0.55" />
-                <path d="M14 12h8" opacity="0.35" />
-                <path d="M48 34h4" opacity="0.35" />
-                <circle cx="32" cy="24" r="1.4" fill="currentColor" stroke="none" opacity="0.8" />
-              </svg>
-              <p className="mt-4 text-sm text-on-surface-variant">
-                Nothing here yet. Your submissions will appear in this list once
-                you send your first measurement.
-              </p>
-              <Link
-                href="/measure"
-                className="mt-4 inline-flex items-center gap-2 rounded-full border border-primary/50 px-5 py-2 text-sm font-bold uppercase tracking-widest text-primary transition-colors hover:bg-primary hover:text-on-primary"
-              >
-                Start your first measurement
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontSize: "16px" }}
-                  aria-hidden
-                >
-                  arrow_forward
-                </span>
-              </Link>
-            </div>
-          ) : (
-            <ul className="tm-lift mt-3 divide-y divide-outline-variant/20 overflow-hidden rounded-2xl border border-outline-variant/30 bg-surface-container-lowest">
-              {recents.map((r) => (
+            <ul className="mt-2">
+              {recents.slice(0, 3).map((r, i) => (
                 <li
                   key={r.id}
-                  className="flex items-center justify-between gap-4 px-4 py-3.5"
+                  className={`flex items-center justify-between gap-3 py-2.5 ${
+                    i > 0 ? "border-t border-outline-variant/25" : ""
+                  }`}
                 >
-                  <div className="min-w-0">
-                    <p className="truncate font-headline text-sm font-semibold text-on-surface">
+                  <span className="min-w-0">
+                    <span className="block truncate font-headline text-sm font-semibold text-on-surface">
                       {r.projectName || "(untitled project)"}
-                    </p>
-                    <p className="mt-0.5 text-sm text-on-surface-variant">
-                      {projectTypeLabel(r.projectType)} ·{" "}
+                    </span>
+                    <span className="mt-0.5 block truncate text-sm text-on-surface-variant">
                       {r.roomCount} room{r.roomCount === 1 ? "" : "s"} ·{" "}
                       {formatRelative(r.submittedAt)}
                       {r.remoteId ? ` · #${r.remoteId}` : ""}
-                    </p>
-                  </div>
+                    </span>
+                  </span>
                   <span
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10"
+                    className="material-symbols-outlined shrink-0 text-primary"
+                    style={{ fontSize: "18px" }}
                     aria-hidden
                   >
-                    <span
-                      className="material-symbols-outlined text-primary"
-                      style={{ fontSize: "18px" }}
-                    >
-                      check
-                    </span>
+                    check
                   </span>
                 </li>
               ))}
             </ul>
-          )}
-        </section>
-
-        {calib && process.env.NEXT_PUBLIC_ENABLE_SCAN === "1" && (
-          <p className="mt-8 text-center text-sm uppercase tracking-widest text-on-surface-variant">
-            Camera calibrated · <span className="font-mono text-primary">{Math.round(calib.focalPx)} px</span> ·{" "}
-            {Math.max(1, Math.round((Date.now() - calib.savedAt) / 86400000))} d ago
-          </p>
+          </section>
         )}
-        <p className="mt-12 text-center text-sm uppercase tracking-widest text-on-surface-variant">
+
+        {/* Calibration used to be stated here as its own line. It is
+            a developer's number on a customer's home screen, and the
+            one action attached to it -- resetting it -- is in More. */}
+        <p className="mt-6 text-center text-sm uppercase tracking-widest text-on-surface-variant/70">
           © {year} TM Architectural Designs Ltd · UK wide
         </p>
       </main>
@@ -458,8 +418,8 @@ export default function AppHome() {
           They stay at the bottom, below the tiles and the recent list,
           for the same reason as before: all of it is wanted
           occasionally and none of it first. */}
-      <nav className="mx-auto w-full max-w-3xl px-4 pb-10 pt-2 md:px-6">
-        <div className="border-t border-outline-variant/30 pt-6">
+      <nav className="mx-auto w-full max-w-3xl px-4 pb-6 pt-0 md:px-6">
+        <div className="border-t border-outline-variant/30 pt-4">
           <p className="mb-3 text-sm font-bold uppercase tracking-widest text-on-surface-variant">
             More
           </p>
@@ -467,13 +427,21 @@ export default function AppHome() {
             {moreItems.map((item, i) => {
               const inner = (
                 <>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-bold uppercase tracking-[0.18em] text-on-surface">
-                      {item.label}
-                    </span>
-                    <span className="mt-0.5 block text-sm leading-snug text-on-surface-variant">
-                      {item.blurb}
-                    </span>
+                  {/* One line per row.
+                      Each row carried a line of description, which was
+                      right when this was six chips with no room to
+                      explain themselves and wrong once it was a list of
+                      six two-line rows -- 300px of secondary navigation
+                      pushing the primary action off the screen. The
+                      labels say enough; the one that genuinely needed a
+                      warning keeps it, inline and muted. */}
+                  <span className="min-w-0 flex-1 text-sm font-bold uppercase tracking-[0.18em] text-on-surface">
+                    {item.label}
+                    {item.blurb && (
+                      <span className="ml-2 font-normal normal-case tracking-normal text-on-surface-variant">
+                        {item.blurb}
+                      </span>
+                    )}
                   </span>
                   <span
                     className="material-symbols-outlined shrink-0 text-on-surface-variant/40"
@@ -484,7 +452,7 @@ export default function AppHome() {
                   </span>
                 </>
               );
-              const cls = `flex w-full items-baseline gap-4 py-3.5 text-left transition-colors hover:text-primary ${
+              const cls = `flex w-full items-baseline gap-3 py-2.5 text-left transition-colors hover:text-primary ${
                 i > 0 ? "border-t border-outline-variant/25" : ""
               }`;
               return (
