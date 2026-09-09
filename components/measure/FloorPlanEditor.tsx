@@ -343,6 +343,21 @@ export default function FloorPlanEditor({
     startMid: { x: number; z: number } | null;
   }>({ pointers: new Map(), startDist: 0, startBox: viewBox, startMid: null });
 
+  /**
+   * Moves whatever is selected. Filled in below, once the functions
+   * that do the moving exist.
+   *
+   * A door on a house-scale plan is a few pixels of line, and landing
+   * a fingertip on it is the whole reason placing one felt fiddly.
+   * Tapping is easy; dragging a five-pixel target is not. So the tap
+   * selects, and after that a drag anywhere on the plan moves the
+   * selected thing -- including drags that start well clear of it,
+   * where there is room for a thumb. Tap empty grid to let go.
+   */
+  const moveSelectionRef = useRef<
+    ((e: ReactPointerEvent) => boolean) | null
+  >(null);
+
   const onCanvasPointerDown = useCallback(
     (e: ReactPointerEvent) => {
       // Only the background. A pointerdown on a room, chip or opening
@@ -404,6 +419,9 @@ export default function FloorPlanEditor({
       if (Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < 3) return;
       const dx = (e.clientX - prev.x) * perPx;
       const dy = (e.clientY - prev.y) * perPx;
+
+      // Something selected? The drag belongs to it, not to the view.
+      if (moveSelectionRef.current?.(e)) return;
       setManualViewBox((cur) => {
         const base = cur ?? activeViewBox;
         return { ...base, x: base.x - dx, z: base.z - dy };
@@ -1171,6 +1189,69 @@ export default function FloorPlanEditor({
     [onPlacementChange, placementFor, svgCoordsFromEvent],
   );
 
+  /*
+   * The implementation of moveSelectionRef, now that every helper it
+   * needs is defined. Assigned during render rather than in an effect,
+   * so a drag on the very first frame after selecting still works.
+   *
+   * Returns true when it handled the move, so the canvas knows not to
+   * pan as well.
+   */
+  moveSelectionRef.current = (e: ReactPointerEvent): boolean => {
+    if (!selected) return false;
+    const room = rooms.find(
+      (r) =>
+        r.id === selected ||
+        (r.doors ?? []).some((d) => d.id === selected) ||
+        (r.windows ?? []).some((w) => w.id === selected) ||
+        (r.stairs ?? []).some((st) => st.id === selected),
+    );
+    if (!room) return false;
+    const world = svgCoordsFromEvent(e);
+    if (!world) return false;
+
+    // A whole room: put its middle under the finger.
+    if (room.id === selected) {
+      const p = placementFor(room.id);
+      if (!p.positionM) return false;
+      const size = roomFootprint(room);
+      onPlacementChange(room.id, {
+        ...p,
+        positionM: {
+          x: snapToGrid(world.x - size.widthM / 2),
+          z: snapToGrid(world.z - size.lengthM / 2),
+        },
+      });
+      return true;
+    }
+
+    if ((room.stairs ?? []).some((st) => st.id === selected)) {
+      setJustAdded(null);
+      const target = roomAtPoint(world);
+      if (!target) {
+        setStairsFree(room.id, selected, {
+          x: snapM(world.x),
+          z: snapM(world.z),
+        });
+        return true;
+      }
+      const local = worldToLocal(world, placementFor(target.id));
+      if (!local) return false;
+      if (target.id !== room.id) moveStairsToRoom(room.id, target.id, selected);
+      slideStairs(target.id, selected, { x: snapM(local.x), z: snapM(local.z) });
+      return true;
+    }
+
+    const kind = (room.doors ?? []).some((d) => d.id === selected)
+      ? ("door" as const)
+      : ("window" as const);
+    const local = worldToLocal(world, placementFor(room.id));
+    if (!local) return false;
+    setJustAdded(null);
+    slideOpening(room.id, selected, kind, local);
+    return true;
+  };
+
   const onRoomPointerUp = useCallback((e: ReactPointerEvent) => {
     const st = dragRef.current;
     if (!st || st.pointerId !== e.pointerId) return;
@@ -1559,6 +1640,19 @@ export default function FloorPlanEditor({
         >
           Clear
         </button>
+        {(zoomRoomId || manualViewBox) && (
+          <button
+            type="button"
+            onClick={() => {
+              setZoomRoomId(null);
+              setManualViewBox(null);
+            }}
+            style={{ minHeight: 40 }}
+            className="rounded-full border border-[#b89650] px-3.5 font-semibold text-[#8a6f2f]"
+          >
+            Whole floor
+          </button>
+        )}
       </div>
 
       {/* Canvas */}
@@ -2442,30 +2536,10 @@ export default function FloorPlanEditor({
             Automatic on add, manual to leave: a view that snapped back
             on its own would do it halfway through the drag it exists
             to make possible. */}
-        {(zoomRoomId || manualViewBox) && (
-          <button
-            type="button"
-            onClick={() => {
-              setZoomRoomId(null);
-              setManualViewBox(null);
-            }}
-            /* Down the right-hand edge, out of the way.
-               It sat across the top corner, where it covered the plan
-               and collided with the "door added" banner. Vertical, on
-               the side, it costs a strip of margin nobody was drawing
-               in. */
-            className="absolute right-1.5 top-1/2 z-10 -translate-y-1/2 rounded-full border border-[#b89650] bg-white/95 py-3 text-sm font-bold uppercase tracking-widest text-[#8a6f2f] shadow-sm"
-            style={{
-              writingMode: "vertical-rl",
-              minWidth: 34,
-              minHeight: 44,
-              letterSpacing: "0.12em",
-            }}
-          >
-            Whole floor
-          </button>
-        )}
-
+        {/* The "Whole floor" button used to float on this edge. It
+            is in the control row next to Clear now -- both put the
+            view back, and a button sitting on the drawing is one more
+            thing between the customer and the plan. */}
         {roomsOnFloor.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <p className="rounded-lg bg-white/80 px-4 py-2 text-sm font-semibold text-[#6e6a5f] shadow-sm">
