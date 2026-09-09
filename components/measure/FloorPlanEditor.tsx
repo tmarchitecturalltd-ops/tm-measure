@@ -229,6 +229,10 @@ export default function FloorPlanEditor({
   const [openPanel, setOpenPanel] = useState<
     null | "rooms" | "feature" | "ceiling"
   >(null);
+  /** What was just added, so the plan can say to drag it. */
+  const [justAdded, setJustAdded] = useState<
+    null | "door" | "window" | "stairs"
+  >(null);
 
   const zoomViewBox = useMemo(() => {
     if (!zoomRoomId) return null;
@@ -380,6 +384,108 @@ export default function FloorPlanEditor({
       }) ?? null,
     [roomsOnFloor, placementFor],
   );
+
+  /** Drag state for a door or window. */
+  const openingDragRef = useRef<{
+    roomId: string;
+    openingId: string;
+    kind: "door" | "window";
+    pointerId: number;
+  } | null>(null);
+
+  /**
+   * Slide an opening to the nearest wall of its room.
+   *
+   * The same shape of maths as slideStairs, and for the same reason: a
+   * door is described by which wall it is in and how far along, not by
+   * a free position, so the drag has to answer those two questions
+   * rather than record where the finger stopped. Dragging across a
+   * corner therefore moves the door round onto the next wall, which is
+   * the behaviour that makes it feel magnetic.
+   */
+  const slideOpening = useCallback(
+    (
+      roomId: string,
+      openingId: string,
+      kind: "door" | "window",
+      at: { x: number; z: number },
+    ) => {
+      if (!onRoomChange) return;
+      const room = rooms.find((r) => r.id === roomId);
+      if (!room) return;
+      const size = roomFootprint(room);
+      const segs: [{ x: number; z: number }, { x: number; z: number }][] = [
+        [{ x: 0, z: 0 }, { x: size.widthM, z: 0 }],
+        [{ x: size.widthM, z: 0 }, { x: size.widthM, z: size.lengthM }],
+        [{ x: size.widthM, z: size.lengthM }, { x: 0, z: size.lengthM }],
+        [{ x: 0, z: size.lengthM }, { x: 0, z: 0 }],
+      ];
+      let best = { index: 0, dist: Infinity, along: 0 };
+      segs.forEach(([a, b], i) => {
+        const vx = b.x - a.x;
+        const vz = b.z - a.z;
+        const lenSq = vx * vx + vz * vz || 1;
+        const t = Math.max(
+          0,
+          Math.min(1, ((at.x - a.x) * vx + (at.z - a.z) * vz) / lenSq),
+        );
+        const px = a.x + vx * t;
+        const pz = a.z + vz * t;
+        const dist = Math.hypot(at.x - px, at.z - pz);
+        if (dist < best.dist) {
+          best = { index: i, dist, along: t * Math.sqrt(lenSq) };
+        }
+      });
+      const patch = (list: typeof room.doors) =>
+        list.map((o) =>
+          o.id === openingId
+            ? {
+                ...o,
+                wallIndex: best.index,
+                positionM: snapM(best.along).toFixed(2),
+                // Dragged, not measured. The draughtsman needs to know
+                // which numbers were paced out.
+                positionApprox: true,
+              }
+            : o,
+        );
+      onRoomChange(
+        roomId,
+        kind === "door"
+          ? { doors: patch(room.doors ?? []) }
+          : { windows: patch(room.windows ?? []) },
+      );
+    },
+    [onRoomChange, rooms],
+  );
+
+  const onOpeningPointerMove = useCallback(
+    (e: ReactPointerEvent) => {
+      const st = openingDragRef.current;
+      if (!st || st.pointerId !== e.pointerId) return;
+      e.stopPropagation();
+      const world = svgCoordsFromEvent(e);
+      if (!world) return;
+      const local = worldToLocal(world, placementFor(st.roomId));
+      if (!local) return;
+      setJustAdded(null);
+      slideOpening(st.roomId, st.openingId, st.kind, local);
+    },
+    [svgCoordsFromEvent, worldToLocal, placementFor, slideOpening],
+  );
+
+  const onOpeningPointerUp = useCallback((e: ReactPointerEvent) => {
+    const st = openingDragRef.current;
+    if (!st || st.pointerId !== e.pointerId) return;
+    e.stopPropagation();
+    openingDragRef.current = null;
+    setFrozenViewBox(null);
+    try {
+      (e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+  }, []);
 
   const slideStairs = useCallback(
     (roomId: string, stairsId: string, at: { x: number; z: number }) => {
@@ -551,9 +657,14 @@ export default function FloorPlanEditor({
         : { windows: [...(room.windows ?? []), opening] },
     );
     setZoomRoomId(target);
-    // Keep the panel open after adding: the next thing anyone does is
-    // add the second window, and closing it would make that two taps.
-    setOpenPanel("feature");
+    // Close the panel and say what to do next.
+    //
+    // The panel used to stay open on the reasoning that the next thing
+    // anyone does is add a second window. What actually happens is the
+    // customer looks for the thing they just added, and the panel is
+    // covering the plan it landed on.
+    setOpenPanel(null);
+    setJustAdded(insertKind);
   }, [
     onRoomChange,
     rooms,
@@ -643,6 +754,7 @@ export default function FloorPlanEditor({
        * frees it, and dragging it back into a room re-anchors it to
        * the nearest wall.
        */
+      setJustAdded(null);
       if (!target) {
         setStairsFree(st.roomId, st.itemId, {
           x: snapM(world.x),
@@ -854,6 +966,60 @@ export default function FloorPlanEditor({
     }
   }, [rooms, placementFor, currentFloor, onPlacementChange]);
 
+  /**
+   * A room that arrives later gets a place too.
+   *
+   * The seed above only fires on a floor with nothing on it, so a room
+   * measured after the plan was first opened landed in the "To place"
+   * list and stayed there -- and putting it on the plan meant opening
+   * that list, tapping the room, then dragging it in from the origin.
+   * Three steps to do something the app could have done, and the
+   * commonest way a room goes missing from a submission.
+   *
+   * It is dropped clear of the existing rooms, to the right, so it
+   * never lands on top of anything. Wrong, but visibly wrong and one
+   * drag from right -- which is the whole idea.
+   *
+   * `autoPlaced` remembers which rooms this has been done to, so
+   * removing a room from the plan with the x chip is respected rather
+   * than instantly undone.
+   */
+  const autoPlaced = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const waiting = rooms.filter((r) => {
+      const p = placementFor(r.id);
+      return (
+        p.floor === currentFloor && !p.positionM && !autoPlaced.current.has(r.id)
+      );
+    });
+    if (!waiting.length) return;
+    // Only once the floor has been seeded, or this fights the seed.
+    if (!laidOut.current.has(currentFloor)) return;
+
+    const placedBoxes = rooms
+      .map((r) => ({ r, p: placementFor(r.id) }))
+      .filter(({ p }) => p.floor === currentFloor && p.positionM)
+      .map(({ r, p }) =>
+        roomBoundingBox(p.positionM!, roomFootprint(r), p.rotationDeg),
+      );
+    let x = placedBoxes.length
+      ? Math.max(...placedBoxes.map((b) => b.maxX)) + 1
+      : 0;
+    const z = placedBoxes.length
+      ? Math.min(...placedBoxes.map((b) => b.minZ))
+      : 0;
+
+    for (const r of waiting) {
+      autoPlaced.current.add(r.id);
+      onPlacementChange(r.id, {
+        positionM: { x: snapToGrid(x), z: snapToGrid(z) },
+        rotationDeg: 0,
+        floor: currentFloor,
+      });
+      x += roomFootprint(r).widthM + 1;
+    }
+  }, [rooms, placementFor, currentFloor, onPlacementChange]);
+
   const clearFloor = useCallback(() => {
     for (const r of rooms) {
       const p = placementFor(r.id);
@@ -865,7 +1031,7 @@ export default function FloorPlanEditor({
 
   // ── Render ───────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2">
       {/* ── Floor, room, feature ────────────────────────────────────
           Three controls in one line.
 
@@ -1243,8 +1409,30 @@ export default function FloorPlanEditor({
 
       {/* Canvas */}
       <div
+        /*
+         * A fixed band, not a growing one.
+         *
+         * minHeight alone let the canvas grow with the layout, so a
+         * house with a few rooms pushed the whole step past the bottom
+         * of the screen -- and the plan is the one thing on it that
+         * should never need scrolling to. It now takes the height it
+         * is given and the viewBox fits the rooms into that.
+         */
         className="relative overflow-hidden rounded-xl border border-[#d9d3c8]"
-        style={{ backgroundColor: CREAM, minHeight: 360 }}
+        /*
+         * Fills whatever the controls and the bottom bar leave.
+         *
+         * A fixed band stopped the step scrolling and left the plan a
+         * letterbox with cream space under it. The subtraction is the
+         * chrome above and below: app bar and progress, two rows of
+         * controls, the bottom Back/Steps/Next bar and the card
+         * padding. dvh rather than vh so the iOS address bar
+         * collapsing does not change the answer mid-drag.
+         */
+        style={{
+          backgroundColor: CREAM,
+          height: "max(260px, calc(100dvh - 310px))",
+        }}
       >
         <svg
           ref={svgRef}
@@ -1549,18 +1737,69 @@ export default function FloorPlanEditor({
                   const px2 = x1 + (x2 - x1) * t2;
                   const py2 = y1 + (y2 - y1) * t2;
                   const colour = op.kind === "door" ? "#b89650" : "#5a6a80";
+                  /*
+                   * Draggable, and magnetic to the walls.
+                   *
+                   * An opening was drawn and then frozen -- pointer
+                   * events off -- so adding a door put a gold mark
+                   * halfway along whichever wall happened to be first
+                   * and left the customer no way to move it. The panel
+                   * said "drag it to where it really is" and the thing
+                   * could not be dragged.
+                   *
+                   * The drag does not set a free position. It finds the
+                   * nearest wall to the finger and how far along that
+                   * wall it landed, so an opening cannot end up
+                   * floating in the middle of a room -- which is both
+                   * what the DXF needs and what a door actually does.
+                   * Same behaviour as the stairs, and the same reason.
+                   *
+                   * The invisible wide stroke underneath is the target:
+                   * a 4px line is about a millimetre of screen and no
+                   * thumb finds it.
+                   */
                   return (
-                    <line
-                      key={`op-${oi}`}
-                      x1={px1}
-                      y1={py1}
-                      x2={px2}
-                      y2={py2}
-                      stroke={colour}
-                      strokeWidth={4}
-                      vectorEffect="non-scaling-stroke"
-                      pointerEvents="none"
-                    />
+                    <g key={`op-${oi}`}>
+                      <line
+                        x1={px1}
+                        y1={py1}
+                        x2={px2}
+                        y2={py2}
+                        stroke="transparent"
+                        strokeWidth={22}
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                        style={{ cursor: "grab" }}
+                        onPointerDown={(e) => {
+                          if (!onRoomChange) return;
+                          e.stopPropagation();
+                          setSelected(op.id);
+                          openingDragRef.current = {
+                            roomId: r.id,
+                            openingId: op.id,
+                            kind: op.kind,
+                            pointerId: e.pointerId,
+                          };
+                          setFrozenViewBox(viewBox);
+                          (e.currentTarget as SVGElement).setPointerCapture(
+                            e.pointerId,
+                          );
+                        }}
+                        onPointerMove={onOpeningPointerMove}
+                        onPointerUp={onOpeningPointerUp}
+                        onPointerCancel={onOpeningPointerUp}
+                      />
+                      <line
+                        x1={px1}
+                        y1={py1}
+                        x2={px2}
+                        y2={py2}
+                        stroke={colour}
+                        strokeWidth={4}
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="none"
+                      />
+                    </g>
                   );
                 })}
 
@@ -1784,6 +2023,21 @@ export default function FloorPlanEditor({
           })()}
         </svg>
 
+        {/* Say where it went and what to do with it.
+            An opening lands on the first wall, half a metre along,
+            which is almost never where it belongs -- so the moment it
+            appears is the moment to say that it moves. It clears on
+            the first drag, and on any tap of the plan. */}
+        {justAdded && (
+          <div
+            className="pointer-events-none absolute inset-x-3 top-3 z-10 rounded-xl px-4 py-2.5 text-center text-sm font-semibold shadow-sm"
+            style={{ backgroundColor: "#1c1c1ae8", color: "#fff8ea" }}
+          >
+            {justAdded === "stairs" ? "Stairs" : justAdded === "door" ? "Door" : "Window"}{" "}
+            added — drag it along the wall to where it really is
+          </div>
+        )}
+
         {/* The way back out of the zoom.
             Automatic on add, manual to leave: a view that snapped back
             on its own would do it halfway through the drag it exists
@@ -1802,7 +2056,7 @@ export default function FloorPlanEditor({
         {roomsOnFloor.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <p className="rounded-lg bg-white/80 px-4 py-2 text-sm font-semibold text-[#6e6a5f] shadow-sm">
-              Tap a room below to place it on {floorLabel(currentFloor)}.
+              Nothing on {floorLabel(currentFloor)} yet.
             </p>
           </div>
         )}

@@ -4758,9 +4758,17 @@ export default function MeasureIntakeForm() {
             onBack={() => setStep("proposal")}
             onNext={goReview}
             nextLabel="Review"
+            wide
           >
-          <div className="space-y-4">
-            <section className="tm-lift rounded-2xl border border-outline-variant/30 bg-surface-container-low p-3 md:p-5">
+          <div>
+            {/* No card, no heading.
+
+                The plan sat inside a bordered, padded, shadowed panel
+                inside the guided screen's own padding -- three nested
+                boxes and a title above the one thing on the step. The
+                page is the plan now: controls along the top, grid
+                filling the rest, Back and Next along the bottom. */}
+            <section>
               {/* One word.
                   This was a 2rem heading and a five-line paragraph
                   explaining dragging, the 25cm grid, the rotate chip,
@@ -4769,9 +4777,7 @@ export default function MeasureIntakeForm() {
                   it. On a phone the instructions took more room than
                   the thing they described. The legend under the grid
                   still says what the chips do. */}
-              <h2 className="font-headline mb-3 text-lg text-on-surface">
-                Floor plan
-              </h2>
+
               {/* The "How do the rooms connect?" section used to sit
                   here.
 
@@ -4799,27 +4805,27 @@ export default function MeasureIntakeForm() {
                 onPlacementChange={updatePlacement}
                 onRoomChange={setRoom}
                 /*
-                 * Add a room without leaving the plan behind.
+                 * No onAddRoom.
                  *
-                 * Looking at the layout is when a forgotten room gets
-                 * noticed -- the utility, the downstairs loo, the
-                 * cupboard under the stairs -- and until now the only
-                 * way back to measuring one was through the Steps
-                 * menu. It measures the new room and returns here.
+                 * There was a "+ Room" button here, on the reasoning
+                 * that the plan is where a forgotten room gets noticed.
+                 * What it actually did was throw the customer back to
+                 * "What's this room called?" -- the first question of
+                 * the room flow -- with no warning and no obvious way
+                 * back to the plan they were looking at. It read as the
+                 * app losing their place.
+                 *
+                 * Rooms are added while measuring, which is where
+                 * someone is standing in one. The plan arranges what
+                 * has already been measured, and that is all it does.
                  */
-                onAddRoom={() => {
-                  addRoom();
-                  setActiveRoomIndex(rooms.length);
-                  setStep("rooms");
-                }}
               />
             </section>
 
-            <p className="text-sm text-on-surface-variant">
-              The floor plan is optional — an empty layout still submits,
-              but the architect will have to infer the arrangement from
-              your room connections.
-            </p>
+            {/* "The floor plan is optional" used to sit here. It told
+                the customer that the screen they were on did not
+                matter, at the bottom of that screen, and referred to
+                room connections which no longer exist. */}
           </div>
           </GuidedScreen>
         )}
@@ -5397,6 +5403,19 @@ export default function MeasureIntakeForm() {
                 }
               : undefined
           }
+          /*
+           * Straight to the plan from inside the room flow.
+           *
+           * The menu could reach every question and every room and
+           * nowhere else, so the only route to the plan was to finish
+           * the rooms -- which a customer part-way through a survey has
+           * no reason to think is safe to do.
+           *
+           * finishRoom runs first, so this cannot be used to skip a
+           * room that is missing something; it reports the problem and
+           * stays put, exactly as "Done with the rooms" does.
+           */
+          onGoToPlan={() => setStep("plan")}
           // On a LiDAR phone the sensor measures; the typed fields are
           // not offered unless a scan has actually failed.
           scanRequired={arSupport === "yes"}

@@ -137,6 +137,14 @@ type Props = {
    * rooms list, where the undo lives.
    */
   onRemoveRoom?: () => void;
+  /**
+   * Finish the rooms and go to the plan.
+   *
+   * Distinct from onDone, which means "this room is finished" and
+   * moves to the next one if there is a next one. Conflating the two
+   * is what made "Done with the rooms" add another room.
+   */
+  onGoToPlan?: () => void;
   /** Room names, for the jump list in the menu. */
   roomNames?: string[];
   /**
@@ -189,6 +197,7 @@ export default function GuidedRoomFlow({
   roomNames = [],
   onAddRoom,
   onRemoveRoom,
+  onGoToPlan,
   onBackFromFirst,
   scanRequired = false,
   scanFailed = false,
@@ -574,17 +583,61 @@ export default function GuidedRoomFlow({
           },
         ]
       : []),
+    /*
+     * Delete, and the two places worth jumping to.
+     *
+     * The menu could reach every question and every room and nothing
+     * else -- so from inside the room flow there was no way to the
+     * floor plan except finishing the rooms, and no way to get rid of
+     * a room at all once it had anything in it. The only delete in the
+     * app was "I didn't mean to add this room", which appears on the
+     * name screen and only while the room is still empty. A room
+     * measured by mistake, or measured twice, was permanent.
+     *
+     * Deleting is last, on its own, and says which room it means. The
+     * undo lives in the rooms list, so this is not the end of the
+     * world if it is pressed by accident.
+     */
     {
       items: [
         ...(onAddRoom
           ? [{ label: "Add another room", onClick: () => finishRoom(onAddRoom) }]
           : []),
-        {
-          label: "Done with the rooms — carry on",
-          onClick: () => finishRoom(),
-        },
+        /*
+         * "Done" means done.
+         *
+         * This used to call finishRoom() with no destination, which
+         * falls through to onDone -- and onDone advances to the next
+         * room whenever there is one. So on room 1 of 3, the menu item
+         * saying "done with the rooms" took you to room 2. It did the
+         * opposite of what it said, to the person who had just decided
+         * they had finished.
+         *
+         * It now goes where it claims: the floor plan, after the same
+         * whole-survey check the Next button runs.
+         */
+        ...(onGoToPlan
+          ? [
+              {
+                label: "Done — go to the floor plan",
+                onClick: () => finishRoom(onGoToPlan),
+              },
+            ]
+          : []),
       ],
     },
+    ...(onRemoveRoom && totalRooms > 1
+      ? [
+          {
+            items: [
+              {
+                label: `Delete ${room.name?.trim() || "this room"}`,
+                onClick: onRemoveRoom,
+              },
+            ],
+          },
+        ]
+      : []),
   ];
 
   return (

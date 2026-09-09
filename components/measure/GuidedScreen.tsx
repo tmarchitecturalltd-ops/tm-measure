@@ -71,6 +71,15 @@ type Props = {
   nextDisabled?: boolean;
   /** Why Next is unavailable. Shown above the buttons. */
   blockMessage?: string | null;
+  /**
+   * Let the content run edge to edge and fill the band.
+   *
+   * The default is a centred column with generous padding, which is
+   * right for a question and wrong for the floor plan -- there the
+   * content is a canvas that should take every pixel between the
+   * controls and the bottom bar.
+   */
+  wide?: boolean;
   children: ReactNode;
 };
 
@@ -89,6 +98,7 @@ export default function GuidedScreen({
   nextLabel,
   nextDisabled,
   blockMessage,
+  wide = false,
   children,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -215,9 +225,11 @@ export default function GuidedScreen({
         ref={scrollRef}
         // justify-center keeps a short question in the middle of the
         // band; a long one scrolls from the top as normal.
-        className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-5 py-5"
+        className={`flex min-h-0 flex-1 flex-col overflow-y-auto ${
+          wide ? "px-3 py-2" : "justify-center px-5 py-5"
+        }`}
       >
-        <div className="mx-auto w-full max-w-xl">
+        <div className={wide ? "w-full" : "mx-auto w-full max-w-xl"}>
           {eyebrow && (
             <p className="font-label mb-2 text-sm font-bold uppercase tracking-widest text-primary">
               {eyebrow}

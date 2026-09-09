@@ -200,8 +200,11 @@ export default function AppHome() {
   // it does not flash in and straight back out during hydration.
   if (showWelcome === null) return null;
 
+  // pb-2, not pb-20. Eighty pixels of bottom padding meant the screen
+  // scrolled past the footer into nothing, which reads as a page that
+  // has failed to load the rest of itself.
   return (
-    <div className="min-h-screen bg-surface pb-20">
+    <div className="min-h-screen bg-surface pb-2">
       {/* Brand header — slimmer than the marketing nav, no menu links.
           Logo mark + wordmark on the left, tiny outbound link on the
           right. The hairline gold rule under the header echoes the
