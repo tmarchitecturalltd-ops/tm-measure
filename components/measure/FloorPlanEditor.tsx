@@ -319,6 +319,23 @@ export default function FloorPlanEditor({
    * fills the screen with nothing to line it up against, wider than
    * 60 m and a house is a smudge.
    */
+  /*
+   * Keep the view where the drag left it.
+   *
+   * frozenViewBox pins the frame for the duration of a gesture, and
+   * clearing it on release handed the canvas back to the auto-fit --
+   * which had just been recomputed around the room's new position. So
+   * every drag ended with the whole plan hopping to a new scale. The
+   * freeze becomes the manual view instead, and the plan holds still
+   * until someone asks for the whole floor.
+   */
+  const settleView = useCallback(() => {
+    setFrozenViewBox((frozen) => {
+      if (frozen) setManualViewBox(frozen);
+      return null;
+    });
+  }, []);
+
   const gestureRef = useRef<{
     pointers: Map<number, { x: number; y: number }>;
     startDist: number;
@@ -395,9 +412,36 @@ export default function FloorPlanEditor({
     [activeViewBox],
   );
 
-  const onCanvasPointerUp = useCallback((e: ReactPointerEvent) => {
-    gestureRef.current.pointers.delete(e.pointerId);
-  }, []);
+  const onCanvasPointerUp = useCallback(
+    (e: ReactPointerEvent) => {
+      const g = gestureRef.current;
+      const start = g.pointers.get(e.pointerId);
+      g.pointers.delete(e.pointerId);
+      settleView();
+      /*
+       * A tap on the background clears the decks.
+       *
+       * The panel and the Delete button are both tied to something
+       * being selected, and there was no way to unselect -- so once a
+       * door had been tapped the controls stayed up for the rest of
+       * the session, over the plan. Tapping empty grid is the gesture
+       * everyone already tries.
+       *
+       * Under four pixels of travel, or it fires at the end of every
+       * pan.
+       */
+      if (
+        start &&
+        Math.hypot(e.clientX - start.x, e.clientY - start.y) < 4 &&
+        g.pointers.size === 0
+      ) {
+        setSelected(null);
+        setOpenPanel(null);
+        setJustAdded(null);
+      }
+    },
+    [settleView],
+  );
 
   // ── Pointer → SVG-coord helper (SVG units are metres) ────────────
   const svgCoordsFromEvent = useCallback(
@@ -691,7 +735,7 @@ export default function FloorPlanEditor({
     if (!st || st.pointerId !== e.pointerId) return;
     e.stopPropagation();
     openingDragRef.current = null;
-    setFrozenViewBox(null);
+    settleView();
     try {
       (e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
     } catch {
@@ -1063,7 +1107,7 @@ export default function FloorPlanEditor({
     if (!st || st.pointerId !== e.pointerId) return;
     e.stopPropagation();
     itemDragRef.current = null;
-    setFrozenViewBox(null);
+    settleView();
     try {
       (e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
     } catch {
@@ -1131,8 +1175,7 @@ export default function FloorPlanEditor({
     const st = dragRef.current;
     if (!st || st.pointerId !== e.pointerId) return;
     dragRef.current = null;
-    // Release the frame; the view re-fits to wherever things ended up.
-    setFrozenViewBox(null);
+    settleView();
     try {
       (e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
     } catch {
@@ -1518,8 +1561,44 @@ export default function FloorPlanEditor({
         </button>
       </div>
 
-      {openPanel && (
-        <div className="rounded-lg border border-[#b89650]/50 p-3" style={{ backgroundColor: "#fffdf8" }}>
+      {/* Canvas */}
+      <div
+        /*
+         * A fixed band, not a growing one.
+         *
+         * minHeight alone let the canvas grow with the layout, so a
+         * house with a few rooms pushed the whole step past the bottom
+         * of the screen -- and the plan is the one thing on it that
+         * should never need scrolling to. It now takes the height it
+         * is given and the viewBox fits the rooms into that.
+         */
+        className="relative overflow-hidden rounded-xl border border-[#d9d3c8]"
+        /*
+         * Fills whatever the controls and the bottom bar leave.
+         *
+         * A fixed band stopped the step scrolling and left the plan a
+         * letterbox with cream space under it. The subtraction is the
+         * chrome above and below: app bar and progress, two rows of
+         * controls, the bottom Back/Steps/Next bar and the card
+         * padding. dvh rather than vh so the iOS address bar
+         * collapsing does not change the answer mid-drag.
+         */
+        style={{
+          backgroundColor: CREAM,
+          height: "max(260px, calc(100dvh - 310px))",
+        }}
+      >
+        {/* Over the plan, not above it.
+            A panel that pushes the canvas down resizes the drawing
+            every time it opens and closes, so the plan jumps twice per
+            door. As an overlay the layout never changes: the grid is
+            the same size whatever is on top of it, and closing the
+            panel gives the space straight back. */}
+        {openPanel && (
+          <div
+            className="absolute inset-x-2 top-2 z-20 max-h-[70%] overflow-y-auto rounded-xl border border-[#b89650]/60 p-3 shadow-xl"
+            style={{ backgroundColor: "#fffdf8f2" }}
+          >
           {openPanel === "rooms" && (
             <>
         {unplacedOnFloor.length === 0 ? (
@@ -1710,38 +1789,8 @@ export default function FloorPlanEditor({
         </div>
             </>
           )}
-        </div>
-      )}
-
-
-
-      {/* Canvas */}
-      <div
-        /*
-         * A fixed band, not a growing one.
-         *
-         * minHeight alone let the canvas grow with the layout, so a
-         * house with a few rooms pushed the whole step past the bottom
-         * of the screen -- and the plan is the one thing on it that
-         * should never need scrolling to. It now takes the height it
-         * is given and the viewBox fits the rooms into that.
-         */
-        className="relative overflow-hidden rounded-xl border border-[#d9d3c8]"
-        /*
-         * Fills whatever the controls and the bottom bar leave.
-         *
-         * A fixed band stopped the step scrolling and left the plan a
-         * letterbox with cream space under it. The subtraction is the
-         * chrome above and below: app bar and progress, two rows of
-         * controls, the bottom Back/Steps/Next bar and the card
-         * padding. dvh rather than vh so the iOS address bar
-         * collapsing does not change the answer mid-drag.
-         */
-        style={{
-          backgroundColor: CREAM,
-          height: "max(260px, calc(100dvh - 310px))",
-        }}
-      >
+          </div>
+        )}
         <svg
           ref={svgRef}
           viewBox={`${activeViewBox.x} ${activeViewBox.z} ${activeViewBox.w} ${activeViewBox.h}`}
@@ -2400,10 +2449,20 @@ export default function FloorPlanEditor({
               setZoomRoomId(null);
               setManualViewBox(null);
             }}
-            style={{ minHeight: 44 }}
-            className="absolute right-3 top-3 z-10 rounded-full border border-[#b89650] bg-white/95 px-4 text-sm font-bold uppercase tracking-widest text-[#8a6f2f] shadow-sm"
+            /* Down the right-hand edge, out of the way.
+               It sat across the top corner, where it covered the plan
+               and collided with the "door added" banner. Vertical, on
+               the side, it costs a strip of margin nobody was drawing
+               in. */
+            className="absolute right-1.5 top-1/2 z-10 -translate-y-1/2 rounded-full border border-[#b89650] bg-white/95 py-3 text-sm font-bold uppercase tracking-widest text-[#8a6f2f] shadow-sm"
+            style={{
+              writingMode: "vertical-rl",
+              minWidth: 34,
+              minHeight: 44,
+              letterSpacing: "0.12em",
+            }}
           >
-            Show whole floor
+            Whole floor
           </button>
         )}
 
