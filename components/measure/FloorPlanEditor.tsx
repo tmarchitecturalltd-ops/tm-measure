@@ -103,6 +103,13 @@ export type FloorPlanEditorProps = {
    * one was buried in the Steps menu on another screen.
    */
   onAddRoom?: () => void;
+  /**
+   * True once this project's plan has been laid out (or opened with
+   * rooms already on it). Held by the parent because this component
+   * unmounts whenever the customer leaves the step.
+   */
+  seeded?: boolean;
+  onSeeded?: () => void;
 };
 
 /*
@@ -125,6 +132,8 @@ export default function FloorPlanEditor({
   onPlacementChange,
   onRoomChange,
   onAddRoom,
+  seeded = false,
+  onSeeded,
 }: FloorPlanEditorProps) {
   /** Which floor is currently visible. */
   const [currentFloor, setCurrentFloor] = useState(0);
@@ -1370,73 +1379,54 @@ export default function FloorPlanEditor({
    */
   const laidOut = useRef<Set<number>>(new Set());
   useEffect(() => {
+    /*
+     * Once per project, not once per visit.
+     *
+     * `laidOut` is a ref in a component that unmounts every time the
+     * customer leaves the plan step, so it forgets. A floor they had
+     * deliberately cleared would be laid out again the moment they
+     * came back -- the same silent rewrite as the late-room placement
+     * above, just a step further along. The parent owns the flag, so
+     * it survives.
+     */
+    if (seeded) return;
     if (laidOut.current.has(currentFloor)) return;
     const onFloor = rooms.filter((r) => placementFor(r.id).floor === currentFloor);
     if (!onFloor.length) return;
     if (onFloor.some((r) => placementFor(r.id).positionM)) {
       laidOut.current.add(currentFloor);
+      onSeeded?.();
       return;
     }
     laidOut.current.add(currentFloor);
+    onSeeded?.();
     const seed = autoLayoutRooms(onFloor);
     for (const [id, placement] of seed.entries()) {
       onPlacementChange(id, placement);
     }
-  }, [rooms, placementFor, currentFloor, onPlacementChange]);
+  }, [rooms, placementFor, currentFloor, onPlacementChange, seeded, onSeeded]);
 
-  /**
-   * A room that arrives later gets a place too.
+  /*
+   * Rooms added later are NOT placed automatically any more.
    *
-   * The seed above only fires on a floor with nothing on it, so a room
-   * measured after the plan was first opened landed in the "To place"
-   * list and stayed there -- and putting it on the plan meant opening
-   * that list, tapping the room, then dragging it in from the origin.
-   * Three steps to do something the app could have done, and the
-   * commonest way a room goes missing from a submission.
+   * There was an effect here that dropped any unplaced room onto the
+   * plan, on the reasoning that a room measured after the plan was
+   * first opened would otherwise sit in "To place" and get forgotten.
    *
-   * It is dropped clear of the existing rooms, to the right, so it
-   * never lands on top of anything. Wrong, but visibly wrong and one
-   * drag from right -- which is the whole idea.
+   * It rewrote the customer's drawing behind their back. The state it
+   * used to decide what counted as "new" lived in refs inside this
+   * component, and leaving the plan step unmounts it -- so on coming
+   * back, every unplaced room looked new. Place one room, go to
+   * Review, press Back, and the plan now had all of them on it. The
+   * customer had arranged one room and been given six.
    *
-   * `autoPlaced` remembers which rooms this has been done to, so
-   * removing a room from the plan with the x chip is respected rather
-   * than instantly undone.
+   * Reported exactly that way, and it is the right complaint: the plan
+   * is the customer's, and nothing should move on it without them
+   * asking. Every route that puts a room on the plan is now something
+   * they press -- "To place", "Add to plan" on the review warning, or
+   * the buttons on an empty floor.
    */
-  const autoPlaced = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const waiting = rooms.filter((r) => {
-      const p = placementFor(r.id);
-      return (
-        p.floor === currentFloor && !p.positionM && !autoPlaced.current.has(r.id)
-      );
-    });
-    if (!waiting.length) return;
-    // Only once the floor has been seeded, or this fights the seed.
-    if (!laidOut.current.has(currentFloor)) return;
 
-    const placedBoxes = rooms
-      .map((r) => ({ r, p: placementFor(r.id) }))
-      .filter(({ p }) => p.floor === currentFloor && p.positionM)
-      .map(({ r, p }) =>
-        roomBoundingBox(p.positionM!, roomFootprint(r), p.rotationDeg),
-      );
-    let x = placedBoxes.length
-      ? Math.max(...placedBoxes.map((b) => b.maxX)) + 1
-      : 0;
-    const z = placedBoxes.length
-      ? Math.min(...placedBoxes.map((b) => b.minZ))
-      : 0;
-
-    for (const r of waiting) {
-      autoPlaced.current.add(r.id);
-      onPlacementChange(r.id, {
-        positionM: { x: snapToGrid(x), z: snapToGrid(z) },
-        rotationDeg: 0,
-        floor: currentFloor,
-      });
-      x += roomFootprint(r).widthM + 1;
-    }
-  }, [rooms, placementFor, currentFloor, onPlacementChange]);
 
   const clearFloor = useCallback(() => {
     for (const r of rooms) {

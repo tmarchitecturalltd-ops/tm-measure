@@ -1963,6 +1963,16 @@ export default function MeasureIntakeForm() {
     "exterior",
   );
 
+  /**
+   * Has the floor plan been laid out for this project?
+   *
+   * Lives here rather than in FloorPlanEditor because that component
+   * unmounts every time the customer leaves the step, taking its refs
+   * with it -- which is how a plan the customer had arranged, or
+   * deliberately cleared, got rewritten on the way back.
+   */
+  const [planSeeded, setPlanSeeded] = useState(false);
+
   const [navBlock, setNavBlock] = useState<{
     message: string;
     roomIndex: number | null;
@@ -5116,6 +5126,8 @@ export default function MeasureIntakeForm() {
                   setRoomsReturnTo("plan");
                   setStep("rooms");
                 }}
+                seeded={planSeeded}
+                onSeeded={() => setPlanSeeded(true)}
               />
             </section>
 
