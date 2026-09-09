@@ -268,8 +268,127 @@ export default function FloorPlanEditor({
     };
   }, [zoomRoomId, rooms, placementFor]);
 
+  /**
+   * How big a "constant size" thing should be, in metres.
+   *
+   * Everything on this canvas is drawn in metres, so a chip with a
+   * 0.3 m radius is 0.3 m of plan -- fine at the default fit, and
+   * enormous the moment anyone zooms in. Zooming to one room made the
+   * rotate and remove chips bigger than the doorways, which is what
+   * that screenshot is showing.
+   *
+   * Dividing by the visible width undoes the zoom: the number of
+   * metres per screen pixel changes, so the metre size changes with
+   * it and the pixel size does not. 10 m is the reference fit.
+   */
   /** What the SVG actually renders — held still mid-drag. */
-  const activeViewBox = frozenViewBox ?? zoomViewBox ?? viewBox;
+  /**
+   * A pinched / dragged view, when the customer has set one.
+   *
+   * Wins over every other source, because it is the only one they
+   * asked for directly. Cleared by "Show whole floor".
+   */
+  const [manualViewBox, setManualViewBox] = useState<{
+    x: number;
+    z: number;
+    w: number;
+    h: number;
+  } | null>(null);
+
+  const activeViewBox =
+    frozenViewBox ?? manualViewBox ?? zoomViewBox ?? viewBox;
+
+  /** Metres per unit of "constant screen size". See the note above. */
+  const uiScale = activeViewBox.w / 10;
+
+  /*
+   * Pinch to zoom, drag the background to pan.
+   *
+   * The plan auto-fits every room on the floor, which is the right
+   * default and useless the moment someone wants to put a door
+   * accurately on a wall -- at house scale a door is a few pixels
+   * wide. There was no way to get closer except adding something and
+   * letting the auto-zoom do it.
+   *
+   * Two fingers scale about the midpoint between them, which is what
+   * every map does. One finger on the background pans; one finger on a
+   * room still drags the room, because that gesture was there first
+   * and is the one the step exists for.
+   *
+   * Clamped between 2 m and 60 m across: closer than 2 m and a wall
+   * fills the screen with nothing to line it up against, wider than
+   * 60 m and a house is a smudge.
+   */
+  const gestureRef = useRef<{
+    pointers: Map<number, { x: number; y: number }>;
+    startDist: number;
+    startBox: { x: number; z: number; w: number; h: number };
+    startMid: { x: number; z: number } | null;
+  }>({ pointers: new Map(), startDist: 0, startBox: viewBox, startMid: null });
+
+  const onCanvasPointerDown = useCallback(
+    (e: ReactPointerEvent) => {
+      // Only the background. A pointerdown on a room, chip or opening
+      // has already called stopPropagation.
+      const g = gestureRef.current;
+      g.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      g.startBox = activeViewBox;
+      if (g.pointers.size === 2) {
+        const [a, b] = [...g.pointers.values()];
+        g.startDist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      }
+      setFrozenViewBox(null);
+    },
+    [activeViewBox],
+  );
+
+  const onCanvasPointerMove = useCallback(
+    (e: ReactPointerEvent) => {
+      const g = gestureRef.current;
+      if (!g.pointers.has(e.pointerId)) return;
+      const prev = g.pointers.get(e.pointerId)!;
+      g.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const svg = svgRef.current;
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+      const perPx = g.startBox.w / (rect.width || 1);
+
+      if (g.pointers.size >= 2) {
+        const [a, b] = [...g.pointers.values()];
+        const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+        const factor = g.startDist / dist;
+        const w = Math.min(60, Math.max(2, g.startBox.w * factor));
+        const h = w * (g.startBox.h / g.startBox.w);
+        // Keep the midpoint of the two fingers still.
+        const midX = (a.x + b.x) / 2 - rect.left;
+        const midY = (a.y + b.y) / 2 - rect.top;
+        const fx = midX / (rect.width || 1);
+        const fy = midY / (rect.height || 1);
+        const anchorX = g.startBox.x + g.startBox.w * fx;
+        const anchorZ = g.startBox.z + g.startBox.h * fy;
+        setManualViewBox({
+          x: anchorX - w * fx,
+          z: anchorZ - h * fy,
+          w,
+          h,
+        });
+        return;
+      }
+
+      // One finger on the background: pan.
+      const dx = (e.clientX - prev.x) * perPx;
+      const dy = (e.clientY - prev.y) * perPx;
+      setManualViewBox((cur) => {
+        const base = cur ?? activeViewBox;
+        return { ...base, x: base.x - dx, z: base.z - dy };
+      });
+    },
+    [activeViewBox],
+  );
+
+  const onCanvasPointerUp = useCallback((e: ReactPointerEvent) => {
+    gestureRef.current.pointers.delete(e.pointerId);
+  }, []);
 
   // ── Pointer → SVG-coord helper (SVG units are metres) ────────────
   const svgCoordsFromEvent = useCallback(
@@ -1550,9 +1669,13 @@ export default function FloorPlanEditor({
           ref={svgRef}
           viewBox={`${activeViewBox.x} ${activeViewBox.z} ${activeViewBox.w} ${activeViewBox.h}`}
           preserveAspectRatio="xMidYMid meet"
-          className="block h-[420px] w-full"
+          className="block h-full w-full"
           style={{ touchAction: "none", userSelect: "none" }}
           aria-label={`Floor plan editor for ${floorLabel(currentFloor)}`}
+          onPointerDown={onCanvasPointerDown}
+          onPointerMove={onCanvasPointerMove}
+          onPointerUp={onCanvasPointerUp}
+          onPointerCancel={onCanvasPointerUp}
         >
           <defs>
             <pattern
@@ -2017,7 +2140,7 @@ export default function FloorPlanEditor({
 
                 {/* Rotate chip — top-right of the unrotated rectangle */}
                 <g
-                  transform={`translate(${size.widthM - 0.4} 0.4)`}
+                  transform={`translate(${size.widthM - 0.4 * uiScale} ${0.4 * uiScale})`}
                   style={{ cursor: "pointer" }}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -2032,12 +2155,12 @@ export default function FloorPlanEditor({
                       transparent circle enlarges the target without
                       making the plan look like it is covered in
                       buttons. */}
-                  <circle r={0.62} fill="transparent" />
-                  <circle r={0.3} fill={DARK} pointerEvents="none" />
+                  <circle r={0.62 * uiScale} fill="transparent" />
+                  <circle r={0.3 * uiScale} fill={DARK} pointerEvents="none" />
                   <text
                     x={0}
-                    y={0.1}
-                    fontSize={0.35}
+                    y={0.1 * uiScale}
+                    fontSize={0.35 * uiScale}
                     textAnchor="middle"
                     fill={CREAM}
                   >
@@ -2047,7 +2170,7 @@ export default function FloorPlanEditor({
 
                 {/* Unplace chip — bottom-right */}
                 <g
-                  transform={`translate(${size.widthM - 0.4} ${size.lengthM - 0.4})`}
+                  transform={`translate(${size.widthM - 0.4 * uiScale} ${size.lengthM - 0.4 * uiScale})`}
                   style={{ cursor: "pointer" }}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -2062,12 +2185,12 @@ export default function FloorPlanEditor({
                       transparent circle enlarges the target without
                       making the plan look like it is covered in
                       buttons. */}
-                  <circle r={0.62} fill="transparent" />
-                  <circle r={0.3} fill="#8a2f2f" pointerEvents="none" />
+                  <circle r={0.62 * uiScale} fill="transparent" />
+                  <circle r={0.3 * uiScale} fill="#8a2f2f" pointerEvents="none" />
                   <text
                     x={0}
-                    y={0.1}
-                    fontSize={0.35}
+                    y={0.1 * uiScale}
+                    fontSize={0.35 * uiScale}
                     textAnchor="middle"
                     fill={CREAM}
                   >
@@ -2136,17 +2259,19 @@ export default function FloorPlanEditor({
         </svg>
 
         {/* Say where it went and what to do with it.
+            Along the bottom, not the top -- "Show whole floor" lives up
+            there, and the two were landing on top of each other.
             An opening lands on the first wall, half a metre along,
             which is almost never where it belongs -- so the moment it
             appears is the moment to say that it moves. It clears on
             the first drag, and on any tap of the plan. */}
         {justAdded && (
           <div
-            className="pointer-events-none absolute inset-x-3 top-3 z-10 rounded-xl px-4 py-2.5 text-center text-sm font-semibold shadow-sm"
+            className="pointer-events-none absolute inset-x-3 bottom-3 z-10 rounded-xl px-4 py-2.5 text-center text-sm font-semibold shadow-sm"
             style={{ backgroundColor: "#1c1c1ae8", color: "#fff8ea" }}
           >
             {justAdded === "stairs" ? "Stairs" : justAdded === "door" ? "Door" : "Window"}{" "}
-            added — drag it along the wall to where it really is
+            added — drag it to where it goes
           </div>
         )}
 
@@ -2154,10 +2279,13 @@ export default function FloorPlanEditor({
             Automatic on add, manual to leave: a view that snapped back
             on its own would do it halfway through the drag it exists
             to make possible. */}
-        {zoomRoomId && (
+        {(zoomRoomId || manualViewBox) && (
           <button
             type="button"
-            onClick={() => setZoomRoomId(null)}
+            onClick={() => {
+              setZoomRoomId(null);
+              setManualViewBox(null);
+            }}
             style={{ minHeight: 44 }}
             className="absolute right-3 top-3 z-10 rounded-full border border-[#b89650] bg-white/95 px-4 text-sm font-bold uppercase tracking-widest text-[#8a6f2f] shadow-sm"
           >

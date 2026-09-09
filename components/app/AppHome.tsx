@@ -198,16 +198,21 @@ export default function AppHome() {
   // it does not flash in and straight back out during hydration.
   if (showWelcome === null) return null;
 
-  // pb-2, not pb-20. Eighty pixels of bottom padding meant the screen
-  // scrolled past the footer into nothing, which reads as a page that
-  // has failed to load the rest of itself.
+  // The page is exactly the viewport and does not scroll.
+  //
+  // min-h-screen plus padding kept leaving a little slack, and a home
+  // screen that drifts a few pixels reads as broken rather than as
+  // long. It is now a fixed-height column: header, a middle band that
+  // scrolls only if it genuinely has to, and More pinned underneath.
+  // 100dvh rather than 100vh so the iOS address bar does not push the
+  // footer off the bottom.
   //
   // overscroll-none kills the rubber band as well. On iOS a page that
   // fits still drags away from the top and springs back, which looks
   // exactly like a screen with something above it that failed to
   // arrive -- and there is nothing up there to find.
   return (
-    <div className="min-h-screen overscroll-none bg-surface pb-2">
+    <div className="flex h-[100dvh] flex-col overscroll-none bg-surface">
       {/* Brand header — slimmer than the marketing nav, no menu links.
           Logo mark + wordmark on the left, tiny outbound link on the
           right. The hairline gold rule under the header echoes the
@@ -238,7 +243,7 @@ export default function AppHome() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 pt-5 md:px-6 md:pt-8">
+      <main className="mx-auto w-full min-h-0 max-w-3xl flex-1 overflow-y-auto px-4 pt-4 md:px-6 md:pt-6">
         {/* ── Continue where you left off ────────────────────────
             First, above the tiles, and only when there is something to
             continue.
@@ -427,7 +432,7 @@ export default function AppHome() {
           They stay at the bottom, below the tiles and the recent list,
           for the same reason as before: all of it is wanted
           occasionally and none of it first. */}
-      <nav className="mx-auto w-full max-w-3xl px-4 pb-6 pt-0 md:px-6">
+      <nav className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pt-0 md:px-6">
         <div className="border-t border-outline-variant/30 pt-4">
           <p className="mb-3 text-sm font-bold uppercase tracking-widest text-on-surface-variant">
             More

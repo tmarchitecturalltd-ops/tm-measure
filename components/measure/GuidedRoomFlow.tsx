@@ -693,7 +693,12 @@ export default function GuidedRoomFlow({
             onChange={(e) => onPatch({ name: e.target.value })}
             placeholder="e.g. Kitchen"
             className={input}
-            autoFocus
+            /* No autoFocus.
+               It opened the keyboard the instant the room screen
+               appeared, which covers half the phone and the chips
+               underneath -- so the fastest way to name a room was
+               hidden by the slowest. Tapping the field still opens it
+               for anyone who wants to type. */
           />
           {/* Tap instead of type.
               Naming rooms is the one bit of typing that repeats — once
