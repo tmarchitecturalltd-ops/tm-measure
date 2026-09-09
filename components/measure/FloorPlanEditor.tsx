@@ -1594,17 +1594,12 @@ export default function FloorPlanEditor({
           Each chip carries its own state in its label -- the number of
           rooms still to place, the ceiling height in metres -- so the
           floor can be read without opening anything. */}
+      {/* No "+ Room" here.
+          It sat in this row and threw the customer back to "What's
+          this room called?" with a plan half arranged behind them,
+          which read as the app losing their place. It is offered on
+          the empty floor instead, where there is no place to lose. */}
       <div className="flex flex-wrap items-center gap-1.5 text-sm">
-        {onAddRoom && (
-          <button
-            type="button"
-            onClick={onAddRoom}
-            style={{ minHeight: 40 }}
-            className="rounded-full bg-[#b89650] px-4 font-bold uppercase tracking-widest text-white"
-          >
-            + Room
-          </button>
-        )}
         {/* Only what is left over.
             Rooms now place themselves, so "To place" appears only when
             something genuinely could not be, and Auto-layout and Clear
@@ -2476,15 +2471,16 @@ export default function FloorPlanEditor({
                     drawing, and none of them was wanted until a room
                     had been chosen.
 
-                    They now appear on the selected room only, and they
-                    have moved inside it -- a third of the way in from
-                    the corner rather than sitting on the wall, so they
-                    no longer overlap anything drawn in the wall
-                    itself. */}
+                    They appear on the selected room only, and they sit
+                    outside it now -- above the top edge, clear of the
+                    walls entirely. Inside the room they still landed
+                    on whatever was drawn there: a door on the top
+                    wall, a window on the right, the room's own name.
+                    Outside, there is nothing to hit by accident. */}
                 {selected === r.id && (
                 <>
                 <g
-                  transform={`translate(${size.widthM - 0.9 * uiScale} ${0.9 * uiScale})`}
+                  transform={`translate(${size.widthM - 1.5 * uiScale} ${-0.75 * uiScale})`}
                   style={{ cursor: "pointer" }}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
@@ -2513,9 +2509,9 @@ export default function FloorPlanEditor({
                   </text>
                 </g>
 
-                {/* Unplace chip — bottom-right */}
+                {/* Unplace chip — beside rotate, above the room. */}
                 <g
-                  transform={`translate(${size.widthM - 0.9 * uiScale} ${size.lengthM - 0.9 * uiScale})`}
+                  transform={`translate(${size.widthM - 0.35 * uiScale} ${-0.75 * uiScale})`}
                   style={{ cursor: "pointer" }}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
@@ -2631,19 +2627,13 @@ export default function FloorPlanEditor({
             is in the control row next to Clear now -- both put the
             view back, and a button sitting on the drawing is one more
             thing between the customer and the plan. */}
-        {/* An empty floor with rooms waiting is a dead end unless the
-            way out is on it. "Nothing here yet" stated the problem and
-            left the customer to work out that the answer was either
-            Auto-layout or opening To place and tapping five rooms one
-            at a time. The button is the same auto-layout, said where
-            it is needed. */}
+        {/* An empty floor offers the two things that fill it.
+            It used to state the problem -- "nothing here yet" -- and
+            leave the customer to work out that the answer was either
+            Auto-layout or opening To place and tapping rooms one at a
+            time. Buttons instead of a sentence. */}
         {roomsOnFloor.length === 0 && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
-            <p className="rounded-lg bg-white/85 px-4 py-2 text-sm font-semibold text-[#6e6a5f] shadow-sm">
-              {unplacedOnFloor.length
-                ? `${unplacedOnFloor.length} room${unplacedOnFloor.length === 1 ? "" : "s"} to put on ${floorLabel(currentFloor)}`
-                : `Nothing on ${floorLabel(currentFloor)} yet.`}
-            </p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 px-6">
             {unplacedOnFloor.length > 0 && (
               <button
                 type="button"
@@ -2651,7 +2641,17 @@ export default function FloorPlanEditor({
                 style={{ minHeight: 48 }}
                 className="rounded-full bg-[#b89650] px-6 text-sm font-bold uppercase tracking-widest text-white shadow-lg"
               >
-                Lay them out for me
+                Auto-layout
+              </button>
+            )}
+            {onAddRoom && (
+              <button
+                type="button"
+                onClick={onAddRoom}
+                style={{ minHeight: 48 }}
+                className="rounded-full border-2 border-[#b89650] bg-white/90 px-6 text-sm font-bold uppercase tracking-widest text-[#8a6f2f]"
+              >
+                Add room
               </button>
             )}
           </div>

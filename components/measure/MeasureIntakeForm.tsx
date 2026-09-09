@@ -4916,20 +4916,21 @@ export default function MeasureIntakeForm() {
                 onPlacementChange={updatePlacement}
                 onRoomChange={setRoom}
                 /*
-                 * No onAddRoom.
+                 * Offered only on an empty floor.
                  *
-                 * There was a "+ Room" button here, on the reasoning
-                 * that the plan is where a forgotten room gets noticed.
-                 * What it actually did was throw the customer back to
-                 * "What's this room called?" -- the first question of
-                 * the room flow -- with no warning and no obvious way
-                 * back to the plan they were looking at. It read as the
-                 * app losing their place.
-                 *
-                 * Rooms are added while measuring, which is where
-                 * someone is standing in one. The plan arranges what
-                 * has already been measured, and that is all it does.
+                 * As a button in the control row this threw the
+                 * customer back to "What's this room called?" with a
+                 * half-arranged plan behind them, which read as the app
+                 * losing their place. On an empty floor there is no
+                 * place to lose, and "add a room" is one of exactly two
+                 * useful things to do -- so the editor shows it there
+                 * and nowhere else.
                  */
+                onAddRoom={() => {
+                  addRoom();
+                  setActiveRoomIndex(rooms.length);
+                  setStep("rooms");
+                }}
               />
             </section>
 
