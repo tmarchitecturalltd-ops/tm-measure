@@ -1887,6 +1887,22 @@ export default function MeasureIntakeForm() {
    * they pressed the button from. Going to the room is then their
    * choice, from the Steps menu.
    */
+  /**
+   * Where finishing the rooms should land.
+   *
+   * "exterior" is the normal path: rooms, then the outside photos,
+   * then the plan. But someone who reached the room flow *from* the
+   * plan -- by tapping "Add room" on an empty floor -- came back to
+   * find themselves in the exterior photos instead, with the plan
+   * they had been arranging two steps behind them. Finish that room
+   * and it happens again. That is the loop.
+   *
+   * Set when the plan sends them, cleared the moment it is used.
+   */
+  const [roomsReturnTo, setRoomsReturnTo] = useState<"exterior" | "plan">(
+    "exterior",
+  );
+
   const [navBlock, setNavBlock] = useState<{
     message: string;
     roomIndex: number | null;
@@ -4929,6 +4945,7 @@ export default function MeasureIntakeForm() {
                 onAddRoom={() => {
                   addRoom();
                   setActiveRoomIndex(rooms.length);
+                  setRoomsReturnTo("plan");
                   setStep("rooms");
                 }}
               />
@@ -5458,7 +5475,9 @@ export default function MeasureIntakeForm() {
               if (ri !== null) setActiveRoomIndex(ri);
               return;
             }
-            setStep("exterior");
+            // Back where they came from -- see roomsReturnTo.
+            setStep(roomsReturnTo);
+            setRoomsReturnTo("exterior");
           }}
           onExitGuided={() => setGuidedMode(false)}
           issueFor={(suffix) => issueFor(`room-${activeRoomIndex}-${suffix}`)}
@@ -5528,6 +5547,9 @@ export default function MeasureIntakeForm() {
            * stays put, exactly as "Done with the rooms" does.
            */
           onGoToPlan={() => setStep("plan")}
+          doneLabel={
+            roomsReturnTo === "plan" ? "Back to the floor plan" : undefined
+          }
           // On a LiDAR phone the sensor measures; the typed fields are
           // not offered unless a scan has actually failed.
           scanRequired={arSupport === "yes"}

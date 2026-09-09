@@ -145,6 +145,15 @@ type Props = {
    * is what made "Done with the rooms" add another room.
    */
   onGoToPlan?: () => void;
+  /**
+   * What the last room's Next button says, when it is not the usual
+   * "Done with the rooms".
+   *
+   * A customer who came here from the floor plan is going back to the
+   * floor plan, and the button should say so -- otherwise finishing a
+   * room they added from the plan reads as finishing the whole survey.
+   */
+  doneLabel?: string;
   /** Room names, for the jump list in the menu. */
   roomNames?: string[];
   /**
@@ -198,6 +207,7 @@ export default function GuidedRoomFlow({
   onAddRoom,
   onRemoveRoom,
   onGoToPlan,
+  doneLabel,
   onBackFromFirst,
   scanRequired = false,
   scanFailed = false,
@@ -680,7 +690,7 @@ export default function GuidedRoomFlow({
         isLast
           ? roomIndex + 1 < totalRooms
             ? "Next room"
-            : "Done with the rooms"
+            : (doneLabel ?? "Done with the rooms")
           : "Next"
       }
       blockMessage={block ?? finishIssue}
