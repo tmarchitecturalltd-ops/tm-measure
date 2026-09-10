@@ -194,7 +194,7 @@ export default function GuidedScreen({
           >
             help
           </span>
-          Help
+          Help?
         </button>
       </div>
 

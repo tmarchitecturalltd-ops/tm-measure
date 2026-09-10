@@ -424,7 +424,12 @@ export default function AppHome() {
           occasionally and none of it first. */}
       <nav className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pt-0 md:px-6">
         <div className="border-t border-outline-variant/30 pt-4">
-          <p className="mb-3 text-sm font-bold uppercase tracking-widest text-on-surface-variant">
+          {/* The section title, set like the other section titles on
+              this page rather than like a slightly darker version of
+              the group headings underneath it. Three things in a row
+              all bold, all small caps, differing only in opacity is
+              not a hierarchy -- it is one texture. */}
+          <p className="font-label mb-1 text-sm font-bold uppercase tracking-[0.25em] text-primary">
             More
           </p>
           {(["Help", "Your project", "TM Designs"] as const)
@@ -434,8 +439,11 @@ export default function AppHome() {
             }))
             .filter((sec) => sec.items.length > 0)
             .map((sec, si) => (
-              <div key={sec.group} className={si > 0 ? "mt-4" : ""}>
-                <p className="mb-1 text-sm font-bold uppercase tracking-[0.18em] text-on-surface-variant/70">
+              <div key={sec.group} className={si > 0 ? "mt-5" : "mt-3"}>
+                {/* Below the title, above the rows, and lighter than
+                    both — so the three levels read in the order they
+                    are meant to. */}
+                <p className="mb-0.5 text-sm uppercase tracking-[0.18em] text-on-surface-variant/60">
                   {sec.group}
                 </p>
           <ul>

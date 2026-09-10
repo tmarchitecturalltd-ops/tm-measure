@@ -103,7 +103,23 @@ export default function AppButton({
             {eyebrow}
           </span>
         )}
-        <span className="block text-base font-bold uppercase tracking-widest">
+        {/* The quiet rows are not shouted.
+            Small caps and heavy tracking is the house style for a
+            heading, and using it for the rows as well put three levels
+            of bold small caps within one screen of each other -- the
+            section title, its group headings, and every row underneath
+            them. Reported as the bold being confusing to look at, and
+            it was: nothing on the block looked more important than
+            anything else, so the eye had no way in.
+            The rows now read as what they are, which is a list of
+            places to go, and the small caps mean "heading" again. */}
+        <span
+          className={
+            variant === "quiet"
+              ? "block text-base font-medium"
+              : "block text-base font-bold uppercase tracking-widest"
+          }
+        >
           {label}
         </span>
         {detail && (
