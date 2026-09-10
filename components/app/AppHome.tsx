@@ -22,9 +22,9 @@
  * submissions list and the dynamic year stamp both need browser APIs.
  */
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import AppLogo from "@/components/app/AppLogo";
+import AppButton from "@/components/app/AppButton";
 import WelcomeScreen, { WELCOME_SEEN_KEY } from "@/components/app/WelcomeScreen";
 import { loadDraft, type ProjectDraftSnapshot } from "@/lib/draftStorage";
 
@@ -126,6 +126,16 @@ export default function AppHome() {
     label: string;
     blurb: string;
     icon: string;
+    /**
+     * Which group the row sits under.
+     *
+     * One flat run of six rows made "Privacy" and "Architect console"
+     * look like the same kind of thing as "Photo tips", so a customer
+     * looking for help had to read all six to find the two that were
+     * for them. Grouped, the first heading is the only one most people
+     * ever need to read.
+     */
+    group: "Help" | "Your project" | "TM Designs";
     href?: string;
     onClick?: () => void;
   }[] = [
@@ -133,30 +143,35 @@ export default function AppHome() {
       label: "How it works",
       blurb: "",
       icon: "help",
+      group: "Help",
       onClick: () => setShowWelcome(true),
     },
     {
       label: "Photo tips",
       blurb: "",
       icon: "photo_camera",
+      group: "Help",
       href: "/photo-tips",
     },
     {
       label: "Project status",
       blurb: "",
       icon: "fact_check",
+      group: "Your project",
       href: "/status",
     },
     {
       label: "Privacy",
       blurb: "",
       icon: "shield",
+      group: "Your project",
       href: "/privacy",
     },
     {
       label: "Architect console",
       blurb: "TM Designs staff only",
       icon: "architecture",
+      group: "TM Designs",
       href: "/architect",
     },
     ...(calib && process.env.NEXT_PUBLIC_ENABLE_SCAN === "1"
@@ -165,6 +180,7 @@ export default function AppHome() {
             label: "Reset calibration",
             blurb: "",
             icon: "restart_alt",
+            group: "TM Designs" as const,
             onClick: () => {
               if (typeof window === "undefined") return;
               const ks: string[] = [];
@@ -263,34 +279,15 @@ export default function AppHome() {
                 whole card was already a link, so the Resume row was
                 telling the customer they could do the thing they were
                 already about to do by tapping it. */}
-            <Link
+            <AppButton
+              variant="secondary"
               href="/measure"
-              className="flex items-center gap-3 rounded-2xl border border-primary/40 bg-primary/5 p-4 transition-colors hover:bg-primary/10"
-            >
-              <span className="min-w-0 flex-1">
-                <span className="font-label block text-sm font-bold uppercase tracking-[0.15em] text-primary">
-                  Continue where you left off
-                </span>
-                <span className="mt-1 block truncate text-sm text-on-surface">
-                  <span className="font-medium">
-                    {draft.projectName?.trim() || "Untitled project"}
-                  </span>
-                  <span className="text-on-surface-variant">
-                    {" · "}
-                    {draft.rooms?.length ?? 0} room
-                    {(draft.rooms?.length ?? 0) === 1 ? "" : "s"} · saved{" "}
-                    {formatSavedAt(draft.savedAt)}
-                  </span>
-                </span>
-              </span>
-              <span
-                className="material-symbols-outlined shrink-0 text-primary"
-                style={{ fontSize: "24px" }}
-                aria-hidden
-              >
-                chevron_right
-              </span>
-            </Link>
+              eyebrow="Continue where you left off"
+              label={draft.projectName?.trim() || "Untitled project"}
+              detail={`${draft.rooms?.length ?? 0} room${
+                (draft.rooms?.length ?? 0) === 1 ? "" : "s"
+              } · saved ${formatSavedAt(draft.savedAt)}`}
+            />
           </section>
         )}
 
@@ -328,20 +325,13 @@ export default function AppHome() {
               The type question still exists on the project step, where
               it is one tap among questions the customer is already
               answering rather than a toll gate in front of them. */}
-          <Link
+          <AppButton
+            variant="primary"
             href="/measure"
-            style={{ minHeight: 60 }}
-            className="tm-fade-up-late flex w-full items-center justify-center gap-2.5 rounded-full bg-primary px-6 text-base font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 transition-all hover:bg-surface-tint active:scale-[0.99]"
-          >
-            Start a project
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: "20px" }}
-              aria-hidden
-            >
-              arrow_forward
-            </span>
-          </Link>
+            label="Start a project"
+            trailingIcon="arrow_forward"
+            className="tm-fade-up-late"
+          />
         </section>
 
         {/* The "How it works" cards used to sit here.
@@ -437,58 +427,43 @@ export default function AppHome() {
           <p className="mb-3 text-sm font-bold uppercase tracking-widest text-on-surface-variant">
             More
           </p>
+          {(["Help", "Your project", "TM Designs"] as const)
+            .map((group) => ({
+              group,
+              items: moreItems.filter((it) => it.group === group),
+            }))
+            .filter((sec) => sec.items.length > 0)
+            .map((sec, si) => (
+              <div key={sec.group} className={si > 0 ? "mt-4" : ""}>
+                <p className="mb-1 text-sm font-bold uppercase tracking-[0.18em] text-on-surface-variant/70">
+                  {sec.group}
+                </p>
           <ul>
-            {moreItems.map((item, i) => {
-              const inner = (
-                <>
-                  {/* One line per row.
-                      Each row carried a line of description, which was
-                      right when this was six chips with no room to
-                      explain themselves and wrong once it was a list of
-                      six two-line rows -- 300px of secondary navigation
-                      pushing the primary action off the screen. The
-                      labels say enough; the one that genuinely needed a
-                      warning keeps it, inline and muted. */}
-                  <span className="min-w-0 flex-1 text-sm font-bold uppercase tracking-[0.18em] text-on-surface">
-                    {item.label}
-                    {item.blurb && (
-                      <span className="ml-2 font-normal normal-case tracking-normal text-on-surface-variant">
-                        {item.blurb}
-                      </span>
-                    )}
-                  </span>
-                  <span
-                    className="material-symbols-outlined shrink-0 text-on-surface-variant/40"
-                    style={{ fontSize: "18px" }}
-                    aria-hidden
-                  >
-                    chevron_right
-                  </span>
-                </>
-              );
-              const cls = `flex w-full items-baseline gap-3 py-2.5 text-left transition-colors hover:text-primary ${
-                i > 0 ? "border-t border-outline-variant/25" : ""
-              }`;
-              return (
-                <li key={item.label}>
-                  {item.href ? (
-                    <Link href={item.href} className={cls} style={{ minHeight: 56 }}>
-                      {inner}
-                    </Link>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={item.onClick}
-                      className={cls}
-                      style={{ minHeight: 56 }}
-                    >
-                      {inner}
-                    </button>
-                  )}
-                </li>
-              );
-            })}
+            {/* The same control as the two above, at its quietest.
+                The rows kept their own layout -- baseline-aligned,
+                56px, an 18px chevron, small caps at a different
+                tracking from everything else -- which is four ways of
+                being not-quite the buttons further up the page. They
+                are the same kind of thing and are now built by the
+                same component; only the fill differs. */}
+            {sec.items.map((item, i) => (
+              <li
+                key={item.label}
+                className={i > 0 ? "border-t border-outline-variant/25" : ""}
+              >
+                <AppButton
+                  variant="quiet"
+                  label={item.label}
+                  detail={item.blurb || undefined}
+                  href={item.href}
+                  onClick={item.onClick}
+                  className="!px-0"
+                />
+              </li>
+            ))}
           </ul>
+              </div>
+            ))}
           <p className="mt-5 text-center text-sm uppercase tracking-widest text-on-surface-variant/70">
             © {year} TM Architectural Designs Ltd · UK wide
           </p>

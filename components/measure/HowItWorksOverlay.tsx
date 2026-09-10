@@ -25,6 +25,20 @@ import { useEffect, useState } from "react";
 const SEEN_KEY = "tm.howItWorks.seen";
 
 /**
+ * Fired to bring the guide back after it has been dismissed.
+ *
+ * The guide is shown once and then never again, which is right for
+ * someone measuring their second house and wrong for someone who read
+ * it in the hall and wants it again in the loft. The Help button in
+ * the corner of every guided screen dispatches this.
+ *
+ * A window event rather than lifted state because the overlay and the
+ * Help button sit at opposite ends of a five-thousand-line form with
+ * no shared parent that isn't the form itself.
+ */
+export const SHOW_GUIDE_EVENT = "tm:show-how-it-works";
+
+/**
  * Four lines, each one short enough to read standing up.
  *
  * It has to fit one screen without scrolling. A briefing you have to
@@ -73,6 +87,13 @@ export default function HowItWorksOverlay() {
       // therefore appears on every single project.
       setShow(false);
     }
+  }, []);
+
+  // Asked for again from the Help button.
+  useEffect(() => {
+    const open = () => setShow(true);
+    window.addEventListener(SHOW_GUIDE_EVENT, open);
+    return () => window.removeEventListener(SHOW_GUIDE_EVENT, open);
   }, []);
 
   if (!show) return null;

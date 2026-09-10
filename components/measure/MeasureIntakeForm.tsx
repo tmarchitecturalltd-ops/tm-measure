@@ -2459,17 +2459,40 @@ export default function MeasureIntakeForm() {
           })),
         irregularShapeNotes: r.irregularNotes.trim() || undefined,
         notes: r.notes.trim() || undefined,
-        stairs: (r.stairs ?? [])
-          .filter((st) => st.widthM.trim())
-          .map((st) => ({
-            widthM: parseMeters(st.widthM),
-            direction: st.direction,
-            wallIndex: st.wallIndex,
-            positionM: st.positionM ? parseMeters(st.positionM) : undefined,
-            positionApprox: st.positionM ? st.positionApprox === true : undefined,
-            treads: st.treads ? Number.parseInt(st.treads, 10) : undefined,
-            notes: st.notes || undefined,
-          })),
+        /*
+         * Every flight, with where it actually is.
+         *
+         * This dropped three things the drawing depends on. `worldM`
+         * and `headingDeg` are how a staircase is positioned now --
+         * stairs were cut loose from their room's walls precisely
+         * because most of them are not against one -- so leaving them
+         * out sent every flight to the office with no position at all,
+         * and whoever read the payload saw a width and a direction and
+         * nothing to place them by. `winders` went the same way, which
+         * matters more than it sounds: a flight that turns and is
+         * recorded as straight is the commonest reason a staircase
+         * does not fit the hole drawn for it.
+         *
+         * The width filter went too. It threw away any flight whose
+         * width had not been typed -- and a staircase added on the
+         * plan, which is now the only way to add one, does not ask for
+         * a width. So the flights most likely to exist were the ones
+         * most likely to be discarded. A flight with no width is drawn
+         * at 900 mm and said to be assumed; a flight that was never
+         * sent cannot be.
+         */
+        stairs: (r.stairs ?? []).map((st) => ({
+          widthM: st.widthM.trim() ? parseMeters(st.widthM) : undefined,
+          direction: st.direction,
+          wallIndex: st.wallIndex,
+          positionM: st.positionM ? parseMeters(st.positionM) : undefined,
+          positionApprox: st.positionM ? st.positionApprox === true : undefined,
+          worldM: st.worldM,
+          headingDeg: st.headingDeg,
+          winders: st.winders === true ? true : undefined,
+          treads: st.treads ? Number.parseInt(st.treads, 10) : undefined,
+          notes: st.notes || undefined,
+        })),
         shape: r.shape ?? "rectangle",
         // Undefined rather than false when unticked: the architect needs
         // to distinguish "the customer confirmed this is square" from
@@ -5798,6 +5821,19 @@ export default function MeasureIntakeForm() {
           roomIndex={activeRoomIndex}
           totalRooms={rooms.length}
           onPatch={(patch) => setRoom(rooms[activeRoomIndex].id, patch)}
+          /* Which storey the room is on, asked while it is being
+             named. The position is left alone: choosing a floor is
+             not choosing a spot on it. */
+          roomFloor={placements[rooms[activeRoomIndex].id]?.floor ?? 0}
+          onSetFloor={(floor) => {
+            const id = rooms[activeRoomIndex].id;
+            const prev = placements[id];
+            updatePlacement(id, {
+              positionM: prev?.positionM ?? null,
+              rotationDeg: prev?.rotationDeg ?? 0,
+              floor,
+            });
+          }}
           onSetShape={(shape) => setShape(rooms[activeRoomIndex].id, shape)}
           onAddOpening={(kind) => addOpening(rooms[activeRoomIndex].id, kind)}
           onRemoveOpening={(kind, id) =>

@@ -35,7 +35,8 @@
 
 import Link from "next/link";
 import BottomActionBar from "@/components/measure/BottomActionBar";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { SHOW_GUIDE_EVENT } from "@/components/measure/HowItWorksOverlay";
 
 export type MenuItem = {
   label: string;
@@ -108,6 +109,21 @@ export default function GuidedScreen({
 }: Props) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  /**
+   * The help panel.
+   *
+   * Every screen in this flow is one question with two buttons under
+   * it, which is deliberate -- but it leaves someone who is stuck with
+   * nowhere to go except Back. The corner opposite Home is the
+   * conventional place for a question mark and, since the menu moved
+   * to the bottom bar, it has been empty.
+   *
+   * Local state rather than a prop: the panel says the same thing on
+   * every screen, and threading open/close through six callers to
+   * achieve that would be six chances to forget one.
+   */
+  const [helpOpen, setHelpOpen] = useState(false);
+
   /*
    * Freeze the page behind.
    *
@@ -161,9 +177,83 @@ export default function GuidedScreen({
             reach for two different parts of the screen depending on
             what they wanted, and the top corner is the hardest place on
             a phone to reach one-handed. Everything that navigates is
-            now in one row along the bottom. */}
-        <span aria-hidden />
+            now in one row along the bottom.
+
+            What is here instead is help, which is not navigation. */}
+        <button
+          type="button"
+          onClick={() => setHelpOpen(true)}
+          aria-label="Need help?"
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-bold text-on-surface-variant hover:text-primary"
+          style={{ minHeight: 44 }}
+        >
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: "20px" }}
+            aria-hidden
+          >
+            help
+          </span>
+          Help
+        </button>
       </div>
+
+      {/* ── Help ──────────────────────────────────────────────────── */}
+      {helpOpen && (
+        <>
+          <button
+            type="button"
+            aria-label="Close help"
+            onClick={() => setHelpOpen(false)}
+            className="fixed inset-0 z-[70] bg-black/30"
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Need help?"
+            className="fixed inset-x-3 top-16 z-[71] rounded-2xl border border-outline-variant/40 bg-surface-container-lowest p-5 shadow-2xl sm:left-auto sm:right-4 sm:w-96"
+          >
+            <p className="mb-1 text-sm font-bold uppercase tracking-widest text-primary">
+              Need help?
+            </p>
+            <h2 className="font-headline mb-3 text-xl leading-tight text-on-surface">
+              Nothing here can be got wrong
+            </h2>
+            <p className="mb-4 text-base leading-relaxed text-on-surface-variant">
+              Skip anything you can&apos;t answer and carry on — we check
+              everything before we draw it, and we&apos;ll ask if
+              something&apos;s missing. Your answers are saved as you go,
+              so you can stop and come back.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setHelpOpen(false);
+                window.dispatchEvent(new Event(SHOW_GUIDE_EVENT));
+              }}
+              className="mb-2 w-full rounded-xl border border-outline-variant/50 px-4 py-3 text-left text-base font-bold text-on-surface hover:text-primary"
+              style={{ minHeight: 48 }}
+            >
+              Show the short guide again
+            </button>
+            <a
+              href="mailto:tmarchitecturalltd@gmail.com?subject=Help%20with%20my%20measurements"
+              className="mb-2 block w-full rounded-xl border border-outline-variant/50 px-4 py-3 text-left text-base font-bold text-on-surface hover:text-primary"
+              style={{ minHeight: 48 }}
+            >
+              Email us about this survey
+            </a>
+            <button
+              type="button"
+              onClick={() => setHelpOpen(false)}
+              className="w-full px-4 py-3 text-center text-base font-bold text-on-surface-variant hover:text-primary"
+              style={{ minHeight: 48 }}
+            >
+              Close
+            </button>
+          </div>
+        </>
+      )}
 
       {/* Progress. A guided flow with no visible end is an
           interrogation — but a hairline, so it frames the question

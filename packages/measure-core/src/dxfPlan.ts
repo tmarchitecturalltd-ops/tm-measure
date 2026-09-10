@@ -472,6 +472,102 @@ function planDimension(
   return { blockName, block, entity };
 }
 
+/* ── wall faces ───────────────────────────────────────────────────── */
+
+/**
+ * Where two offset lines cross.
+ *
+ * Parallel lines never do, and two walls in a straight run are
+ * parallel, so that case returns the second line's own start rather
+ * than a point at infinity.
+ */
+function intersectOffset(
+  p1: Pt,
+  d1: Pt,
+  o1: number,
+  p2: Pt,
+  d2: Pt,
+  o2: number,
+): Pt {
+  const n1 = perp(d1);
+  const n2 = perp(d2);
+  const a = { x: p1.x + n1.x * o1, z: p1.z + n1.z * o1 };
+  const b = { x: p2.x + n2.x * o2, z: p2.z + n2.z * o2 };
+  const cross = d1.x * d2.z - d1.z * d2.x;
+  if (Math.abs(cross) < 1e-9) return b;
+  const t = ((b.x - a.x) * d2.z - (b.z - a.z) * d2.x) / cross;
+  return { x: a.x + d1.x * t, z: a.z + d1.z * t };
+}
+
+/**
+ * A room's two wall faces, as closed chains that meet at the corners.
+ *
+ * Every wall used to be drawn on its own: two lines parallel to its
+ * centreline, running from one end of that centreline to the other.
+ * Which means no wall knew about the wall it turned into. At every
+ * corner the outer faces stopped 125 mm short of each other and the
+ * inner faces ran 125 mm past, so a plain rectangular room reached CAD
+ * with four open corners and four little crossed tails -- and an
+ * L-shaped room, which has a corner that turns the other way, got the
+ * same treatment at six corners including one where the overshoot
+ * landed inside the room. Reported as L-shaped rooms coming up funny,
+ * which they did, and so did everything else on closer inspection.
+ *
+ * Mitring is the fix a draughtsman would expect: offset each wall's
+ * centreline by half its own thickness, then take the corner point as
+ * the intersection of the two offsets rather than as either wall's
+ * own end. Walls of different thicknesses meet correctly, a straight
+ * run of two walls stays straight, and the outline closes.
+ *
+ * Which side is inside is worked out from the winding rather than
+ * assumed: the room outlines this app builds run one way, but a
+ * polygon that came back from a scan can run either.
+ */
+export function mitredWallFaces(
+  corners: Pt[],
+  halfThicknessM: number[],
+): { inner: Pt[]; outer: Pt[] } {
+  const n = corners.length;
+  const dirs = corners.map((p, i) => norm(sub(corners[(i + 1) % n], p)));
+
+  // Shoelace. Positive means the left-hand perpendicular points into
+  // the room, which is the winding roomOutlineM produces.
+  const area2 = corners.reduce((s, p, i) => {
+    const q = corners[(i + 1) % n];
+    return s + (p.x * q.z - q.x * p.z);
+  }, 0);
+  const inward = area2 >= 0 ? 1 : -1;
+
+  const inner: Pt[] = [];
+  const outer: Pt[] = [];
+  for (let i = 0; i < n; i++) {
+    const prev = (i - 1 + n) % n;
+    const hp = halfThicknessM[prev] ?? 0;
+    const hi = halfThicknessM[i] ?? 0;
+    inner.push(
+      intersectOffset(
+        corners[prev],
+        dirs[prev],
+        hp * inward,
+        corners[i],
+        dirs[i],
+        hi * inward,
+      ),
+    );
+    outer.push(
+      intersectOffset(
+        corners[prev],
+        dirs[prev],
+        -hp * inward,
+        corners[i],
+        dirs[i],
+        -hi * inward,
+      ),
+    );
+  }
+  return { inner, outer };
+}
+
 /* ── openings ─────────────────────────────────────────────────────── */
 
 type OpeningOnWall = {
@@ -679,71 +775,121 @@ export function buildDetailedPlanDxf(
   out.push(pair(0, "SECTION"), pair(2, "ENTITIES"));
   for (const d of dims) out.push(...d.entity);
 
-  const byRoom = new Map(placed.map((e) => [e.room.id, e]));
+  if (!detailed) {
+    // Plain companion drawing: centrelines only, no thickness and no
+    // openings. It exists to be a clean shell to build on.
+    for (const w of walls) out.push(line(LAYER.walls, w.a, w.b));
+  } else {
+    for (const entry of placed) {
+      const corners = roomOutlineM(entry);
+      const n = corners.length;
+      if (n < 3) continue;
 
-  for (const w of walls) {
-    const entry = byRoom.get(w.roomId);
-    if (!entry) continue;
-    const thickness = w.internal ? WALL_INTERNAL_M : WALL_EXTERNAL_M;
-    const dir = norm(sub(w.b, w.a));
-    const n = perp(dir);
-    const half = thickness / 2;
-    const wallLen = len(sub(w.b, w.a));
+      // Each wall's own half thickness, in outline order, so the mitre
+      // at a corner where an internal wall meets an external one lands
+      // in the right place.
+      const halves = corners.map((_, i) => {
+        const w = walls.find(
+          (x) => x.roomId === entry.room.id && x.wallIndex === i,
+        );
+        return (w?.internal ? WALL_INTERNAL_M : WALL_EXTERNAL_M) / 2;
+      });
+      const { inner, outer } = mitredWallFaces(corners, halves);
 
-    const offset = (p: Pt, s: number): Pt => ({
-      x: p.x + n.x * s,
-      z: p.z + n.z * s,
-    });
-    const along = (d: number): Pt => ({
-      x: w.a.x + dir.x * d,
-      z: w.a.z + dir.z * d,
-    });
+      // Which side of the run is the room on. Needed for the door
+      // swing, and it is the same answer the mitring worked out.
+      const area2 = corners.reduce((s, p, i) => {
+        const q = corners[(i + 1) % n];
+        return s + (p.x * q.z - q.x * p.z);
+      }, 0);
+      const inward = area2 >= 0 ? 1 : -1;
 
-    if (!detailed) {
-      // Plain companion drawing: centreline only.
-      out.push(line(LAYER.walls, w.a, w.b));
-      continue;
-    }
+      for (let i = 0; i < n; i++) {
+        const a = corners[i];
+        const b = corners[(i + 1) % n];
+        const dir = norm(sub(b, a));
+        const wallLen = len(sub(b, a));
+        if (wallLen < 1e-6) continue;
 
-    const openings = openingsForWall(entry.room, w.wallIndex, wallLen);
+        const i0 = inner[i];
+        const i1 = inner[(i + 1) % n];
+        const o0 = outer[i];
+        const o1 = outer[(i + 1) % n];
 
-    // Both faces of the wall, broken around each opening. Drawing the
-    // faces as continuous lines and the openings on top would leave the
-    // wall running straight through every door.
-    let cursor = 0;
-    for (const o of openings) {
-      const start = Math.max(0, o.centreM - o.widthM / 2);
-      const end = Math.min(wallLen, o.centreM + o.widthM / 2);
-      if (start > cursor) {
-        out.push(line(LAYER.walls, offset(along(cursor), half), offset(along(start), half)));
-        out.push(line(LAYER.walls, offset(along(cursor), -half), offset(along(start), -half)));
+        /*
+         * A point on a face, given a distance along the centreline.
+         *
+         * Square to the wall, not a fraction of the face's own run.
+         * Mitring makes the inner face shorter than the centreline and
+         * the outer face longer -- on a 4 m external wall, 3.75 and
+         * 4.25 -- so putting a door at "60% of the way along" each
+         * face separately lands the two sides of the same reveal 47 mm
+         * apart, and the jamb comes out as a splayed line. Which looks
+         * like a deliberate splayed reveal, so nobody queries it; it
+         * just quietly makes every opening the wrong width on one
+         * side.
+         *
+         * Measuring along the centreline and stepping off it at right
+         * angles puts both sides of a reveal on one line across the
+         * wall. The ends still come from the mitre, because that is
+         * where the face genuinely ends.
+         */
+        // `nrm`, not `n`: `n` is the corner count in this scope.
+        const nrm = perp(dir);
+        const half = halves[i];
+        const faceAt = (d: number, side: number): Pt => ({
+          x: a.x + dir.x * d + nrm.x * half * side,
+          z: a.z + dir.z * d + nrm.z * half * side,
+        });
+        const onInner = (d: number) =>
+          d <= 0 ? i0 : d >= wallLen ? i1 : faceAt(d, inward);
+        const onOuter = (d: number) =>
+          d <= 0 ? o0 : d >= wallLen ? o1 : faceAt(d, -inward);
+
+        const openings = openingsForWall(entry.room, i, wallLen);
+
+        // Both faces, broken around each opening. Drawing them whole
+        // and putting the openings on top would leave the wall running
+        // straight through every door.
+        let cursor = 0;
+        for (const o of openings) {
+          const start = Math.max(0, o.centreM - o.widthM / 2);
+          const end = Math.min(wallLen, o.centreM + o.widthM / 2);
+          if (start > cursor) {
+            out.push(line(LAYER.walls, onInner(cursor), onInner(start)));
+            out.push(line(LAYER.walls, onOuter(cursor), onOuter(start)));
+          }
+          // Jambs: close the wall off at the reveal, otherwise the
+          // opening reads as the wall simply stopping.
+          out.push(line(LAYER.walls, onInner(start), onOuter(start)));
+          out.push(line(LAYER.walls, onInner(end), onOuter(end)));
+
+          if (o.kind === "window") {
+            // Frame: two lines across the reveal, set in from each
+            // face, which is how a window is shown on a plan.
+            const inset = (d: number, f: number): Pt => {
+              const p = onInner(d);
+              const q = onOuter(d);
+              return { x: p.x + (q.x - p.x) * f, z: p.z + (q.z - p.z) * f };
+            };
+            out.push(line(LAYER.windows, inset(start, 1 / 3), inset(end, 1 / 3)));
+            out.push(line(LAYER.windows, inset(start, 2 / 3), inset(end, 2 / 3)));
+          } else {
+            drawDoor(out, {
+              hinge: onInner(start),
+              far: onInner(end),
+              dir,
+              inward,
+              widthM: o.widthM,
+            });
+          }
+          cursor = end;
+        }
+        if (cursor < wallLen) {
+          out.push(line(LAYER.walls, onInner(cursor), onInner(wallLen)));
+          out.push(line(LAYER.walls, onOuter(cursor), onOuter(wallLen)));
+        }
       }
-      // Jambs: close the wall off at the reveal, otherwise the opening
-      // reads as the wall simply stopping.
-      out.push(line(LAYER.walls, offset(along(start), half), offset(along(start), -half)));
-      out.push(line(LAYER.walls, offset(along(end), half), offset(along(end), -half)));
-
-      if (o.kind === "window") {
-        // Frame: two thin lines across the reveal.
-        const q = thickness / 6;
-        out.push(line(LAYER.windows, offset(along(start), q), offset(along(end), q)));
-        out.push(line(LAYER.windows, offset(along(start), -q), offset(along(end), -q)));
-      } else {
-        // Door: leaf on the hinge side, opening into the room, with the
-        // swing arc. Hinge side is not captured anywhere, so the start
-        // edge is used consistently -- an assumption, and a visible one,
-        // which is better than an invisible one.
-        const hinge = along(start);
-        const leafEnd = offset(hinge, o.widthM);
-        out.push(line(LAYER.doors, hinge, leafEnd));
-        const baseAngle = (Math.atan2(dir.z, dir.x) * 180) / Math.PI;
-        out.push(arc(LAYER.doors, hinge, o.widthM, baseAngle, baseAngle + 90));
-      }
-      cursor = end;
-    }
-    if (cursor < wallLen) {
-      out.push(line(LAYER.walls, offset(along(cursor), half), offset(along(wallLen), half)));
-      out.push(line(LAYER.walls, offset(along(cursor), -half), offset(along(wallLen), -half)));
     }
   }
 
@@ -879,6 +1025,85 @@ function drawFixture(
   const label = FIXTURE_SIZES_M[f.kind].label;
   const h = Math.max(80, Math.min(200, (Math.min(widthM, depthM) * MM) / 4));
   out.push(text(LAYER.fixtures, localToWorld(entry, c), h, label));
+}
+
+/** Nominal leaf thickness, metres. A 44 mm internal door, drawn. */
+const DOOR_LEAF_M = 0.044;
+
+/**
+ * One door, drawn the way a plan is expected to draw one.
+ *
+ * What was here before was a single line from the hinge and a quarter
+ * arc of the same radius, both struck from the wall's centreline. Two
+ * things wrong with that. The line has no thickness, so it reads as a
+ * stray line rather than as a door leaf -- and it starts half a wall
+ * away from the reveal it is hinged on, so at 250 mm external walls it
+ * sat 125 mm inside the room with the arc cutting the jamb. Reported
+ * as the doors not being in standard format, which they were not.
+ *
+ * The convention: leaf shown open at ninety degrees, drawn to its real
+ * thickness, hinged at one reveal on the room face; swing arc of the
+ * clear width struck from that hinge, running from the leaf round to
+ * the closed position at the far reveal. It opens into the room,
+ * because a door that opens onto a landing or a path is the exception
+ * and is not something the survey asks about.
+ *
+ * Which reveal carries the hinge is not captured anywhere either, so
+ * the first one along the wall is used every time. An assumption, but
+ * a visible one -- and a visibly wrong hinge is a five-second fix in
+ * CAD, where a silently omitted door is not.
+ */
+function drawDoor(
+  out: string[],
+  d: {
+    /** Reveal the leaf is hinged on, on the room face of the wall. */
+    hinge: Pt;
+    /** The other reveal, same face. The arc lands here. */
+    far: Pt;
+    /** Along the wall, hinge towards far. */
+    dir: Pt;
+    /** +1 when the left-hand perpendicular points into the room. */
+    inward: number;
+    /** Clear opening width, metres. */
+    widthM: number;
+  },
+): void {
+  const { hinge, far, dir, inward, widthM } = d;
+  const n = perp(dir);
+  const into = { x: n.x * inward, z: n.z * inward };
+
+  // The leaf: a rectangle standing at right angles to the wall.
+  const tipA = { x: hinge.x + into.x * widthM, z: hinge.z + into.z * widthM };
+  const backB = { x: hinge.x + dir.x * DOOR_LEAF_M, z: hinge.z + dir.z * DOOR_LEAF_M };
+  const tipB = {
+    x: backB.x + into.x * widthM,
+    z: backB.z + into.z * widthM,
+  };
+  out.push(line(LAYER.doors, hinge, tipA));
+  out.push(line(LAYER.doors, backB, tipB));
+  out.push(line(LAYER.doors, tipA, tipB));
+  out.push(line(LAYER.doors, hinge, backB));
+
+  /*
+   * The swing, from the open leaf round to the shut one.
+   *
+   * Angles are given in the app's frame; `arc` flips them, because the
+   * z negation that turns screen-down into CAD-up also reverses which
+   * way an arc sweeps. The leaf sits at ninety degrees from the wall
+   * on the room side, so the arc runs between the wall direction and
+   * that -- in whichever order puts the sweep on the room side.
+   */
+  const wallDeg = (Math.atan2(dir.z, dir.x) * 180) / Math.PI;
+  const leafDeg = (Math.atan2(into.z, into.x) * 180) / Math.PI;
+  const from = inward >= 0 ? wallDeg : leafDeg;
+  const to = inward >= 0 ? leafDeg : wallDeg;
+  out.push(arc(LAYER.doors, hinge, widthM, from, to));
+
+  // `far` is the reveal the arc closes onto. Unused geometrically --
+  // the radius is the clear width, so the arc lands on it -- but taking
+  // it as an argument keeps the caller honest about which pair of
+  // reveals this door sits between.
+  void far;
 }
 
 function drawStairs(

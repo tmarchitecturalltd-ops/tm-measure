@@ -1411,3 +1411,242 @@ test("fewer than three points is never usable", () => {
   assert.equal(scanPolygonIsUsable([{ x: 0, z: 0 }, { x: 4, z: 0 }], 4, 3), false);
   assert.equal(scanPolygonIsUsable(undefined, 4, 3), false);
 });
+
+/* ── wall faces and doors ─────────────────────────────────────────── */
+
+/**
+ * Every LINE in the file, as metres in the app's frame.
+ *
+ * The DXF is written in millimetres with z negated, so this undoes
+ * both — otherwise every expectation below would have to be written
+ * in the file's units, which is how a sign error survives a test.
+ */
+function planLines(dxf: string): { a: Pt2; b: Pt2; layer: string }[] {
+  const out: { a: Pt2; b: Pt2; layer: string }[] = [];
+  const lines = dxf.trimEnd().split("\n");
+  for (let i = 0; i < lines.length - 1; i += 2) {
+    if (lines[i] !== "0" || lines[i + 1] !== "LINE") continue;
+    const f: Record<string, string> = {};
+    for (let j = i + 2; j < lines.length - 1; j += 2) {
+      if (lines[j] === "0") break;
+      f[lines[j]] = lines[j + 1];
+    }
+    out.push({
+      layer: f["8"] ?? "",
+      a: { x: Number(f["10"]) / 1000, z: -Number(f["20"]) / 1000 },
+      b: { x: Number(f["11"]) / 1000, z: -Number(f["21"]) / 1000 },
+    });
+  }
+  return out;
+}
+
+type Pt2 = { x: number; z: number };
+
+/** Is a point strictly inside a polygon? Ray casting, no frills. */
+function inside(poly: Pt2[], p: Pt2): boolean {
+  let hit = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i];
+    const b = poly[j];
+    if (
+      a.z > p.z !== b.z > p.z &&
+      p.x < ((b.x - a.x) * (p.z - a.z)) / (b.z - a.z) + a.x
+    ) {
+      hit = !hit;
+    }
+  }
+  return hit;
+}
+
+test("wall corners are mitred, so a room closes", () => {
+  /*
+   * The bug this pins down drew every wall from its own centreline
+   * ends, so at each corner the outer faces stopped short of each
+   * other and the inner faces crossed. It looked like a box with the
+   * corners chewed off, and nothing in the old suite noticed because
+   * nothing checked where a face ended -- only that lines of roughly
+   * the right length existed.
+   *
+   * A 4x3 room, all walls external at 250mm: the inner face is the
+   * rectangle inset by 125mm on every side, and its four corners are
+   * exact. If the corners are not mitred, no line ends at (0.125,
+   * 0.125), because the top wall's inner face starts at x=0.
+   */
+  const dxf = buildDetailedPlanDxf([
+    { room: planRoom("m", "Kitchen", 4, 3), anchor: { x: 0, z: 0 }, rotationDeg: 0 },
+  ]);
+  const walls = planLines(dxf).filter((l) => l.layer === "TM-WALLS");
+
+  const corners: Pt2[] = [
+    { x: 0.125, z: 0.125 },
+    { x: 3.875, z: 0.125 },
+    { x: 3.875, z: 2.875 },
+    { x: 0.125, z: 2.875 },
+  ];
+  for (const c of corners) {
+    const meeting = walls.filter(
+      (l) =>
+        (Math.abs(l.a.x - c.x) < 0.002 && Math.abs(l.a.z - c.z) < 0.002) ||
+        (Math.abs(l.b.x - c.x) < 0.002 && Math.abs(l.b.z - c.z) < 0.002),
+    );
+    assert.equal(
+      meeting.length,
+      2,
+      `two inner faces must meet at (${c.x}, ${c.z}), found ${meeting.length}`,
+    );
+  }
+
+  // And the outer face likewise, 125mm the other way.
+  const outer = walls.filter(
+    (l) =>
+      (Math.abs(l.a.x + 0.125) < 0.002 && Math.abs(l.a.z + 0.125) < 0.002) ||
+      (Math.abs(l.b.x + 0.125) < 0.002 && Math.abs(l.b.z + 0.125) < 0.002),
+  );
+  assert.equal(outer.length, 2, "two outer faces must meet at the outer corner");
+});
+
+test("an L-shaped room's faces close at the reflex corner too", () => {
+  /*
+   * The corner that turns the other way is the one the old code got
+   * most visibly wrong: the overshoot landed inside the room. Six
+   * corners, six mitres, and every face endpoint shared with exactly
+   * one other face.
+   */
+  const room = {
+    ...planRoom("l2", "Lounge", 4, 4),
+    shape: "l-shape",
+    notchWidthM: "1.5",
+    notchLengthM: "1.5",
+  } as RoomDraft;
+  const dxf = buildDetailedPlanDxf([
+    { room, anchor: { x: 0, z: 0 }, rotationDeg: 0 },
+  ]);
+  const walls = planLines(dxf).filter((l) => l.layer === "TM-WALLS");
+  assert.equal(walls.length, 12, "six walls, two faces each, no openings");
+
+  // Every endpoint is shared by exactly two faces: that is what a
+  // closed chain means, and an unmitred one has twelve loose ends.
+  const key = (p: Pt2) => `${p.x.toFixed(3)},${p.z.toFixed(3)}`;
+  const counts = new Map<string, number>();
+  for (const l of walls) {
+    for (const p of [l.a, l.b]) {
+      counts.set(key(p), (counts.get(key(p)) ?? 0) + 1);
+    }
+  }
+  const loose = [...counts.entries()].filter(([, n]) => n !== 2);
+  assert.deepEqual(loose, [], "no face may end anywhere but at a mitre");
+});
+
+test("a door swings into its room, with a leaf that has thickness", () => {
+  /*
+   * The old door was one line and an arc struck from the wall's
+   * centreline -- so on a 250mm wall it began 125mm inside the room,
+   * and the arc cut through the jamb. This checks the two things that
+   * makes a door read as a door: a closed leaf, and a swing that is
+   * inside the room rather than out on the pavement.
+   */
+  const room = {
+    ...planRoom("d", "Kitchen", 4, 3),
+    doors: [{ id: "d1", widthM: "0.76", wallIndex: 0, positionM: "2.0" }],
+  } as unknown as RoomDraft;
+  const entry = { room, anchor: { x: 0, z: 0 }, rotationDeg: 0 as const };
+  const dxf = buildDetailedPlanDxf([entry]);
+  const doors = planLines(dxf).filter((l) => l.layer === "TM-DOORS");
+
+  // Four lines: a rectangle. Three would be an open leaf, one is the
+  // stray line this replaced.
+  assert.equal(doors.length, 4, "the leaf is drawn as a closed rectangle");
+
+  const poly = roomOutlineM(entry);
+  const far = doors
+    .flatMap((l) => [l.a, l.b])
+    .filter((p) => inside(poly, p));
+  assert.ok(
+    far.length >= 4,
+    "the leaf must stand inside the room, not out through the wall",
+  );
+
+  // The leaf is a real 44mm door, not a zero-width line.
+  const thin = doors.filter((l) => {
+    const d = Math.hypot(l.a.x - l.b.x, l.a.z - l.b.z);
+    return Math.abs(d - 0.044) < 0.001;
+  });
+  assert.equal(thin.length, 2, "two ends of a 44mm leaf");
+
+  // And the swing is an arc of the clear width, not of something else.
+  assert.match(dxf, /\n0\nARC\n/, "a door has a swing arc");
+});
+
+test("the swing arc opens on the room side of the wall", () => {
+  /*
+   * The arc's own angles are the easiest thing in this file to get
+   * backwards, because `arc` flips them to undo the z negation. A
+   * wrong flip draws a perfectly convincing door opening into the
+   * garden. Sampled at its midpoint rather than trusting the numbers.
+   */
+  const room = {
+    ...planRoom("d2", "Kitchen", 4, 3),
+    doors: [{ id: "d1", widthM: "0.9", wallIndex: 0, positionM: "2.0" }],
+  } as unknown as RoomDraft;
+  const entry = { room, anchor: { x: 0, z: 0 }, rotationDeg: 0 as const };
+  const dxf = buildDetailedPlanDxf([entry]);
+
+  const lines = dxf.trimEnd().split("\n");
+  const i = lines.findIndex((l, n) => n % 2 === 1 && l === "ARC" && lines[n - 1] === "0");
+  assert.ok(i > 0, "there is an arc");
+  const f: Record<string, string> = {};
+  for (let j = i + 1; j < lines.length - 1; j += 2) {
+    if (lines[j] === "0") break;
+    f[lines[j]] = lines[j + 1];
+  }
+  const cx = Number(f["10"]) / 1000;
+  const cy = Number(f["20"]) / 1000;
+  const r = Number(f["40"]) / 1000;
+  const s = Number(f["50"]);
+  const e = Number(f["51"]);
+  // Sweep CCW from s to e in CAD's own frame, and look at the middle.
+  const mid = ((s + ((e - s + 360) % 360) / 2) * Math.PI) / 180;
+  const p = { x: cx + r * Math.cos(mid), z: -(cy + r * Math.sin(mid)) };
+
+  assert.ok(
+    inside(roomOutlineM(entry), p),
+    `the swing must sweep through the room, not outside it (got ${p.x.toFixed(2)}, ${p.z.toFixed(2)})`,
+  );
+});
+
+test("an opening's reveals are square to the wall and its true width", () => {
+  /*
+   * Mitring makes the inner face shorter than the centreline and the
+   * outer face longer. The first version of it placed openings as a
+   * fraction of each face's own run, which put the two sides of one
+   * reveal 47mm apart on a 4m external wall -- a splayed jamb, and a
+   * door 712mm wide on the room side and 810 on the other. It looked
+   * intentional, which is exactly why it needed a test.
+   *
+   * A 760 door centred at 2.0 on a 4m wall: both reveals run straight
+   * across the wall at x=1.62 and x=2.38, and they are 760 apart.
+   */
+  const room = {
+    ...planRoom("rv", "Kitchen", 4, 3),
+    doors: [{ id: "d1", widthM: "0.76", wallIndex: 0, positionM: "2.0" }],
+  } as unknown as RoomDraft;
+  const dxf = buildDetailedPlanDxf([
+    { room, anchor: { x: 0, z: 0 }, rotationDeg: 0 },
+  ]);
+  // A jamb is the short line across the wall: vertical here, and
+  // exactly one wall thick. The side walls' faces are vertical too and
+  // metres long, which is what distinguishes them.
+  const jambs = planLines(dxf).filter(
+    (l) =>
+      l.layer === "TM-WALLS" &&
+      Math.abs(l.a.x - l.b.x) < 1e-6 &&
+      Math.abs(Math.abs(l.a.z - l.b.z) - 0.25) < 1e-6,
+  );
+  const xs = jambs.map((l) => Number(l.a.x.toFixed(3))).sort((p, q) => p - q);
+  assert.deepEqual(xs, [1.62, 2.38], "both reveals run straight across the wall");
+  assert.equal(
+    Number((xs[1] - xs[0]).toFixed(3)),
+    0.76,
+    "and the opening is the width the customer gave",
+  );
+});

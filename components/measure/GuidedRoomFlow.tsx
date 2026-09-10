@@ -48,12 +48,21 @@ const ROOM_NAMES = [
   "Bathroom",
   "En suite",
   "Utility",
-  // Demo only. Harry asked for it as a joke for a walkthrough, and it
-  // is one chip in a list a customer sees on every room they name --
-  // so it comes out before anything goes to the App Store, where a
-  // reviewer would find it long before a homeowner did.
-  "Sex dungeon",
 ] as const;
+
+/**
+ * The storeys a UK house has, in the order you walk them.
+ *
+ * Matches `RoomPlacement.floor`: 0 is the ground floor, negatives go
+ * down. Four is enough — a fifth storey is a house that is getting a
+ * site visit anyway.
+ */
+const FLOORS: { value: number; label: string }[] = [
+  { value: 0, label: "Ground" },
+  { value: 1, label: "First" },
+  { value: 2, label: "Second" },
+  { value: -1, label: "Basement" },
+];
 
 /**
  * The next free name in a series — "Bedroom", then "Bedroom 2".
@@ -173,6 +182,14 @@ type Props = {
   scanRequired?: boolean;
   /** Last scan attempt failed or was cancelled — see the escape hatch. */
   scanFailed?: boolean;
+  /**
+   * Which storey this room is on. 0 is the ground floor.
+   *
+   * Lives in the form's `placements` record rather than on the room,
+   * so it comes in and goes out as a prop rather than through onPatch.
+   */
+  roomFloor?: number;
+  onSetFloor?: (floor: number) => void;
 };
 
 const LABELS: Record<StepId, string> = {
@@ -211,6 +228,8 @@ export default function GuidedRoomFlow({
   onBackFromFirst,
   scanRequired = false,
   scanFailed = false,
+  roomFloor,
+  onSetFloor,
 }: Props) {
   /**
    * A scanned room is not asked to be measured again.
@@ -744,6 +763,42 @@ export default function GuidedRoomFlow({
           <p className="mt-3 text-sm text-on-surface-variant">
             Whatever you call it at home is fine.
           </p>
+
+          {/* Which floor.
+              Every room used to land on the ground floor and stay
+              there until someone found the move-between-floors control
+              in the plan editor, which is two taps into a dropdown on
+              a screen most customers reach once. So a three-bedroom
+              house arrived as a ground floor with three bedrooms on
+              it, and putting that right was Charlie's job.
+
+              Asked here, on the screen where the room is named and
+              while the customer is standing in it, it is one tap and
+              they cannot get it wrong. Still changeable on the plan.
+              Ground is preselected because most rooms are. */}
+          <p className="mt-5 mb-2 text-sm font-bold uppercase tracking-widest text-on-surface-variant">
+            Which floor is it on?
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {FLOORS.map((f) => {
+              const current = roomFloor ?? 0;
+              return (
+                <button
+                  key={f.value}
+                  type="button"
+                  onClick={() => onSetFloor?.(f.value)}
+                  style={{ minHeight: 44 }}
+                  className={`rounded-full border px-4 text-sm font-bold ${
+                    current === f.value
+                      ? "border-primary bg-primary/10 text-on-surface"
+                      : "border-outline-variant/40 text-on-surface-variant"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
 
           {/* The escape hatch for a room added by mistake.
               Only while it is empty — see onRemoveRoom. Plain text
