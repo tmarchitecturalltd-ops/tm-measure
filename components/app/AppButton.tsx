@@ -58,13 +58,20 @@ type Props = {
 };
 
 /**
- * 60px.
+ * 60px for the two buttons, 48 for an index row.
  *
- * Above the 44px minimum by enough to be comfortable one-handed, and
- * the same for every variant — a quiet row that is shorter than the
- * primary button is what made the page look like three pages.
+ * These were the same, on the reasoning that a quiet row shorter than
+ * the primary button is what made the page look like three pages.
+ * That was about *style* — radius, type, where the chevron goes — and
+ * those are still shared. Height is a different matter: six rows at
+ * 60px is 360px of secondary navigation, which on a 667px iPhone SE
+ * left the two things anyone came here for scrolling under it.
+ *
+ * 48 is still four above the 44px minimum, and the rows read as one
+ * list rather than six buttons, which is what they are.
  */
 const MIN_HEIGHT = 60;
+const MIN_HEIGHT_QUIET = 48;
 
 export default function AppButton({
   variant = "primary",
@@ -151,7 +158,12 @@ export default function AppButton({
   // Padding rather than justify-center: a label that is centred on one
   // control and left-aligned on the next is the same inconsistency in
   // a different place.
-  const style = { minHeight: MIN_HEIGHT, paddingTop: 12, paddingBottom: 12 };
+  const quiet = variant === "quiet";
+  const style = {
+    minHeight: quiet ? MIN_HEIGHT_QUIET : MIN_HEIGHT,
+    paddingTop: quiet ? 8 : 12,
+    paddingBottom: quiet ? 8 : 12,
+  };
 
   if (href) {
     return (

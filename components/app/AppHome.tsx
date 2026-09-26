@@ -69,6 +69,15 @@ export default function AppHome() {
   /** Tri-state: null until localStorage has been read on the client, so
    *  we never flash the wrong screen during hydration. */
   const [showWelcome, setShowWelcome] = useState<boolean | null>(null);
+  /**
+   * Is the More list open?
+   *
+   * Starts closed on every visit, deliberately — not remembered. The
+   * point of closing it is that the home screen fits, and a
+   * preference that quietly reopens it would undo that for the one
+   * customer who opened it once to read the privacy page.
+   */
+  const [moreOpen, setMoreOpen] = useState(false);
   /** In-flight survey, if any — powers the resume card. */
   const [draft, setDraft] = useState<ProjectDraftSnapshot | null>(null);
 
@@ -228,7 +237,21 @@ export default function AppHome() {
   // exactly like a screen with something above it that failed to
   // arrive -- and there is nothing up there to find.
   return (
-    <div className="flex h-[100dvh] flex-col overscroll-none bg-surface">
+    <div
+      className="flex flex-col overscroll-none bg-surface"
+      /*
+       * The viewport, less the notch, which the body has already
+       * padded for.
+       *
+       * `h-[100dvh]` measures the whole screen. But globals.css puts
+       * `padding-top: env(safe-area-inset-top)` on the body, so on a
+       * notched iPhone this column started 59px down and was still a
+       * full screen tall -- 59px of it below the bottom of the glass.
+       * The footer went with it. The page looked like it had lost its
+       * bottom margin when what it had actually lost was its bottom.
+       */
+      style={{ height: "calc(100dvh - env(safe-area-inset-top))" }}
+    >
       {/* Brand header — slimmer than the marketing nav, no menu links.
           Logo mark + wordmark on the left, tiny outbound link on the
           right. The hairline gold rule under the header echoes the
@@ -271,7 +294,7 @@ export default function AppHome() {
             which is the impression a form that saves as you go can
             least afford to give. */}
         {draft && (
-          <section>
+          <section className="mb-4">
             {/* Two rows, not five.
                 This was a label, the project name, the room count and
                 a "Resume →" line, in a card with 20px of padding --
@@ -291,20 +314,23 @@ export default function AppHome() {
           </section>
         )}
 
-
         {/* ── Hero ───────────────────────────────────────────────
-            Soft warm wash sits behind the hero copy and tile grid —
-            a low-opacity gold radial that fades into the surface so
-            the home feels warmer without saturating the brand. */}
-        <section
-          className={`tm-fade-up relative isolate ${draft ? "mt-6" : ""}`}
-          style={{
-            backgroundImage:
-              "radial-gradient(80% 60% at 0% 0%, rgba(184, 150, 80, 0.09) 0%, rgba(184, 150, 80, 0) 70%)",
-            borderRadius: "24px",
-            padding: "8px 4px 0",
-          }}
-        >
+            A gold radial wash used to sit behind this, with 24px
+            corners and 8px 4px 0 of padding. It was built to sit
+            behind the hero copy and the three tiles; the copy and the
+            tiles are both gone, so it was a decorative panel wrapped
+            around one button -- almost entirely hidden behind that
+            button's own solid gold, and its 4px of side padding made
+            Start a project 8px narrower than the resume card directly
+            above it. Two full-width buttons that are not the same
+            width is the sort of thing you see before you can say what
+            you are looking at, which is what "the spacing isn't
+            right" means.
+
+            No wash, no wrapper padding, and the gap above comes from
+            the resume card's own margin so there is one number to
+            change rather than two that have to agree. */}
+        <section className="tm-fade-up relative isolate">
           {/* "Self-measure your project" and "What are you building?"
               used to sit here, above a paragraph, above the button.
 
@@ -358,10 +384,15 @@ export default function AppHome() {
             Three at most. Someone who wants the fourth is looking for
             a submission ID, and that is what Project status is for. */}
         {recents.length > 0 && (
-          <section className="mt-8">
+          <section className="mt-6">
             <h3 className="font-label text-sm font-bold uppercase tracking-[0.25em] text-primary">
               Recent submissions
             </h3>
+            {/* Back to three.
+                This was cut to two to buy 58px towards fitting the
+                screen, which was the wrong place to take it from --
+                it is the customer's own history, and closing the More
+                list frees six times as much. */}
             <ul className="mt-2">
               {recents.slice(0, 3).map((r, i) => (
                 <li
@@ -422,24 +453,83 @@ export default function AppHome() {
           They stay at the bottom, below the tiles and the recent list,
           for the same reason as before: all of it is wanted
           occasionally and none of it first. */}
-      <nav className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pt-0 md:px-6">
-        <div className="border-t border-outline-variant/30 pt-4">
-          {/* The section title, set like the other section titles on
-              this page rather than like a slightly darker version of
-              the group headings underneath it. Three things in a row
-              all bold, all small caps, differing only in opacity is
-              not a hierarchy -- it is one texture. */}
-          <p className="font-label mb-1 text-sm font-bold uppercase tracking-[0.25em] text-primary">
-            More
-          </p>
-          {(["Help", "Your project", "TM Designs"] as const)
+      {/* And clear of the home indicator. The copyright line sat
+          directly under it, which on a modern iPhone means partly
+          behind it. */}
+      <nav
+        className="mx-auto w-full max-w-3xl shrink-0 px-4 pt-0 md:px-6"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
+      >
+        <div className="border-t border-outline-variant/30 pt-1">
+          {/* More is closed until it is asked for.
+              Six rows and three headings is about 330px. Pinned open
+              at the bottom of a 667px iPhone SE, it took half the
+              screen and pushed Continue and Start a project below the
+              fold -- so the two things every customer opens this app
+              to tap were the two things they had to scroll to find,
+              while Privacy and the staff console sat there in full
+              view. Trimming heights bought back a few pixels at a
+              time and never fixed the shape of the problem.
+              Closed, the whole page fits with room to spare whether
+              or not there is a project on the go. Open, it pushes the
+              page past the screen and scrolls -- which is fine,
+              because at that point the customer has asked for it. */}
+          {/* Named by what is in it, not by what is left over.
+              "More" is the word you use when you cannot be bothered to
+              say, and closing the list made that worse: before, a
+              customer could at least see Photo tips and Project status
+              sitting there. Now the row is all they get, so the row has
+              to do the telling -- a heading that says who it is for and
+              a line underneath naming what is actually behind it.
+              The contents line goes away once the list is open, where
+              the real rows say the same thing better. */}
+          <button
+            type="button"
+            onClick={() => setMoreOpen((v) => !v)}
+            aria-expanded={moreOpen}
+            style={{ minHeight: 48 }}
+            className="flex w-full items-center gap-3 text-left text-on-surface transition-colors hover:text-primary"
+          >
+            <span className="min-w-0 flex-1">
+              <span className="font-label block text-sm font-bold uppercase tracking-[0.25em] text-primary">
+                Help and your project
+              </span>
+              {/* Three, not four, and short enough that none of them
+                  can be cut off.
+                  Four ran past the end of a 375px phone and truncated
+                  to "Priva…", which is worse than not listing it: a
+                  line that exists to say what is inside should not
+                  itself be cut short. Project status came out rather
+                  than shrinking the type, because it is the one a
+                  customer looks for only after submitting, by which
+                  point they will open the list anyway. */}
+              {!moreOpen && (
+                <span className="mt-0.5 block truncate text-[13px] text-on-surface-variant">
+                  How it works · Photo tips · Privacy
+                </span>
+              )}
+            </span>
+            <span
+              className="material-symbols-outlined shrink-0 text-on-surface-variant/50 transition-transform"
+              style={{
+                fontSize: "20px",
+                transform: moreOpen ? "rotate(180deg)" : "none",
+              }}
+              aria-hidden
+            >
+              expand_more
+            </span>
+          </button>
+
+          {moreOpen &&
+            (["Help", "Your project", "TM Designs"] as const)
             .map((group) => ({
               group,
               items: moreItems.filter((it) => it.group === group),
             }))
             .filter((sec) => sec.items.length > 0)
             .map((sec, si) => (
-              <div key={sec.group} className={si > 0 ? "mt-5" : "mt-3"}>
+              <div key={sec.group} className={si > 0 ? "mt-3" : ""}>
                 {/* Below the title, above the rows, and lighter than
                     both — so the three levels read in the order they
                     are meant to. */}
@@ -472,7 +562,7 @@ export default function AppHome() {
           </ul>
               </div>
             ))}
-          <p className="mt-5 text-center text-sm uppercase tracking-widest text-on-surface-variant/70">
+          <p className="mt-2 text-center text-sm uppercase tracking-widest text-on-surface-variant/70">
             © {year} TM Architectural Designs Ltd · UK wide
           </p>
         </div>
