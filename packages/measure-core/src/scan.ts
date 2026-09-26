@@ -272,6 +272,58 @@ export function looksLikeStrayCapture(
 }
 
 /**
+ * Is this one room, or several the sensor joined together?
+ *
+ * The opposite failure to looksLikeStrayCapture, and the more
+ * expensive one. RoomPlan decides for itself where one room ends and
+ * the next begins, and through a wide opening or an open-plan ground
+ * floor it often decides they do not — returning a single room 8 m by
+ * 7 m with five doors and seven windows in it. That reached the
+ * drawing as one rectangle the size of a house, and nothing anywhere
+ * said so: it was only spotted by reading the dimensions on a
+ * submission and thinking they looked odd.
+ *
+ * Two tests, either of which is enough:
+ *
+ * Area. The largest room in an ordinary British house is a through
+ * lounge or a kitchen-diner at around 35 m2. Above 45 there is a good
+ * chance the sensor has joined two spaces. Not a certainty — genuine
+ * open-plan extensions run to 60 — which is why this warns and never
+ * deletes.
+ *
+ * Openings. Doors are the better signal, because a room's door count
+ * is bounded by how houses are built in a way its area is not: two or
+ * three is normal, four is a hall, and five means the capture has
+ * swallowed the hall and what opens off it. Counted together with
+ * windows because a merged capture usually has too many of both.
+ *
+ * The point is not to be right. It is that the only person who can
+ * fix a merged capture is the customer, while they are still in the
+ * house, and they cannot fix what nobody told them about.
+ */
+export const MERGED_CAPTURE_MIN_M2 = 45;
+export const MERGED_CAPTURE_MIN_DOORS = 5;
+export const MERGED_CAPTURE_MIN_OPENINGS = 9;
+
+export function looksLikeMergedCapture(opts: {
+  widthM: number;
+  lengthM: number;
+  floorAreaM2?: number;
+  doorCount?: number;
+  windowCount?: number;
+}): boolean {
+  const { widthM, lengthM, floorAreaM2, doorCount = 0, windowCount = 0 } = opts;
+  const area =
+    Number.isFinite(floorAreaM2) && (floorAreaM2 as number) > 0
+      ? (floorAreaM2 as number)
+      : widthM * lengthM;
+
+  if (Number.isFinite(area) && area >= MERGED_CAPTURE_MIN_M2) return true;
+  if (doorCount >= MERGED_CAPTURE_MIN_DOORS) return true;
+  return doorCount + windowCount >= MERGED_CAPTURE_MIN_OPENINGS;
+}
+
+/**
  * A room outline scaled into a small box, for a thumbnail.
  *
  * Returns an SVG path and the viewBox to draw it in, or null when

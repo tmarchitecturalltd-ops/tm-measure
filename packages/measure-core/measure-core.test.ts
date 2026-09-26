@@ -35,6 +35,7 @@ import {
   scanPolygonIsUsable,
   scanOutlineWorthKeeping,
   looksLikeStrayCapture,
+  looksLikeMergedCapture,
   outlineThumbnail,
 } from "./src/scan.ts";
 import type { RoomDraft } from "./src/types.ts";
@@ -1716,6 +1717,59 @@ test("a room at an angle to the scan's frame keeps its outline", () => {
     ),
     true,
     "a room 20m from the origin is the same room",
+  );
+});
+
+test("a capture the size of a house is flagged as more than one room", () => {
+  /*
+   * Built from the submission that prompted it: a "Room 1" of
+   * 8.44 x 6.74 m with five doors and seven windows, which is not a
+   * room, is the ground floor. It went through silently.
+   */
+  assert.equal(
+    looksLikeMergedCapture({
+      widthM: 8.44,
+      lengthM: 6.74,
+      doorCount: 5,
+      windowCount: 7,
+    }),
+    true,
+    "57 square metres with five doors is a floor, not a room",
+  );
+
+  // Each test on its own, so neither is carrying the other.
+  assert.equal(
+    looksLikeMergedCapture({ widthM: 8, lengthM: 7 }),
+    true,
+    "area alone is enough",
+  );
+  assert.equal(
+    looksLikeMergedCapture({ widthM: 4, lengthM: 3, doorCount: 5 }),
+    true,
+    "five doors in a small room means the hall came too",
+  );
+
+  // And the ordinary cases stay quiet, which is the harder half: a
+  // warning on every room is a warning on none.
+  assert.equal(
+    looksLikeMergedCapture({ widthM: 2.69, lengthM: 5.34, windowCount: 1 }),
+    false,
+    "the kitchen from the same scan is a kitchen",
+  );
+  assert.equal(
+    looksLikeMergedCapture({
+      widthM: 6.5,
+      lengthM: 5,
+      doorCount: 2,
+      windowCount: 3,
+    }),
+    false,
+    "a 32 square metre through lounge is a real room",
+  );
+  assert.equal(
+    looksLikeMergedCapture({ widthM: 2, lengthM: 1.5, doorCount: 1 }),
+    false,
+    "a downstairs loo is a real room",
   );
 });
 

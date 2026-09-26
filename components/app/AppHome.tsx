@@ -69,15 +69,6 @@ export default function AppHome() {
   /** Tri-state: null until localStorage has been read on the client, so
    *  we never flash the wrong screen during hydration. */
   const [showWelcome, setShowWelcome] = useState<boolean | null>(null);
-  /**
-   * Is the More list open?
-   *
-   * Starts closed on every visit, deliberately — not remembered. The
-   * point of closing it is that the home screen fits, and a
-   * preference that quietly reopens it would undo that for the one
-   * customer who opened it once to read the privacy page.
-   */
-  const [moreOpen, setMoreOpen] = useState(false);
   /** In-flight survey, if any — powers the resume card. */
   const [draft, setDraft] = useState<ProjectDraftSnapshot | null>(null);
 
@@ -125,11 +116,8 @@ export default function AppHome() {
    * room for -- "Status" and "Architect" sat next to each other with
    * nothing to say that one is for the customer and the other is not.
    *
-   * The architect console is still here and still shouldn't be. It is
-   * staff-only behind a shared secret, and listing it to homeowners
-   * invites them to try. Left in place for now because Charlie and
-   * Fabian reach it this way; it wants moving somewhere customers do
-   * not see before this goes to the App Store.
+   * The architect console used to be listed here and no longer is —
+   * see the note where it was removed.
    */
   const moreItems: {
     label: string;
@@ -138,11 +126,13 @@ export default function AppHome() {
     /**
      * Which group the row sits under.
      *
-     * One flat run of six rows made "Privacy" and "Architect console"
-     * look like the same kind of thing as "Photo tips", so a customer
-     * looking for help had to read all six to find the two that were
-     * for them. Grouped, the first heading is the only one most people
-     * ever need to read.
+     * One flat run made "Privacy" look like the same kind of thing as
+     * "Photo tips", so a customer looking for help had to read the
+     * lot to find the two that were for them.
+     *
+     * "TM Designs" survives for Reset calibration, which only appears
+     * on a scan-enabled build, so on a customer's phone there are two
+     * groups.
      */
     group: "Help" | "Your project" | "TM Designs";
     href?: string;
@@ -176,13 +166,17 @@ export default function AppHome() {
       group: "Your project",
       href: "/privacy",
     },
-    {
-      label: "Architect console",
-      blurb: "TM Designs staff only",
-      icon: "architecture",
-      group: "TM Designs",
-      href: "/architect",
-    },
+    /*
+     * Architect console is gone from here.
+     *
+     * It was always the odd one out: staff-only, behind a shared
+     * secret, listed to homeowners on the front screen of their own
+     * app — which is an invitation to try it. The note above this
+     * list has said it wanted moving for months.
+     *
+     * Charlie and Fabian reach /architect in a browser now. Nothing
+     * in the app links to it, deliberately.
+     */
     ...(calib && process.env.NEXT_PUBLIC_ENABLE_SCAN === "1"
       ? [
           {
@@ -388,13 +382,18 @@ export default function AppHome() {
             <h3 className="font-label text-sm font-bold uppercase tracking-[0.25em] text-primary">
               Recent submissions
             </h3>
-            {/* Back to three.
-                This was cut to two to buy 58px towards fitting the
-                screen, which was the wrong place to take it from --
-                it is the customer's own history, and closing the More
-                list frees six times as much. */}
+            {/* One.
+                This has been three, then two, then three again as
+                the page budget moved around. It settles at one
+                because Help and your project is now permanently open
+                and cannot give way, so the only block left that can
+                is this one — and of everything on the screen it is
+                the least urgent: a customer looking at their own
+                history is not mid-job. The latest submission is the
+                one that answers "did that go through"; Project
+                status, two rows below, has the rest. */}
             <ul className="mt-2">
-              {recents.slice(0, 3).map((r, i) => (
+              {recents.slice(0, 1).map((r, i) => (
                 <li
                   key={r.id}
                   className={`flex items-center justify-between gap-3 py-2.5 ${
@@ -460,69 +459,26 @@ export default function AppHome() {
         className="mx-auto w-full max-w-3xl shrink-0 px-4 pt-0 md:px-6"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
       >
-        <div className="border-t border-outline-variant/30 pt-1">
-          {/* More is closed until it is asked for.
-              Six rows and three headings is about 330px. Pinned open
-              at the bottom of a 667px iPhone SE, it took half the
-              screen and pushed Continue and Start a project below the
-              fold -- so the two things every customer opens this app
-              to tap were the two things they had to scroll to find,
-              while Privacy and the staff console sat there in full
-              view. Trimming heights bought back a few pixels at a
-              time and never fixed the shape of the problem.
-              Closed, the whole page fits with room to spare whether
-              or not there is a project on the go. Open, it pushes the
-              page past the screen and scrolls -- which is fine,
-              because at that point the customer has asked for it. */}
-          {/* Named by what is in it, not by what is left over.
-              "More" is the word you use when you cannot be bothered to
-              say, and closing the list made that worse: before, a
-              customer could at least see Photo tips and Project status
-              sitting there. Now the row is all they get, so the row has
-              to do the telling -- a heading that says who it is for and
-              a line underneath naming what is actually behind it.
-              The contents line goes away once the list is open, where
-              the real rows say the same thing better. */}
-          <button
-            type="button"
-            onClick={() => setMoreOpen((v) => !v)}
-            aria-expanded={moreOpen}
-            style={{ minHeight: 48 }}
-            className="flex w-full items-center gap-3 text-left text-on-surface transition-colors hover:text-primary"
-          >
-            <span className="min-w-0 flex-1">
-              <span className="font-label block text-sm font-bold uppercase tracking-[0.25em] text-primary">
-                Help and your project
-              </span>
-              {/* Three, not four, and short enough that none of them
-                  can be cut off.
-                  Four ran past the end of a 375px phone and truncated
-                  to "Priva…", which is worse than not listing it: a
-                  line that exists to say what is inside should not
-                  itself be cut short. Project status came out rather
-                  than shrinking the type, because it is the one a
-                  customer looks for only after submitting, by which
-                  point they will open the list anyway. */}
-              {!moreOpen && (
-                <span className="mt-0.5 block truncate text-[13px] text-on-surface-variant">
-                  How it works · Photo tips · Privacy
-                </span>
-              )}
-            </span>
-            <span
-              className="material-symbols-outlined shrink-0 text-on-surface-variant/50 transition-transform"
-              style={{
-                fontSize: "20px",
-                transform: moreOpen ? "rotate(180deg)" : "none",
-              }}
-              aria-hidden
-            >
-              expand_more
-            </span>
-          </button>
+        <div className="border-t border-outline-variant/30 pt-3">
+          {/* Always open. No toggle.
+              It was briefly a collapsible section, because six rows
+              and three headings pinned open at the bottom of a 667px
+              iPhone SE pushed Start a project below the fold. That
+              solved the height and created a worse problem: tapping
+              it expanded the list upwards over the button it had been
+              hiding, so the fix reproduced the bug on demand. And a
+              customer who cannot see Photo tips cannot know to want
+              it — a list of links nobody opens may as well not exist.
+              What made it fit instead was taking things out. The
+              staff console has gone, the toggle row with it, and
+              Recent submissions shows one. Everything left is
+              permanently visible and Start a project stays on screen
+              in every state. */}
+          <p className="font-label mb-1 text-sm font-bold uppercase tracking-[0.25em] text-primary">
+            Help and your project
+          </p>
 
-          {moreOpen &&
-            (["Help", "Your project", "TM Designs"] as const)
+          {(["Help", "Your project", "TM Designs"] as const)
             .map((group) => ({
               group,
               items: moreItems.filter((it) => it.group === group),

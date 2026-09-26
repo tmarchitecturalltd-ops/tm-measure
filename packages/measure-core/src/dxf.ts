@@ -27,6 +27,9 @@
  */
 
 import type { RoomDraft, RoomRotationDeg } from "./types";
+// Extension included — a value import has to resolve at runtime. See
+// the same note in floorplan.ts.
+import { rotatePointM } from "./types.ts";
 // Explicit .ts extension: this is a value import, not a type-only one,
 // so Node's native TypeScript loader has to resolve it at runtime when
 // `npm test` runs the suite directly. The type imports elsewhere in
@@ -66,18 +69,9 @@ export function roomCornersM(
     [w, l],
     [0, l],
   ];
-  const rot = ((rotationDeg % 360) + 360) % 360;
   return local.map(([x, z]) => {
-    switch (rot) {
-      case 90:
-        return { x: anchor.x - z, z: anchor.z + x };
-      case 180:
-        return { x: anchor.x - x, z: anchor.z - z };
-      case 270:
-        return { x: anchor.x + z, z: anchor.z - x };
-      default:
-        return { x: anchor.x + x, z: anchor.z + z };
-    }
+    const r = rotatePointM({ x, z }, rotationDeg);
+    return { x: anchor.x + r.x, z: anchor.z + r.z };
   });
 }
 

@@ -23,6 +23,10 @@
  */
 
 import type { RoomDraft, RoomRotationDeg } from "./types";
+// Extension included: this is a value import, so Node's ESM resolver
+// has to find it at runtime. The `import type` above is erased and
+// never resolved, which is why it gets away without one.
+import { rotatePointM } from "./types.ts";
 
 /** Snap granularity for room positions. Must divide common wall lengths cleanly. */
 export const GRID_STEP_M = 0.25;
@@ -81,46 +85,42 @@ export function roomBoundingBox(
   rotationDeg: RoomRotationDeg,
 ): { minX: number; minZ: number; maxX: number; maxZ: number } {
   const { widthM, lengthM } = size;
-  let dx: number, dz: number;
-  switch (rotationDeg) {
-    case 0:
-      dx = widthM;
-      dz = lengthM;
-      break;
-    case 90:
-      // The editor draws rooms with `rotate(deg 0 0)` after translating
-      // to the anchor. SVG rotates clockwise in this z-down system, so
-      // its matrix sends (x, z) to (-z, x): the far corner (w, l) lands
-      // at (-l, w) — down and to the LEFT of the anchor.
-      //
-      // This case and 270 were previously each other's values, which
-      // reflected the box through the anchor. The drawn room and its
-      // bounding box then disagreed for every quarter turn, so the
-      // auto-fit viewBox could scroll a rotated room out of sight and
-      // overlap checks compared the wrong region of the plan.
-      dx = -lengthM;
-      dz = widthM;
-      break;
-    case 180:
-      // (x, z) → (-x, -z). Symmetric, so this case was already right.
-      dx = -widthM;
-      dz = -lengthM;
-      break;
-    case 270:
-      // (x, z) → (z, -x): up and to the right.
-      dx = lengthM;
-      dz = -widthM;
-      break;
-  }
-  const x1 = anchor.x;
-  const z1 = anchor.z;
-  const x2 = anchor.x + dx;
-  const z2 = anchor.z + dz;
+
+  /*
+   * All four corners, not two.
+   *
+   * This used to take the anchor and the far corner and bound those,
+   * which is exact for a quarter turn — at 0, 90, 180 or 270 the
+   * other two corners always fall inside that box — and wrong for
+   * anything else. At 37 degrees the diagonal is not the widest part
+   * of the rectangle, so the box came out too small, and a box that
+   * is too small is worse than no box: overlap checks stop seeing
+   * collisions and the auto-fit viewBox clips the room it is meant
+   * to frame.
+   *
+   * Four corners costs nothing and is right at every angle. The
+   * cardinals give bit-identical results to the old switch, so
+   * nothing about an unrotated plan moves.
+   */
+  const corners = (
+    [
+      [0, 0],
+      [widthM, 0],
+      [widthM, lengthM],
+      [0, lengthM],
+    ] as [number, number][]
+  ).map(([x, z]) => {
+    const r = rotatePointM({ x, z }, rotationDeg);
+    return { x: anchor.x + r.x, z: anchor.z + r.z };
+  });
+
+  const xs = corners.map((c) => c.x);
+  const zs = corners.map((c) => c.z);
   return {
-    minX: Math.min(x1, x2),
-    minZ: Math.min(z1, z2),
-    maxX: Math.max(x1, x2),
-    maxZ: Math.max(z1, z2),
+    minX: Math.min(...xs),
+    minZ: Math.min(...zs),
+    maxX: Math.max(...xs),
+    maxZ: Math.max(...zs),
   };
 }
 

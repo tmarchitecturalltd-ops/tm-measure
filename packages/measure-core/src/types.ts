@@ -65,13 +65,72 @@ export type RoomAudio = {
 };
 
 /**
- * Rotation applied to a room rectangle on the floor plan canvas.
+ * Rotation applied to a room on the floor plan, in degrees clockwise.
  *
- * Restricted to the four cardinal rotations so adjacent rooms can snap
- * cleanly along their walls without sub-degree drift. Free rotation
- * would require wall-segment snapping which is out of scope for v1.
+ * This was `0 | 90 | 180 | 270`, and for a room the customer drags
+ * around the plan editor by hand that is still the right idea: four
+ * orientations let adjacent rooms snap along their walls without
+ * sub-degree drift, and nobody wants to fine-tune an angle with a
+ * fingertip. The editor still only ever produces those four.
+ *
+ * A scanned room is not placed by hand. RoomPlan reports the bearing
+ * of each room's longest wall, and a LiDAR survey now skips the plan
+ * editor entirely -- so the only thing the four-value restriction did
+ * there was round a real measurement to the nearest quarter turn on
+ * its way to CAD. A room captured at 37 degrees was drawn square. In
+ * a terrace where every room is square to every other that is
+ * invisible; in the houses that most need surveying -- a bay, a
+ * rear addition at an angle, anything on a curved road -- it silently
+ * squares off the very thing the customer is paying to have recorded.
+ *
+ * So: any angle. Cardinal values remain exact special cases in the
+ * geometry, which matters because the overwhelming majority of rooms
+ * still are 0, and floating-point rotation of a right angle does not
+ * always come back as a right angle.
  */
-export type RoomRotationDeg = 0 | 90 | 180 | 270;
+export type RoomRotationDeg = number;
+
+/**
+ * Turn a room-local point clockwise about the room's anchor.
+ *
+ * One implementation, because there were four: roomCornersM,
+ * roomOutlineM, localToWorld and roomBoundingBox each had their own
+ * switch over the four cardinal angles, all agreeing, and a fifth
+ * caller would have had to agree too. Getting one of them wrong puts
+ * a fixture through a wall on rotated rooms only, which is the sort
+ * of fault that survives a long time.
+ *
+ * Clockwise on screen, where z runs down the page — so 90 degrees
+ * sends (x, z) to (-z, x), matching what the four-way version did.
+ *
+ * The cardinals are returned exactly rather than through sin and cos.
+ * Math.cos(Math.PI / 2) is 6.1e-17, not zero, and almost every room
+ * in the app is at 0 or 90: letting that dust in would turn exact
+ * wall coordinates into 3.9999999999999996 throughout the DXF, and
+ * the mitring maths compares coordinates for equality.
+ */
+export function rotatePointM(
+  p: { x: number; z: number },
+  rotationDeg: RoomRotationDeg,
+): { x: number; z: number } {
+  const deg = ((rotationDeg % 360) + 360) % 360;
+  switch (deg) {
+    case 0:
+      return { x: p.x, z: p.z };
+    case 90:
+      return { x: -p.z, z: p.x };
+    case 180:
+      return { x: -p.x, z: -p.z };
+    case 270:
+      return { x: p.z, z: -p.x };
+    default: {
+      const r = (deg * Math.PI) / 180;
+      const cos = Math.cos(r);
+      const sin = Math.sin(r);
+      return { x: p.x * cos - p.z * sin, z: p.x * sin + p.z * cos };
+    }
+  }
+}
 
 /**
  * Floor plan placement for a single room, in real-world metres.

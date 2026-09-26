@@ -734,15 +734,30 @@ export default function MeasureIntakeForm() {
             { id: newId(), label: "Wall 4", lengthM: sr.lengthM.toFixed(2) },
           ];
 
-      // Rotation is snapped to a quarter turn because the plan editor
-      // only models four orientations. A room scanned at 8° off-square
-      // therefore sits square on screen. The measurements themselves are
-      // unaffected — this is the drawn position only — but it is the one
-      // place the merged scan loses information, and worth revisiting if
-      // the editor ever learns arbitrary angles.
+      /*
+       * The angle the sensor measured, kept.
+       *
+       * This used to round to the nearest quarter turn, because the
+       * plan editor models four orientations and a scanned room used
+       * to pass through it. Neither is true now: a LiDAR survey skips
+       * the plan editor entirely, and the geometry takes any angle.
+       * So the rounding was doing nothing except throwing away a real
+       * measurement on its way to CAD — a room captured at 37 degrees
+       * was drawn square.
+       *
+       * On a terrace where everything is square to everything else
+       * that is invisible. On the houses that most need surveying —
+       * a bay, a rear addition set at an angle, anything on a curved
+       * road — it quietly squares off the exact feature the customer
+       * is paying to have recorded, and it does so without saying a
+       * word, which is the worst way to be wrong.
+       *
+       * Rounded to a tenth of a degree. The sensor's bearing is not
+       * good to more than that, and a long tail of decimals in the
+       * drawing implies a precision we do not have.
+       */
       const raw = sr.rotationDeg ?? 0;
-      const snapped = (Math.round(raw / 90) * 90) % 360;
-      const rotationDeg = ((snapped + 360) % 360) as 0 | 90 | 180 | 270;
+      const rotationDeg = Number(((((raw % 360) + 360) % 360)).toFixed(1));
 
       nextPlacements[id] = {
         positionM: sr.originM

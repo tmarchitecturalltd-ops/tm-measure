@@ -39,7 +39,7 @@ import type {
   RoomRotationDeg,
   RoomStairs,
 } from "./types";
-import { FIXTURE_SIZES_M, fixtureFootprintM } from "./types.ts";
+import { FIXTURE_SIZES_M, fixtureFootprintM, rotatePointM } from "./types.ts";
 import { roomFootprint } from "./floorplan.ts";
 import { roomCornersM, sanitiseDxfText } from "./dxf.ts";
 
@@ -181,18 +181,9 @@ export function roomOutlineM(entry: PlanRoomInput): Pt[] {
   if (!poly || poly.length < 3) {
     return roomCornersM(anchor, roomFootprint(room), rotationDeg);
   }
-  const rot = ((rotationDeg % 360) + 360) % 360;
   return poly.map(({ x, z }) => {
-    switch (rot) {
-      case 90:
-        return { x: anchor.x - z, z: anchor.z + x };
-      case 180:
-        return { x: anchor.x - x, z: anchor.z - z };
-      case 270:
-        return { x: anchor.x + z, z: anchor.z - x };
-      default:
-        return { x: anchor.x + x, z: anchor.z + z };
-    }
+    const r = rotatePointM({ x, z }, rotationDeg);
+    return { x: anchor.x + r.x, z: anchor.z + r.z };
   });
 }
 
@@ -970,17 +961,8 @@ export function buildDetailedPlanDxf(
  */
 function localToWorld(entry: PlanRoomInput, p: Pt): Pt {
   const { anchor, rotationDeg } = entry;
-  const rot = ((rotationDeg % 360) + 360) % 360;
-  switch (rot) {
-    case 90:
-      return { x: anchor.x - p.z, z: anchor.z + p.x };
-    case 180:
-      return { x: anchor.x - p.x, z: anchor.z - p.z };
-    case 270:
-      return { x: anchor.x + p.z, z: anchor.z - p.x };
-    default:
-      return { x: anchor.x + p.x, z: anchor.z + p.z };
-  }
+  const r = rotatePointM(p, rotationDeg);
+  return { x: anchor.x + r.x, z: anchor.z + r.z };
 }
 
 /**

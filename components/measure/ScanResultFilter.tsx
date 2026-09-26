@@ -25,6 +25,7 @@
 
 import { useState } from "react";
 import {
+  looksLikeMergedCapture,
   looksLikeStrayCapture,
   outlineThumbnail,
   type RoomDraft,
@@ -194,6 +195,32 @@ export default function ScanResultFilter({ rooms, onConfirm, onBack }: Props) {
                           ? ` · ${r.scanCornerCount} corners, so a rectangle`
                           : ` · ${r.scanCornerCount} corners, outline not usable`}
                   </span>
+
+                  {/* Probably more than one room.
+                      The sensor decides for itself where one room
+                      ends, and through a wide opening it often
+                      decides it doesn't — so a whole ground floor
+                      comes back as one 8 x 7 m "room" with five doors
+                      in it, reaches CAD as a single rectangle the
+                      size of a house, and nobody notices until
+                      somebody reads the dimensions and thinks they
+                      look odd.
+                      Said here because here is the only place it can
+                      still be fixed, and only the customer can fix
+                      it: they are in the house and can walk it again
+                      room by room. Left ticked, because it is a guess
+                      and a genuine open-plan extension trips it. */}
+                  {looksLikeMergedCapture({
+                    widthM: w,
+                    lengthM: l,
+                    doorCount: r.doors?.length ?? 0,
+                    windowCount: r.windows?.length ?? 0,
+                  }) && (
+                    <span className="mt-1 block text-sm text-primary">
+                      This looks like more than one room — if it is,
+                      scan them separately
+                    </span>
+                  )}
                 </span>
               </button>
             </li>
