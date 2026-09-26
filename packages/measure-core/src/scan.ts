@@ -114,33 +114,97 @@ export function scanPolygonIsUsable(
   if (!polygon || polygon.length < 3) return false;
   if (!(widthM > 0) || !(lengthM > 0)) return false;
 
-  const xs = polygon.map((p) => p.x);
-  const zs = polygon.map((p) => p.z);
-  const spanX = Math.max(...xs) - Math.min(...xs);
-  const spanZ = Math.max(...zs) - Math.min(...zs);
-  if (!(spanX > 0) || !(spanZ > 0)) return false;
+  const box = orientedExtentM(polygon);
+  if (!box) return false;
 
-  // The outline's bounding box should resemble the reported footprint.
-  // Either orientation, since the polygon is axis-aligned in the shared
-  // frame while width/length come from the room's own longest wall.
+  // The outline's own box should resemble the reported footprint.
+  // Either order, because which of the two the plugin called "width"
+  // depends on its longest wall and carries no meaning here.
   const expected = [
     [widthM, lengthM],
     [lengthM, widthM],
   ];
   const near = (a: number, b: number) => Math.abs(a - b) <= Math.max(0.5, b * 0.25);
-  const boxMatches = expected.some(([w, l]) => near(spanX, w) && near(spanZ, l));
+  const boxMatches = expected.some(([w, l]) => near(box.w, w) && near(box.l, l));
   if (!boxMatches) return false;
 
-  // Shoelace area against the bounding box. A sliver fills almost none
-  // of its box; an L-shape, the worst honest case, still fills half.
+  // Shoelace area against that same box. A sliver fills almost none of
+  // it; an L-shape, the worst honest case, still fills half.
   let twiceArea = 0;
   for (let i = 0; i < polygon.length; i++) {
     const a = polygon[i];
     const b = polygon[(i + 1) % polygon.length];
     twiceArea += a.x * b.z - b.x * a.z;
   }
-  const fill = Math.abs(twiceArea) / 2 / (spanX * spanZ);
+  const fill = Math.abs(twiceArea) / 2 / (box.w * box.l);
   return fill >= 0.45;
+}
+
+/**
+ * The smallest rectangle that contains the outline, at any angle.
+ *
+ * This replaces a min/max over x and z, and the difference is the
+ * whole point. The polygon arrives in the scan's shared world frame,
+ * but `widthM` and `lengthM` are measured along the room's own longest
+ * wall — so the two were only comparable when the house happened to be
+ * square to the frame, which is decided by whichever direction the
+ * customer was facing when the scan started.
+ *
+ * A room at 45° to that frame has an axis-aligned span about 1.41x its
+ * true size. The tolerance is 25%, so the outline failed the check,
+ * was thrown away, and the room was drawn as a rectangle — the numbers
+ * still right, because they never came from the polygon. That is
+ * exactly the symptom reported: rooms coming back square for no
+ * visible reason, on scans that looked fine.
+ *
+ * Measured by testing each edge direction in turn. The minimum-area
+ * rectangle around a convex shape always lies flush with one of its
+ * edges; a room outline is close enough to convex, and its edges are
+ * its walls, so the winning direction is a wall direction — which is
+ * the frame the reported width and length are already in.
+ *
+ * Exported because it answers "how big is this room, really" without
+ * reference to which way the phone was pointing, which is worth having
+ * on its own.
+ */
+export function orientedExtentM(
+  polygon: { x: number; z: number }[],
+): { w: number; l: number } | null {
+  let best: { w: number; l: number; area: number } | null = null;
+
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % polygon.length];
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+    const edge = Math.hypot(dx, dz);
+    if (edge < 1e-6) continue;
+
+    // Unit vector along this edge, and its perpendicular.
+    const ux = dx / edge;
+    const uz = dz / edge;
+
+    let minU = Infinity;
+    let maxU = -Infinity;
+    let minV = Infinity;
+    let maxV = -Infinity;
+    for (const p of polygon) {
+      const u = p.x * ux + p.z * uz;
+      const v = -p.x * uz + p.z * ux;
+      if (u < minU) minU = u;
+      if (u > maxU) maxU = u;
+      if (v < minV) minV = v;
+      if (v > maxV) maxV = v;
+    }
+
+    const w = maxU - minU;
+    const l = maxV - minV;
+    if (!(w > 0) || !(l > 0)) continue;
+    const area = w * l;
+    if (!best || area < best.area) best = { w, l, area };
+  }
+
+  return best ? { w: best.w, l: best.l } : null;
 }
 
 /**

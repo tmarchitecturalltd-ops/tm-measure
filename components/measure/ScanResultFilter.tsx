@@ -80,16 +80,24 @@ export default function ScanResultFilter({ rooms, onConfirm, onBack }: Props) {
         doorway or the room next door in passing.
       </p>
 
-      {/* One room back from a whole-property scan usually means it
-          stopped early -- the sensor lost tracking, or Done was pressed
-          in the first room. Said here, where going back and scanning
-          again costs nothing, rather than discovered by Charlie when
-          the drawing turns out to be one box. */}
+      {/* One room is an answer, not a fault.
+          This was an amber warning saying "Only one room came back" and
+          telling the customer to go back and scan again. Nothing was
+          actually blocking them -- one room has always been enough to
+          carry on with -- but a yellow box that opens by contradicting
+          what you just did reads as a refusal, and it was taken as one:
+          reported as the app making you record at least two rooms.
+          Plenty of jobs are one room. Somebody scanning a single
+          kitchen for a rear extension has done exactly the right
+          thing and should not be told off for it. So: no amber, no
+          "only", and the possibility that it stopped early offered
+          second, as a thing they might want rather than a thing they
+          got wrong. */}
       {rooms.length === 1 && (
-        <p className="mb-3 rounded-lg bg-amber-100/70 px-3 py-2 text-sm text-amber-900">
-          Only one room came back. If you meant to scan more of the
-          house, go back and scan again — walk through each room and
-          press Done at the end, not in between.
+        <p className="mb-3 text-sm text-on-surface-variant">
+          One room is fine if that&apos;s the job. If you meant to scan
+          more, go back and walk through each room, pressing Done only
+          at the very end.
         </p>
       )}
 

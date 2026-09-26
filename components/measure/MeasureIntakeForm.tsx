@@ -5329,15 +5329,28 @@ export default function MeasureIntakeForm() {
                 const shaped = scanned.filter(
                   (r) => (r.floorPolygonM?.length ?? 0) >= 5,
                 ).length;
+                /*
+                 * Four lines of reassurance became one.
+                 *
+                 * It said the rooms were scanned with the sensor, then
+                 * that they were straight-sided, then that the layout
+                 * came from the scan, then that there was nothing to
+                 * arrange -- the last two being the same fact twice.
+                 * At the top of a screen the customer is meant to read
+                 * carefully before sending, spending a paragraph
+                 * saying "this went fine" buys nothing and pushes the
+                 * measurements, which are the part worth checking,
+                 * below the fold.
+                 */
                 return (
                   <p className="mb-3 rounded-lg bg-primary/10 px-3 py-2 text-sm text-on-surface">
                     <span className="font-semibold">
                       Scanned {scanned.length} room
-                      {scanned.length === 1 ? "" : "s"} with the sensor
+                      {scanned.length === 1 ? "" : "s"}
                     </span>
                     {shaped > 0
-                      ? ` — ${shaped} with alcoves or corners picked up. The layout came from the scan, so there is nothing to arrange.`
-                      : " — all measured as straight-sided rooms. The layout came from the scan, so there is nothing to arrange."}
+                      ? ` — ${shaped} with alcoves or corners. Nothing to arrange.`
+                      : " — nothing to arrange."}
                   </p>
                 );
               })()}
@@ -5429,24 +5442,65 @@ export default function MeasureIntakeForm() {
                         </p>
                       );
                     })}
-                    {(room.doors.length > 0 || room.windows.length > 0) && (
-                      <ul className="mt-2 list-inside list-disc text-sm text-on-surface-variant">
-                        {room.doors.map((d) =>
-                          d.widthM.trim() ? (
-                            <li key={d.id}>
-                              Door {d.widthM} m{d.note ? ` — ${d.note}` : ""}
+                    {/* Openings: always one line per kind. Never a list.
+                        A scanned room can report five doors and seven
+                        windows, and each used to get its own bullet
+                        ending "— Detected by scan": twelve lines
+                        saying the same four words, for one room, on
+                        the screen the customer is meant to check
+                        before sending. Nobody audits a list like that.
+                        They scroll past it, which is the opposite of
+                        what a review screen is for.
+                        The first attempt at this itemised anything up
+                        to four, on the reasoning that a short list is
+                        checkable. It is, but it also means the shape
+                        of this section changes depending on how many
+                        windows a room happens to have -- a bulleted
+                        list here, a summary line there -- and a
+                        customer reading down six rooms has to work out
+                        the format again each time. One line per kind,
+                        always, is the thing they can learn once.
+                        Identical widths collapse further: "3 doors —
+                        0.76 m", because "0.76 to 0.76" is a range with
+                        nothing in it. Every width still reaches the
+                        drawing; this is only what gets read back. */}
+                    {(() => {
+                      const summarise = (
+                        list: Opening[],
+                        one: string,
+                        many: string,
+                      ) => {
+                        const widths = list
+                          .map((o) => Number.parseFloat(o.widthM))
+                          .filter((n) => Number.isFinite(n) && n > 0)
+                          .sort((a, b) => a - b);
+                        if (!widths.length) return null;
+                        const lo = widths[0].toFixed(2);
+                        const hi = widths[widths.length - 1].toFixed(2);
+                        if (widths.length === 1) {
+                          return (
+                            <li key={one}>
+                              {one} {lo} m
                             </li>
-                          ) : null,
-                        )}
-                        {room.windows.map((w) =>
-                          w.widthM.trim() ? (
-                            <li key={w.id}>
-                              Window {w.widthM} m{w.note ? ` — ${w.note}` : ""}
-                            </li>
-                          ) : null,
-                        )}
-                      </ul>
-                    )}
+                          );
+                        }
+                        return (
+                          <li key={many}>
+                            {widths.length} {many} —{" "}
+                            {lo === hi ? `${lo} m` : `${lo} to ${hi} m wide`}
+                          </li>
+                        );
+                      };
+                      const doors = summarise(room.doors, "Door", "doors");
+                      const windows = summarise(room.windows, "Window", "windows");
+                      if (!doors && !windows) return null;
+                      return (
+                        <ul className="mt-2 list-inside list-disc text-sm text-on-surface-variant">
+                          {doors}
+                          {windows}
+                        </ul>
+                      );
+                    })()}
                     {room.irregularNotes.trim() && (
                       <p className="mt-3 text-sm text-on-surface">
                         <strong>Irregular:</strong> {room.irregularNotes}

@@ -572,12 +572,39 @@ enum CaptureSerializer {
         // shape is drawn at ARKit coordinates, far from the room.
         var polygonDicts: [[String: Any]] = []
         var originDict: [String: Any]? = nil
+        /*
+         * Wall endpoints are a position, not a shape.
+         *
+         * `fallbackPts` is every wall's two ends, in whatever order
+         * the walls came back. That is a perfectly good way to find
+         * where the room sits and how big its box is, which is what
+         * boundingMetrics uses it for. It is not a polygon: joining
+         * those points in array order traces a star, because nothing
+         * has sorted them into a perimeter.
+         *
+         * They were being sent as `floorPolygonM` anyway whenever the
+         * real floor surface was missing. Two consequences, one
+         * latent and one live. The latent one: if that star ever
+         * passed the usability check the drawing would contain it.
+         * The live one: `scanCornerCount` is taken from the length of
+         * this array, so a room with no floor outline at all reported
+         * sixteen corners instead of zero — and that number exists
+         * specifically to tell us which stage lost the outline. The
+         * diagnostic built to answer the "why is it still square"
+         * question could not answer it.
+         *
+         * So the polygon is sent only when it is one. The origin
+         * still comes from whatever points exist, because placing the
+         * room does not need them ordered.
+         */
         let outline = floorPoly.isEmpty ? fallbackPts : floorPoly
         if outline.count >= 3 {
             let minX = outline.map { $0.0 }.min() ?? 0
             let minZ = outline.map { $0.1 }.min() ?? 0
-            polygonDicts = outline.map { ["x": $0.0, "z": $0.1] }
             originDict = ["x": minX, "z": minZ]
+        }
+        if floorPoly.count >= 3 {
+            polygonDicts = floorPoly.map { ["x": $0.0, "z": $0.1] }
         }
 
         var roomDict: [String: Any] = [
@@ -893,7 +920,14 @@ enum CaptureSerializer {
             // an awkward room is the main thing a scan can do that a
             // tape and a form cannot, and it was being discarded one
             // step before anyone could use it.
-            let polygonDicts: [[String: Any]] = pts.map { ["x": $0.0, "z": $0.1] }
+            // Only when it is genuinely the floor surface's outline.
+            // `pts` falls back to unordered wall endpoints, which are
+            // fine for the origin and the bounding box above and are
+            // not a perimeter — see the note in serialize().
+            let polygonDicts: [[String: Any]] =
+                floorPoly.count >= 3
+                    ? floorPoly.map { ["x": $0.0, "z": $0.1] }
+                    : []
 
             roomDicts.append([
                 "id": UUID().uuidString,

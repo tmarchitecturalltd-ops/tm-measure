@@ -73,6 +73,33 @@ export default function BottomActionBar({
   nextDisabled,
   message,
 }: Props) {
+  /**
+   * Shrink the type to fit the longest word, not the longest label.
+   *
+   * The label already wraps, so a long *label* is fine — "Send to TM
+   * Designs" sits happily on three lines. What cannot wrap is a single
+   * word, and "MEASURING" at 14px with wide tracking is about 100px of
+   * text in an 86px-wide button, so it ran out over both edges.
+   *
+   * Measured by the longest word for that reason. Nine characters or
+   * more and the type drops to 11px with normal tracking, which fits
+   * the widest word the app currently uses in this slot with room to
+   * spare; seven or eight gets an intermediate step so "DESIGNS" is
+   * not shrunk as hard as it does not need to be. Below that nothing
+   * changes, which is almost every screen.
+   *
+   * A scale rather than a special case for one label: the next button
+   * to get a long verb would otherwise reopen this.
+   */
+  const fitLabel = (label: string) => {
+    const longest = label
+      .split(/\s+/)
+      .reduce((max, word) => Math.max(max, word.length), 0);
+    if (longest >= 9) return "text-[11px] tracking-normal";
+    if (longest >= 7) return "text-xs tracking-wide";
+    return "text-sm tracking-wide";
+  };
+
   return (
     <div
       className="shrink-0 border-t border-outline-variant/30 bg-surface px-4 pt-3"
@@ -90,7 +117,9 @@ export default function BottomActionBar({
             onClick={onBack}
             disabled={backDisabled}
             style={{ minHeight: 56 }}
-            className="min-w-0 flex-1 rounded-full border-2 border-outline px-3 text-sm font-bold uppercase leading-tight tracking-wide text-on-surface transition-colors disabled:opacity-35"
+            className={`min-w-0 flex-1 overflow-hidden rounded-full border-2 border-outline px-2 font-bold uppercase leading-tight text-on-surface transition-colors disabled:opacity-35 ${fitLabel(
+              backLabel,
+            )}`}
           >
             {backLabel}
           </button>
@@ -125,11 +154,13 @@ export default function BottomActionBar({
           // where three at different sizes read as clutter. Next stays
           // the obvious one to hit through colour and fill rather than
           // size.
-          // min-w-0 and tighter tracking because there are three
-          // controls in this row now: on a 375px screen the old
-          // padding and letter-spacing pushed a two-word label off the
-          // end of its own button.
-          className="min-w-0 flex-1 rounded-full bg-primary px-3 text-sm font-bold uppercase leading-tight tracking-wide text-on-primary shadow-lg shadow-primary/25 transition-all active:scale-[0.98] disabled:opacity-40 disabled:shadow-none"
+          // min-w-0, overflow-hidden and a type scale sized to the
+          // longest word — see fitLabel. On a 375px screen three
+          // controls share the row, so this button is about 110px
+          // wide and "START MEASURING" ran out over both ends of it.
+          className={`min-w-0 flex-1 overflow-hidden rounded-full bg-primary px-2 font-bold uppercase leading-tight text-on-primary shadow-lg shadow-primary/25 transition-all active:scale-[0.98] disabled:opacity-40 disabled:shadow-none ${fitLabel(
+            nextLabel,
+          )}`}
         >
           {nextLabel}
         </button>

@@ -1650,3 +1650,97 @@ test("an opening's reveals are square to the wall and its true width", () => {
     "and the opening is the width the customer gave",
   );
 });
+
+/* ── scanned outlines, at any angle ───────────────────────────────── */
+
+/** Turn a point about the origin. Degrees, because the bug is in degrees. */
+const turn = (p: { x: number; z: number }, deg: number) => {
+  const r = (deg * Math.PI) / 180;
+  return {
+    x: p.x * Math.cos(r) - p.z * Math.sin(r),
+    z: p.x * Math.sin(r) + p.z * Math.cos(r),
+  };
+};
+
+test("a room at an angle to the scan's frame keeps its outline", () => {
+  /*
+   * The bug this pins down discarded the outline of any room that was
+   * not square to the scan's world frame — and that frame is set by
+   * whichever way the customer happened to be facing when they
+   * started, so which rooms survived was effectively random.
+   *
+   * A 4 x 3 L-shape turned 40° has an axis-aligned span of about
+   * 5.0 x 4.6. Nothing like the 4 x 3 the walls reported, so the old
+   * min/max check rejected it and the room reached CAD as a
+   * rectangle — with correct dimensions, because those never came
+   * from the polygon. Exactly the reported symptom: rooms coming back
+   * square after a scan that looked fine.
+   */
+  const lShape = [
+    { x: 0, z: 0 },
+    { x: 4, z: 0 },
+    { x: 4, z: 2 },
+    { x: 2.5, z: 2 },
+    { x: 2.5, z: 3 },
+    { x: 0, z: 3 },
+  ];
+
+  assert.equal(
+    scanPolygonIsUsable(lShape, 4, 3),
+    true,
+    "square to the frame, which always worked",
+  );
+
+  for (const deg of [15, 40, 65, 90, 137]) {
+    const turned = lShape.map((p) => turn(p, deg));
+    assert.equal(
+      scanPolygonIsUsable(turned, 4, 3),
+      true,
+      `the same room at ${deg}° is the same room`,
+    );
+    assert.equal(
+      scanOutlineWorthKeeping(turned, 4, 3),
+      true,
+      `and its alcove is still worth drawing at ${deg}°`,
+    );
+  }
+
+  // Position must not matter either. Worth stating, because the
+  // oriented extent is built from dot products against absolute
+  // coordinates and a house is rarely scanned at the origin.
+  assert.equal(
+    scanPolygonIsUsable(
+      lShape.map((p) => ({ x: p.x + 20, z: p.z - 7 })),
+      4,
+      3,
+    ),
+    true,
+    "a room 20m from the origin is the same room",
+  );
+});
+
+test("a rotated sliver is still rejected", () => {
+  /*
+   * The other half of it. Making the check blind to rotation must not
+   * make it blind: a near-collinear spike hugging one wall is the
+   * failure the check exists for, and turning it 40° does not turn it
+   * into a room.
+   */
+  const sliver = [
+    { x: 0, z: 0 },
+    { x: 4.3, z: 0 },
+    { x: 4.3, z: 0.12 },
+    { x: 0, z: 0.1 },
+  ];
+  for (const deg of [0, 40, 90]) {
+    assert.equal(
+      scanPolygonIsUsable(
+        sliver.map((p) => turn(p, deg)),
+        4.34,
+        3.33,
+      ),
+      false,
+      `a spike at ${deg}° is not a 4.34 x 3.33 room`,
+    );
+  }
+});
