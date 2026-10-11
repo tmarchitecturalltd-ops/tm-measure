@@ -513,11 +513,28 @@ export default function AppHome() {
       {/* And clear of the home indicator. The copyright line sat
           directly under it, which on a modern iPhone means partly
           behind it. */}
+      {/* The list can grow; the buttons above it cannot be squeezed.
+          `shrink-0` on its own says "this block takes whatever height
+          it needs", which was fine until the height stopped being
+          fixed. A staff build adds a TM Designs group; a scan-enabled
+          one adds another row; the whole thing is 300px before any of
+          that. Each addition came straight out of the band above, and
+          when that band ran short it scrolled -- taking Continue and
+          Start a project with it. Which is the bug: the list was
+          winning an argument with the two buttons the app exists for.
+          Capping it at 45% settles the argument permanently. The main
+          band always keeps the other 55%, which holds the resume card
+          and the start button with room to spare, and the list
+          scrolls within itself if it ever outgrows its share. No
+          future row can push a button off the screen again. */}
       <nav
-        className="mx-auto w-full max-w-3xl shrink-0 px-4 pt-0 md:px-6"
-        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
+        className="mx-auto flex w-full max-w-3xl shrink-0 flex-col px-4 pt-0 md:px-6"
+        style={{
+          maxHeight: "45%",
+          paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)",
+        }}
       >
-        <div className="border-t border-outline-variant/30 pt-3">
+        <div className="min-h-0 flex-1 overflow-y-auto border-t border-outline-variant/30 pt-3">
           {/* Always open. No toggle.
               It was briefly a collapsible section, because six rows
               and three headings pinned open at the bottom of a 667px
@@ -576,10 +593,15 @@ export default function AppHome() {
           </ul>
               </div>
             ))}
-          <p className="mt-2 text-center text-sm uppercase tracking-widest text-on-surface-variant/70">
-            © {year} TM Architectural Designs Ltd · UK wide
-          </p>
         </div>
+        {/* Outside the scrolling part, so the foot of the page is the
+            foot of the page. Inside it, the copyright line wandered
+            off the bottom whenever the list was long enough to
+            scroll, which is the one circumstance in which a reader
+            most wants to know they have reached the end. */}
+        <p className="mt-2 shrink-0 text-center text-sm uppercase tracking-widest text-on-surface-variant/70">
+          © {year} TM Architectural Designs Ltd · UK wide
+        </p>
       </nav>
     </div>
   );
