@@ -64,7 +64,7 @@ import UIKit
  * say when a trace was taken under bad conditions rather than
  * presenting every number with equal confidence.
  */
-@available(iOS 12.0, *)
+@available(iOS 13.0, *)
 final class ARFloorTraceRunner: NSObject {
 
     enum TraceError: LocalizedError {
@@ -155,7 +155,9 @@ final class ARFloorTraceRunner: NSObject {
         config.planeDetection = [.horizontal]
         config.worldAlignment = .gravity
         sceneView?.session.run(config, options: [.resetTracking, .removeExistingAnchors])
-        setStatus("Move the phone slowly until the floor is found")
+        // The room's name, where someone tracing six rooms in a row
+        // can see which one they are in.
+        setStatus("\(title)\n\nMove the phone slowly until the floor is found")
     }
 
     // MARK: - Overlay chrome
@@ -365,19 +367,47 @@ final class ARFloorTraceRunner: NSObject {
 
     // MARK: - Finishing
 
-    @objc private func cancel(_ sender: Any?) {
+    /**
+     * Settle the JS promise exactly once, whether or not the modal is
+     * still around to dismiss.
+     *
+     * `modalVC` is weak, so if the view controller has already gone —
+     * the system dismissed it, the app was backgrounded and tidied up
+     * — then `modalVC?.dismiss(...)` does nothing at all, including
+     * not running its completion block. The promise on the JavaScript
+     * side then never resolves and never rejects, and the app sits
+     * there waiting for an answer that cannot arrive. That reads to a
+     * customer as a freeze, which is the worst way for this to fail:
+     * no error, no screen, nothing to report.
+     *
+     * The `settled` flag covers the other end of it. Cancel and Done
+     * can both be in flight, and resolving a Capacitor call twice is
+     * a crash, not a no-op.
+     */
+    private var settled = false
+
+    private func settle(_ result: Result<[String: Any], Error>) {
+        guard !settled else { return }
+        settled = true
         sceneView?.session.pause()
-        modalVC?.dismiss(animated: true) { [weak self] in
-            self?.completion(.failure(TraceError.cancelled))
+
+        let done = completion
+        if let vc = modalVC {
+            vc.dismiss(animated: true) { done(result) }
+        } else {
+            done(result)
         }
+    }
+
+    @objc private func cancel(_ sender: Any?) {
+        settle(.failure(TraceError.cancelled))
     }
 
     @objc private func finish() {
         guard points.count >= 2 else {
-            completion(.failure(TraceError.noPoints))
+            settle(.failure(TraceError.noPoints))
             return
         }
-        sceneView?.session.pause()
 
         /*
          * Out in the app's own frame.
@@ -404,10 +434,7 @@ final class ARFloorTraceRunner: NSObject {
             payload["heightM"] = Double(c - f)
         }
 
-        let done = completion
-        modalVC?.dismiss(animated: true) {
-            done(.success(payload))
-        }
+        settle(.success(payload))
     }
 
     private func trackingWord(_ s: ARCamera.TrackingState) -> String {
@@ -422,7 +449,7 @@ final class ARFloorTraceRunner: NSObject {
 
 // MARK: - ARSessionDelegate
 
-@available(iOS 12.0, *)
+@available(iOS 13.0, *)
 extension ARFloorTraceRunner: ARSessionDelegate {
 
     func session(_ session: ARSession, cameraDidChangeTrackingState camera: ARCamera) {
@@ -461,16 +488,13 @@ extension ARFloorTraceRunner: ARSessionDelegate {
     }
 
     func session(_ session: ARSession, didFailWithError error: Error) {
-        let done = completion
-        modalVC?.dismiss(animated: true) {
-            done(.failure(TraceError.trackingFailed(error.localizedDescription)))
-        }
+        settle(.failure(TraceError.trackingFailed(error.localizedDescription)))
     }
 }
 
 // MARK: - ARSCNViewDelegate
 
-@available(iOS 12.0, *)
+@available(iOS 13.0, *)
 extension ARFloorTraceRunner: ARSCNViewDelegate {
 
     func renderer(_ renderer: SCNSceneRenderer, didAdd node: SCNNode, for anchor: ARAnchor) {

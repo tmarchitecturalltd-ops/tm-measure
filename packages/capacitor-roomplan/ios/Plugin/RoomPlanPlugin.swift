@@ -139,7 +139,7 @@ public class RoomPlanPlugin: CAPPlugin {
      * if the camera is held by something else.
      */
     @objc public func isArTraceSupported(_ call: CAPPluginCall) {
-        if #available(iOS 12.0, *), ARFloorTraceRunner.isSupportedOnThisDevice() {
+        if #available(iOS 13.0, *), ARFloorTraceRunner.isSupportedOnThisDevice() {
             call.resolve(["supported": true])
         } else {
             call.resolve([
@@ -158,7 +158,7 @@ public class RoomPlanPlugin: CAPPlugin {
      * the scale from the device's own motion.
      */
     @objc public func startArFloorTrace(_ call: CAPPluginCall) {
-        guard #available(iOS 12.0, *), ARFloorTraceRunner.isSupportedOnThisDevice() else {
+        guard #available(iOS 13.0, *), ARFloorTraceRunner.isSupportedOnThisDevice() else {
             call.reject("This device cannot run ARKit world tracking.")
             return
         }
