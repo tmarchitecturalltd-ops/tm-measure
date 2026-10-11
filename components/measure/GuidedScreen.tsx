@@ -168,7 +168,14 @@ export default function GuidedScreen({
           >
             home
           </span>
-          Self measure
+          {/* "Home", not "Self measure".
+              The icon was a house and the word was the name of the
+              thing you were already doing, so the control read as a
+              label for the current screen rather than as a way off
+              it. The one place a customer looks for the way out is
+              the top-left corner, and the word they look for there
+              is Home. */}
+          Home
         </Link>
 
         {/* The menu has moved to the bottom bar.

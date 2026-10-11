@@ -3,6 +3,7 @@ import { WebPlugin } from "@capacitor/core";
 import type {
   ArFloorTraceOptions,
   ArFloorTraceResult,
+  ArHeightMeasureResult,
   RoomPlanPlugin,
   RoomPlanScanOptions,
   RoomPlanScanResult,
@@ -61,6 +62,14 @@ export class RoomPlanWeb extends WebPlugin implements RoomPlanPlugin {
   ): Promise<ArFloorTraceResult> {
     throw this.unimplemented(
       "Tracing a room with the camera only works inside the app.",
+    );
+  }
+
+  async startArHeightMeasure(
+    _options?: ArFloorTraceOptions,
+  ): Promise<ArHeightMeasureResult> {
+    throw this.unimplemented(
+      "Measuring a ceiling with the camera only works inside the app.",
     );
   }
 }

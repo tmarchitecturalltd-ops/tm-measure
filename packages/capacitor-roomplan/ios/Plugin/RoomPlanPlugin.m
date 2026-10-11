@@ -17,4 +17,5 @@ CAP_PLUGIN(RoomPlanPlugin, "RoomPlan",
     CAP_PLUGIN_METHOD(startHouseScan,     CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(isArTraceSupported, CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(startArFloorTrace,  CAPPluginReturnPromise);
+    CAP_PLUGIN_METHOD(startArHeightMeasure, CAPPluginReturnPromise);
 )

@@ -75,6 +75,34 @@ export interface RoomPlanPlugin {
    * brought nothing but the phone.
    */
   startArFloorTrace(options?: ArFloorTraceOptions): Promise<ArFloorTraceResult>;
+
+  /**
+   * Measure a ceiling height with the camera: tap the floor, then
+   * the ceiling above it.
+   *
+   * This exists because of how the alternative reads, not because
+   * the number is hard to get. A customer who has just traced a room
+   * without touching a tape, and is then asked to go and measure the
+   * ceiling by hand, reasonably concludes the app cannot really
+   * measure — and wonders why they are doing the rest of the house
+   * this way.
+   *
+   * More forgiving than tracing corners, because only the vertical
+   * gap between the two taps is used. A tap that lands off to one
+   * side costs nothing.
+   */
+  startArHeightMeasure(
+    options?: ArFloorTraceOptions,
+  ): Promise<ArHeightMeasureResult>;
+}
+
+export interface ArHeightMeasureResult {
+  /** Floor to ceiling, in metres. Never outside 1.8–4.5. */
+  heightM: number;
+  durationS: number;
+  complete: boolean;
+  trackingQuality: "good" | "limited" | "poor";
+  estimatedPoints: number;
 }
 
 export interface ArFloorTraceOptions {

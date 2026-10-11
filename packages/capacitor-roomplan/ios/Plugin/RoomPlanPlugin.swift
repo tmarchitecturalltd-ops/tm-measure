@@ -171,7 +171,52 @@ public class RoomPlanPlugin: CAPPlugin {
                 call.reject("No view controller available to present the camera.")
                 return
             }
-            let r = ARFloorTraceRunner(title: title) { [weak self] result in
+            let r = ARFloorTraceRunner(mode: .floor, title: title) { [weak self] result in
+                self?.runner = nil
+                switch result {
+                case .success(let payload):
+                    call.resolve(payload)
+                case .failure(let err):
+                    call.reject(err.localizedDescription)
+                }
+            }
+            self.runner = r
+            r.present(from: host)
+        }
+    }
+
+    /**
+     * Measure a ceiling height with the camera.
+     *
+     * The last thing in the app anyone had to reach for a tape for.
+     * Once the room outline comes from ARKit, being asked to climb
+     * up and measure one number by hand is not just an inconvenience:
+     * it tells the customer the app cannot really measure, which
+     * makes them wonder why they are doing the rest of it this way
+     * at all. The gate was removed; the impression it left had to go
+     * too.
+     *
+     * Two taps on a wall, floor then ceiling. Only the vertical gap
+     * between them is used, so a tap that lands a little off to one
+     * side costs nothing — which makes this considerably more
+     * forgiving than tracing corners, where sideways error is the
+     * error.
+     */
+    @objc public func startArHeightMeasure(_ call: CAPPluginCall) {
+        guard #available(iOS 13.0, *), ARFloorTraceRunner.isSupportedOnThisDevice() else {
+            call.reject("This device cannot run ARKit world tracking.")
+            return
+        }
+
+        let title = call.getString("title") ?? "Measure the ceiling"
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            guard let host = self.bridge?.viewController else {
+                call.reject("No view controller available to present the camera.")
+                return
+            }
+            let r = ARFloorTraceRunner(mode: .height, title: title) { [weak self] result in
                 self?.runner = nil
                 switch result {
                 case .success(let payload):

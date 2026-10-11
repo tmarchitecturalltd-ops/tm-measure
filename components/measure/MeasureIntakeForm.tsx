@@ -344,6 +344,42 @@ export default function MeasureIntakeForm() {
     };
   }, []);
 
+  /**
+   * Can this phone trace with ARKit?
+   *
+   * Asked separately from the LiDAR probe above and answered far more
+   * often: world tracking needs an A9, which is every iPhone still in
+   * service, where RoomPlan needs a Pro. This is what decides whether
+   * a non-LiDAR customer gets the camera tracer or the old corner-tap
+   * overlay with its tape-measured ceiling.
+   *
+   * Same 2 s race as the LiDAR probe, for the same reason: in the
+   * browser the web fallback resolves instantly, but a promise that
+   * never settles would leave the customer looking at a scan button
+   * that does nothing.
+   */
+  const [arTraceSupport, setArTraceSupport] = useState<
+    "unknown" | "yes" | "no"
+  >("unknown");
+  useEffect(() => {
+    let alive = true;
+    const timeout = new Promise<{ supported: false }>((resolve) =>
+      setTimeout(() => resolve({ supported: false }), 2000),
+    );
+    (async () => {
+      try {
+        const r = await Promise.race([RoomPlan.isArTraceSupported(), timeout]);
+        if (!alive) return;
+        setArTraceSupport(r.supported ? "yes" : "no");
+      } catch {
+        if (alive) setArTraceSupport("no");
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   // Pre-fill the project type from the home tile (e.g. /measure?type=loft).
   // Done on mount so we don't break SSR/static-export render paths.
   useEffect(() => {
@@ -1016,6 +1052,128 @@ export default function MeasureIntakeForm() {
    * worse of the two tools by a wide margin.
    */
   /**
+   * Trace a room with ARKit — the non-LiDAR way to measure.
+   *
+   * This replaces the corner-tap overlay as the default on a phone
+   * without LiDAR, and the reason is the ceiling height. That overlay
+   * works out a room's proportions from perspective, which a single
+   * camera can do; what it cannot do is scale, so it required a
+   * tape-measured ceiling before it would start and multiplied any
+   * error in that figure through every wall in the room. It was a
+   * gate the customer had to pass before the app would even open the
+   * camera, and it made "measure one thing and we do the rest" the
+   * honest version of the pitch.
+   *
+   * ARKit takes scale from the phone's own motion, so there is
+   * nothing to measure and nothing to type. Tested side by side it
+   * was the better tool, which is the whole argument.
+   *
+   * The old overlay is still there and still reachable when ARKit
+   * cannot run, because a customer whose phone refuses world
+   * tracking should get the lesser tool rather than no tool.
+   */
+  const startArTrace = useCallback(
+    async (roomId: string) => {
+      setHouseScanError(null);
+      setHouseScanning(true);
+      setScanAttempts((n) => n + 1);
+      try {
+        const room = rooms.find((r) => r.id === roomId);
+        const result = await RoomPlan.startArFloorTrace({
+          title: room?.name?.trim() || "Trace this room",
+        });
+        const pts = result?.pointsM ?? [];
+        if (pts.length < 3) {
+          setHouseScanError(
+            "That trace only caught a couple of corners. Walk the room and tap each one.",
+          );
+          return;
+        }
+
+        /*
+         * Walls straight off the outline.
+         *
+         * Every wall is the distance between two corners the customer
+         * pointed at, which is the one thing this method knows for
+         * certain. No bounding box, no inference — a six-sided room
+         * produces six walls because six corners were tapped.
+         */
+        const walls: WallSegment[] = pts.map((p, i) => {
+          const q = pts[(i + 1) % pts.length];
+          return {
+            id: newId(),
+            label: `Wall ${i + 1}`,
+            lengthM: Math.hypot(q.x - p.x, q.z - p.z).toFixed(2),
+          };
+        });
+
+        // Room-local, measured from the outline's own corner — the
+        // same convention a RoomPlan scan uses, so the plan editor
+        // and the DXF cannot tell the two apart.
+        const minX = Math.min(...pts.map((p) => p.x));
+        const minZ = Math.min(...pts.map((p) => p.z));
+        const local = pts.map((p) => ({
+          x: Number((p.x - minX).toFixed(3)),
+          z: Number((p.z - minZ).toFixed(3)),
+        }));
+        setRooms((prev) =>
+          prev.map((r) =>
+            r.id !== roomId
+              ? r
+              : {
+                  ...r,
+                  walls,
+                  // ARKit reports the ceiling when it finds a plane
+                  // above the camera. When it does not, the existing
+                  // answer stands — no guessing, because this is the
+                  // number the old scanner proved you cannot guess.
+                  ceilingHeightM: result.heightM
+                    ? result.heightM.toFixed(2)
+                    : r.ceilingHeightM || defaultCeilingHeightM.trim(),
+                  shape: "custom",
+                  floorPolygonM: local,
+                  measuredByScan: true,
+                  scanCornerCount: pts.length,
+                  /*
+                   * Say how the trace went, in the notes.
+                   *
+                   * Tracking quality and how many corners ARKit had
+                   * to estimate are the difference between a drawing
+                   * to build from and one to check — and the only
+                   * person who can judge that is whoever opens it in
+                   * CAD. Stamped here rather than kept in the app,
+                   * where nobody downstream would ever see it.
+                   */
+                  notes: [
+                    r.notes?.trim(),
+                    `[Camera trace ${new Date().toISOString().slice(0, 10)} · ` +
+                      `${pts.length} corners · tracking ${result.trackingQuality}` +
+                      (result.estimatedPoints
+                        ? ` · ${result.estimatedPoints} corners estimated`
+                        : "") +
+                      "]",
+                  ]
+                    .filter(Boolean)
+                    .join("\n"),
+                },
+          ),
+        );
+
+        setScanAttempts(0);
+        setForcedAllView(false);
+        setGuidedMode(true);
+        setTimeout(() => draftSaver.current.flush(), 0);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (!/cancel/i.test(message)) setHouseScanError(message);
+      } finally {
+        setHouseScanning(false);
+      }
+    },
+    [rooms, defaultCeilingHeightM],
+  );
+
+  /**
    * Lets openBannerAutoScan reach scanRoom despite being declared
    * above it. Reordering the declarations would work too, but scanRoom
    * needs arSupport and startRoomScan, which sit lower still.
@@ -1024,13 +1182,19 @@ export default function MeasureIntakeForm() {
 
   const scanRoom = useCallback(
     (roomId: string) => {
+      // Best tool this phone has, in order: LiDAR, then ARKit, then
+      // the corner-tap overlay.
       if (arSupport === "yes") {
         void startRoomScan(roomId);
         return;
       }
+      if (arTraceSupport === "yes") {
+        void startArTrace(roomId);
+        return;
+      }
       setScanRoomId(roomId);
     },
-    [arSupport, startRoomScan],
+    [arSupport, arTraceSupport, startRoomScan, startArTrace],
   );
   scanRoomRef.current = scanRoom;
 
@@ -5234,6 +5398,33 @@ export default function MeasureIntakeForm() {
                 placements={placements}
                 onPlacementChange={updatePlacement}
                 onRoomChange={setRoom}
+                /* Camera height measurement, when the phone can do
+                   it. Applies to every room on the floor, which is
+                   the same scope the typed field has — one height
+                   per storey, however it was arrived at. */
+                onMeasureCeiling={
+                  arTraceSupport === "yes"
+                    ? async (floor: number) => {
+                        try {
+                          const r = await RoomPlan.startArHeightMeasure({
+                            title: "Measure the ceiling",
+                          });
+                          const h = r.heightM.toFixed(2);
+                          setRooms((prev) =>
+                            prev.map((room) =>
+                              (placements[room.id]?.floor ?? 0) === floor
+                                ? { ...room, ceilingHeightM: h }
+                                : room,
+                            ),
+                          );
+                        } catch (err) {
+                          const m =
+                            err instanceof Error ? err.message : String(err);
+                          if (!/cancel/i.test(m)) setHouseScanError(m);
+                        }
+                      }
+                    : undefined
+                }
                 /*
                  * Offered only on an empty floor.
                  *

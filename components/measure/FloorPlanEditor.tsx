@@ -115,6 +115,14 @@ export type FloorPlanEditorProps = {
    */
   onRoomChange?: (roomId: string, patch: Partial<RoomDraft>) => void;
   /**
+   * Measure the ceiling with the camera instead of typing it.
+   *
+   * Absent on a phone that cannot run ARKit, which is how the button
+   * knows whether to appear — there is no point offering a camera
+   * measurement that will open and immediately fail.
+   */
+  onMeasureCeiling?: (floor: number) => void;
+  /**
    * Start measuring another room, then come back here.
    *
    * The plan is where a missing room gets noticed, and the way to add
@@ -149,6 +157,7 @@ export default function FloorPlanEditor({
   placements,
   onPlacementChange,
   onRoomChange,
+  onMeasureCeiling,
   onAddRoom,
   seeded = false,
   onSeeded,
@@ -1961,6 +1970,36 @@ export default function FloorPlanEditor({
               className="w-28 rounded-lg border border-[#d9d3c8] bg-white px-3 py-2 text-sm"
             />
           </label>
+          {/* Measure it, don't type it.
+              This was the last number in the app that needed a tape,
+              and on a survey where everything else came off the
+              camera that is not a small inconvenience — it tells the
+              customer the app cannot really measure, and invites the
+              question of why they are doing the rest of the house
+              this way. Two taps on a wall, floor then ceiling.
+              Only shown when the phone can actually do it; typing
+              stays for everyone else, and for anyone who would
+              rather. */}
+          {onMeasureCeiling && (
+            <button
+              type="button"
+              /* Which floor, from here — the parent has no idea
+                 which one is on screen, and the height applies to
+                 the floor being looked at. */
+              onClick={() => onMeasureCeiling(currentFloor)}
+              style={{ minHeight: 44 }}
+              className="inline-flex items-center gap-1.5 rounded-full border border-primary/50 px-4 text-sm font-bold text-on-surface"
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: "18px" }}
+                aria-hidden
+              >
+                straighten
+              </span>
+              Measure it
+            </button>
+          )}
           <p className="flex-1 py-2 text-sm text-[#6e6a5f]">
             {ceilingIsMixed
               ? "Rooms on this floor differ. Typing here sets them all to the same."
