@@ -49,6 +49,64 @@ export interface RoomPlanPlugin {
    * Rejects with a readable reason on anything older.
    */
   startHouseScan(options?: RoomPlanScanOptions): Promise<RoomPlanScanResult>;
+
+  /**
+   * Can this device trace a floor with ARKit?
+   *
+   * A far lower bar than `isSupported`, which needs LiDAR. World
+   * tracking runs on an A9 chip and better — every iPhone still in
+   * use — so this is true almost everywhere `isSupported` is false.
+   */
+  isArTraceSupported(): Promise<{ supported: boolean; reason?: string }>;
+
+  /**
+   * Trace a room by tapping its corners, to real-world scale.
+   *
+   * The significant thing is what it does not need. Our camera
+   * scanner works out a room's proportions from perspective, but a
+   * photograph carries no scale, so the app asks the customer to
+   * tape-measure the ceiling and derives everything from that. It is
+   * a hard gate before the scanner will start, and an error in it
+   * multiplies through every dimension in the room.
+   *
+   * ARKit gets scale from the device's own motion instead — visual
+   * and inertial, no LiDAR, no reference object, nothing to measure.
+   * This is the call that lets a customer measure a room having
+   * brought nothing but the phone.
+   */
+  startArFloorTrace(options?: ArFloorTraceOptions): Promise<ArFloorTraceResult>;
+}
+
+export interface ArFloorTraceOptions {
+  /** Shown at the top of the camera view, e.g. the room's name. */
+  title?: string;
+}
+
+export interface ArFloorTraceResult {
+  /**
+   * The corners the customer tapped, in metres, in the order they
+   * walked them. Same shape and frame as `RoomPlanRoom.floorPolygonM`,
+   * so everything downstream treats a traced room and a scanned one
+   * identically.
+   */
+  pointsM: { x: number; z: number }[];
+  /**
+   * Floor-to-ceiling height, when ARKit found a plane above the
+   * camera at a plausible height. Absent rather than guessed — a room
+   * with no detected ceiling carries none and the app asks.
+   */
+  heightM?: number;
+  durationS: number;
+  complete: boolean;
+  /**
+   * The worst tracking state seen during the trace, not the last.
+   *
+   * A trace that lost tracking halfway and recovered has a join in
+   * it, and the measurements either side may not agree. Reported so
+   * the app can say when a room was traced under poor conditions
+   * rather than presenting every number with equal confidence.
+   */
+  trackingQuality: "good" | "limited" | "poor";
 }
 
 /** Optional knobs for `startScan`. */

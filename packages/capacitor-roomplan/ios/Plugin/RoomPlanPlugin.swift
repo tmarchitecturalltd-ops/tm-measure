@@ -115,4 +115,73 @@ public class RoomPlanPlugin: CAPPlugin {
             r.present(from: host)
         }
     }
+
+    /*
+     * ── ARKit floor tracing ──────────────────────────────────────
+     *
+     * Lives in the RoomPlan plugin despite not being RoomPlan, and
+     * that is a deliberate trade rather than an oversight. A second
+     * Capacitor plugin means a second podspec, a second package, and
+     * another thing for the iOS build to get wrong — for two methods
+     * that serve the same screen as the three above and are chosen
+     * between at the same moment. The class name is now a little
+     * wrong; the alternative was more moving parts in a pipeline we
+     * cannot compile locally.
+     */
+
+    /**
+     * Can this device trace a floor with ARKit?
+     *
+     * A much lower bar than RoomPlan: world tracking runs on anything
+     * with an A9 or better, so in practice every iPhone still in use.
+     * Worth asking separately all the same — ARKit is unavailable in
+     * the simulator, and a device can have the chip and still refuse
+     * if the camera is held by something else.
+     */
+    @objc public func isArTraceSupported(_ call: CAPPluginCall) {
+        if #available(iOS 12.0, *), ARFloorTraceRunner.isSupportedOnThisDevice() {
+            call.resolve(["supported": true])
+        } else {
+            call.resolve([
+                "supported": false,
+                "reason":
+                    "This device cannot run ARKit world tracking, so it cannot measure without a tape."
+            ])
+        }
+    }
+
+    /**
+     * Trace a room's outline by tapping its corners, to real scale.
+     *
+     * The point of this method is what it does *not* ask for: no
+     * ceiling height, no reference object, no tape. ARKit supplies
+     * the scale from the device's own motion.
+     */
+    @objc public func startArFloorTrace(_ call: CAPPluginCall) {
+        guard #available(iOS 12.0, *), ARFloorTraceRunner.isSupportedOnThisDevice() else {
+            call.reject("This device cannot run ARKit world tracking.")
+            return
+        }
+
+        let title = call.getString("title") ?? "Trace this room"
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            guard let host = self.bridge?.viewController else {
+                call.reject("No view controller available to present the camera.")
+                return
+            }
+            let r = ARFloorTraceRunner(title: title) { [weak self] result in
+                self?.runner = nil
+                switch result {
+                case .success(let payload):
+                    call.resolve(payload)
+                case .failure(let err):
+                    call.reject(err.localizedDescription)
+                }
+            }
+            self.runner = r
+            r.present(from: host)
+        }
+    }
 }

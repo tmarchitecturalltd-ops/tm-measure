@@ -1,6 +1,8 @@
 import { WebPlugin } from "@capacitor/core";
 
 import type {
+  ArFloorTraceOptions,
+  ArFloorTraceResult,
   RoomPlanPlugin,
   RoomPlanScanOptions,
   RoomPlanScanResult,
@@ -34,6 +36,31 @@ export class RoomPlanWeb extends WebPlugin implements RoomPlanPlugin {
   ): Promise<RoomPlanScanResult> {
     throw this.unimplemented(
       "Whole-property scanning is only available on iOS 17+ devices with a LiDAR sensor.",
+    );
+  }
+
+  /*
+   * ARKit floor tracing is native too, for now.
+   *
+   * WebXR can do world tracking in a browser, and one day this could
+   * be a real implementation rather than a refusal — which would
+   * matter, because it would put scale-without-a-tape into the
+   * desktop preview where it can actually be iterated on. Not today:
+   * WebXR's immersive-ar mode is Android Chrome only, so it would
+   * cover neither the iOS app nor the laptop we develop against.
+   */
+  async isArTraceSupported(): Promise<{ supported: boolean; reason?: string }> {
+    return {
+      supported: false,
+      reason: "Tracing a room with the camera only works inside the app.",
+    };
+  }
+
+  async startArFloorTrace(
+    _options?: ArFloorTraceOptions,
+  ): Promise<ArFloorTraceResult> {
+    throw this.unimplemented(
+      "Tracing a room with the camera only works inside the app.",
     );
   }
 }

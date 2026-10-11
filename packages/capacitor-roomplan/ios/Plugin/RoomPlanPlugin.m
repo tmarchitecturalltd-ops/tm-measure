@@ -12,7 +12,9 @@
 // implemented", which reads like a platform problem rather than a
 // registration one.
 CAP_PLUGIN(RoomPlanPlugin, "RoomPlan",
-    CAP_PLUGIN_METHOD(isSupported,    CAPPluginReturnPromise);
-    CAP_PLUGIN_METHOD(startScan,      CAPPluginReturnPromise);
-    CAP_PLUGIN_METHOD(startHouseScan, CAPPluginReturnPromise);
+    CAP_PLUGIN_METHOD(isSupported,        CAPPluginReturnPromise);
+    CAP_PLUGIN_METHOD(startScan,          CAPPluginReturnPromise);
+    CAP_PLUGIN_METHOD(startHouseScan,     CAPPluginReturnPromise);
+    CAP_PLUGIN_METHOD(isArTraceSupported, CAPPluginReturnPromise);
+    CAP_PLUGIN_METHOD(startArFloorTrace,  CAPPluginReturnPromise);
 )

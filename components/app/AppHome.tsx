@@ -177,6 +177,64 @@ export default function AppHome() {
      * Charlie and Fabian reach /architect in a browser now. Nothing
      * in the app links to it, deliberately.
      */
+    /*
+     * The ARKit trace probe. Staff builds only, and temporary.
+     *
+     * This is here to answer one question before any of it is built
+     * out: does ARKit give us the right number of metres? Trace a
+     * room whose walls you have taped, read the lengths back, compare.
+     * If they match, scale without a tape is real and the camera
+     * scanner can stop demanding a ceiling height. If they do not, we
+     * have learned that for the price of one build rather than a
+     * month of work hung off a wrong assumption.
+     *
+     * Deliberately crude — it reports into an alert. It is not a
+     * feature, it is an instrument, and it comes out once it has
+     * told us what we need.
+     */
+    ...(process.env.NEXT_PUBLIC_ENABLE_SCAN === "1"
+      ? [
+          {
+            label: "Trace a room (test)",
+            blurb: "ARKit scale check",
+            icon: "straighten",
+            group: "TM Designs" as const,
+            onClick: async () => {
+              try {
+                const { RoomPlan } = await import(
+                  "@tm-designs/capacitor-roomplan"
+                );
+                const can = await RoomPlan.isArTraceSupported();
+                if (!can.supported) {
+                  alert(can.reason ?? "Not supported on this device.");
+                  return;
+                }
+                const r = await RoomPlan.startArFloorTrace({
+                  title: "Trace a room",
+                });
+                const pts = r.pointsM ?? [];
+                // Wall lengths between consecutive corners, plus the
+                // closing wall. These are the numbers to hold a tape
+                // against.
+                const walls = pts.map((p, i) => {
+                  const q = pts[(i + 1) % pts.length];
+                  return Math.hypot(q.x - p.x, q.z - p.z).toFixed(3);
+                });
+                alert(
+                  [
+                    `${pts.length} corners · tracking ${r.trackingQuality}`,
+                    r.heightM ? `ceiling ${r.heightM.toFixed(3)} m` : "no ceiling found",
+                    "",
+                    ...walls.map((w, i) => `wall ${i + 1}: ${w} m`),
+                  ].join("\n"),
+                );
+              } catch (e) {
+                alert(`Trace failed: ${(e as Error).message}`);
+              }
+            },
+          },
+        ]
+      : []),
     ...(calib && process.env.NEXT_PUBLIC_ENABLE_SCAN === "1"
       ? [
           {

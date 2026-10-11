@@ -19,4 +19,10 @@ Pod::Spec.new do |s|
   # at 14.0 without preventing RoomPlan symbols from resolving on newer
   # devices.
   s.weak_frameworks = ['RoomPlan']
+  # ARKit and SceneKit, for the floor tracer. Linked normally rather
+  # than weakly: both have existed since iOS 11, comfortably below this
+  # pod's 14.0 target, so there is no version to guard against. The
+  # guard that matters for them is ARWorldTrackingConfiguration.isSupported,
+  # which is about the chip and is checked at runtime.
+  s.frameworks = ['ARKit', 'SceneKit']
 end
