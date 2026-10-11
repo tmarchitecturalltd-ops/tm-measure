@@ -107,6 +107,16 @@ export interface ArFloorTraceResult {
    * rather than presenting every number with equal confidence.
    */
   trackingQuality: "good" | "limited" | "poor";
+  /**
+   * How many corners landed on ARKit's guess at the floor rather than
+   * on floor it had actually mapped.
+   *
+   * Corners are the least-mapped part of any real room, because they
+   * are where the furniture is, so some estimating is normal. A trace
+   * where most of the corners were estimated is a trace to be less
+   * sure of.
+   */
+  estimatedPoints: number;
 }
 
 /** Optional knobs for `startScan`. */

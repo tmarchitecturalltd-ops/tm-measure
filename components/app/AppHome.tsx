@@ -222,7 +222,10 @@ export default function AppHome() {
                 });
                 alert(
                   [
-                    `${pts.length} corners · tracking ${r.trackingQuality}`,
+                    `${pts.length} corners · tracking ${r.trackingQuality}` +
+                      (r.estimatedPoints
+                        ? ` · ${r.estimatedPoints} estimated`
+                        : ""),
                     r.heightM ? `ceiling ${r.heightM.toFixed(3)} m` : "no ceiling found",
                     "",
                     ...walls.map((w, i) => `wall ${i + 1}: ${w} m`),
@@ -549,10 +552,14 @@ export default function AppHome() {
               Recent submissions shows one. Everything left is
               permanently visible and Start a project stays on screen
               in every state. */}
-          <p className="font-label mb-1 text-sm font-bold uppercase tracking-[0.25em] text-primary">
-            Help and your project
-          </p>
-
+          {/* The parent heading has gone.
+              "Help and your project" sat directly above "Help", and
+              a little further down "Your project" — it was its own
+              two children glued together, announcing them to a reader
+              who could already see them. Three bands of small caps in
+              a row with nothing between them read as one texture
+              rather than a hierarchy. The rule above the block
+              already says a section starts here. */}
           {(["Help", "Your project", "TM Designs"] as const)
             .map((group) => ({
               group,

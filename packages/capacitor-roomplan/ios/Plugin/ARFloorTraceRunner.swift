@@ -108,6 +108,11 @@ final class ARFloorTraceRunner: NSObject {
     /// A trace that was briefly lost and recovered is still suspect.
     private var worstTracking: ARCamera.TrackingState = .normal
 
+    /// How many corners landed on ARKit's guess rather than on floor
+    /// it had mapped. Reported out, because a trace built on estimates
+    /// deserves less confidence than one built on measured planes.
+    private var estimatedTaps = 0
+
     private var statusLabel: UILabel?
     private var countLabel: UILabel?
     private var doneButton: UIButton?
@@ -296,36 +301,57 @@ final class ARFloorTraceRunner: NSObject {
         let location = gesture.location(in: scene)
 
         /*
-         * Raycast, not hit-test.
+         * Three attempts, strictest first.
          *
-         * `hitTest(_:types:)` is the iOS 11 API and is deprecated; its
-         * results are a snapshot taken against whatever ARKit believed
-         * at that instant. A raycast query can be tracked, and more
-         * importantly it is the API Apple still tunes.
+         * The first version allowed only `.existingPlaneGeometry` — a
+         * tap had to land on floor ARKit had actually mapped. The
+         * reasoning was sound and the result was not: in a real room
+         * the corners are the least-mapped part of the floor, because
+         * they are where the furniture is. Tested in a garage it
+         * refused nearly every tap with "No floor found there", which
+         * is a scanner that works only in an empty room.
          *
-         * `.existingPlaneGeometry` means the tap must land on a plane
-         * ARKit has actually mapped, rather than on its guess at where
-         * a plane probably extends to. A corner is exactly where that
-         * guess is worst — it is the edge of the detected region — so
-         * requiring real geometry trades a few refused taps for not
-         * silently placing corners a foot into the skirting board.
+         * So it falls back. `.existingPlaneInfinite` extends the floor
+         * plane ARKit *has* found out past where it stopped mapping,
+         * which is exactly right for a corner behind a bicycle: the
+         * plane is the same floor, we simply could not see that part
+         * of it. `.estimatedPlane` is ARKit's guess from raw feature
+         * points, used only when there is nothing better.
+         *
+         * The strictness still matters, so which one answered is
+         * recorded rather than thrown away: a trace that leaned on
+         * estimates is a trace to be less sure of, and the app should
+         * be able to say so instead of presenting every corner with
+         * equal confidence.
          */
-        guard
-            let query = scene.raycastQuery(
-                from: location,
-                allowing: .existingPlaneGeometry,
-                alignment: .horizontal
-            )
-        else {
-            setStatus("Point at the floor and try again")
-            return
+        let targets: [(ARRaycastQuery.Target, String)] = [
+            (.existingPlaneGeometry, "mapped"),
+            (.existingPlaneInfinite, "extended"),
+            (.estimatedPlane, "estimated"),
+        ]
+
+        var found: ARRaycastResult?
+        var usedTarget = "mapped"
+        for (target, label) in targets {
+            guard
+                let query = scene.raycastQuery(
+                    from: location,
+                    allowing: target,
+                    alignment: .horizontal
+                )
+            else { continue }
+            if let hit = scene.session.raycast(query).first {
+                found = hit
+                usedTarget = label
+                break
+            }
         }
 
-        let hits = scene.session.raycast(query)
-        guard let hit = hits.first else {
-            setStatus("No floor found there — move closer and try again")
+        guard let hit = found else {
+            setStatus("Can't see the floor there — point a little further into the room")
             return
         }
+        if usedTarget == "estimated" { estimatedTaps += 1 }
 
         let t = hit.worldTransform
         let p = SCNVector3(t.columns.3.x, t.columns.3.y, t.columns.3.z)
@@ -425,6 +451,7 @@ final class ARFloorTraceRunner: NSObject {
             "durationS": Date().timeIntervalSince(started),
             "complete": true,
             "trackingQuality": trackingWord(worstTracking),
+            "estimatedPoints": estimatedTaps,
         ]
 
         // Ceiling height, if ARKit found a plane above us. Reported
