@@ -178,66 +178,14 @@ export default function AppHome() {
      * in the app links to it, deliberately.
      */
     /*
-     * The ARKit trace probe. Staff builds only, and temporary.
+     * The ARKit trace probe has gone.
      *
-     * This is here to answer one question before any of it is built
-     * out: does ARKit give us the right number of metres? Trace a
-     * room whose walls you have taped, read the lengths back, compare.
-     * If they match, scale without a tape is real and the camera
-     * scanner can stop demanding a ceiling height. If they do not, we
-     * have learned that for the price of one build rather than a
-     * month of work hung off a wrong assumption.
-     *
-     * Deliberately crude — it reports into an alert. It is not a
-     * feature, it is an instrument, and it comes out once it has
-     * told us what we need.
+     * It existed to answer one question — does ARKit give us real
+     * metres — before anything was built on the assumption that it
+     * does. It answered it, the tracer is now the ordinary way a
+     * non-LiDAR phone measures a room, and an instrument that has
+     * served its purpose is clutter on a customer's home screen.
      */
-    ...(process.env.NEXT_PUBLIC_ENABLE_SCAN === "1"
-      ? [
-          {
-            label: "Trace a room (test)",
-            blurb: "ARKit scale check",
-            icon: "straighten",
-            group: "TM Designs" as const,
-            onClick: async () => {
-              try {
-                const { RoomPlan } = await import(
-                  "@tm-designs/capacitor-roomplan"
-                );
-                const can = await RoomPlan.isArTraceSupported();
-                if (!can.supported) {
-                  alert(can.reason ?? "Not supported on this device.");
-                  return;
-                }
-                const r = await RoomPlan.startArFloorTrace({
-                  title: "Trace a room",
-                });
-                const pts = r.pointsM ?? [];
-                // Wall lengths between consecutive corners, plus the
-                // closing wall. These are the numbers to hold a tape
-                // against.
-                const walls = pts.map((p, i) => {
-                  const q = pts[(i + 1) % pts.length];
-                  return Math.hypot(q.x - p.x, q.z - p.z).toFixed(3);
-                });
-                alert(
-                  [
-                    `${pts.length} corners · tracking ${r.trackingQuality}` +
-                      (r.estimatedPoints
-                        ? ` · ${r.estimatedPoints} estimated`
-                        : ""),
-                    r.heightM ? `ceiling ${r.heightM.toFixed(3)} m` : "no ceiling found",
-                    "",
-                    ...walls.map((w, i) => `wall ${i + 1}: ${w} m`),
-                  ].join("\n"),
-                );
-              } catch (e) {
-                alert(`Trace failed: ${(e as Error).message}`);
-              }
-            },
-          },
-        ]
-      : []),
     ...(calib && process.env.NEXT_PUBLIC_ENABLE_SCAN === "1"
       ? [
           {
@@ -366,6 +314,73 @@ export default function AppHome() {
                 (draft.rooms?.length ?? 0) === 1 ? "" : "s"
               } · saved ${formatSavedAt(draft.savedAt)}`}
             />
+          </section>
+        )}
+
+        {/* ── What happens ───────────────────────────────────────
+            Shown to a first-time customer and nobody else.
+
+            The empty home screen was a header, one gold button and
+            600px of nothing. It fitted, which is what we had been
+            optimising for, and it read as a page that had failed to
+            load the rest of itself — at the exact moment someone who
+            has just paid several hundred pounds is least certain
+            they have come to the right place. A button labelled
+            "Start a project" does not tell them what the project is,
+            how long it takes, or what arrives at the end.
+
+            Three lines fix that, and they go above the button rather
+            than below it: context, then action. The numbers carry
+            the brand gold and the rest is quiet, so it frames the
+            button instead of competing with it.
+
+            Hidden the moment there is a draft or a submission. A
+            returning customer knows what the app does — they are
+            mid-job — and showing them the explainer again would cost
+            the space the resume card needs. The screen earns its
+            room by saying different things to different people,
+            which is also the answer to its looking static. */}
+        {!draft && recents.length === 0 && (
+          <section className="tm-fade-up mb-6">
+            <ol className="border-t border-outline-variant/30">
+              {[
+                {
+                  n: "1",
+                  title: "Measure, room by room",
+                  body: "Point your phone at each corner. No tape measure needed.",
+                },
+                {
+                  n: "2",
+                  title: "Photograph as you go",
+                  body: "A shot of each room, each side of the house, and any manholes.",
+                },
+                {
+                  n: "3",
+                  title: "We draw it up",
+                  body: "A draughtsman checks every survey by hand. Drawings back by email.",
+                },
+              ].map((s) => (
+                <li
+                  key={s.n}
+                  className="flex gap-3 border-b border-outline-variant/25 py-3"
+                >
+                  <span
+                    className="font-headline shrink-0 text-lg leading-none text-primary"
+                    aria-hidden
+                  >
+                    {s.n}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-base font-medium text-on-surface">
+                      {s.title}
+                    </span>
+                    <span className="mt-0.5 block text-sm leading-snug text-on-surface-variant">
+                      {s.body}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ol>
           </section>
         )}
 

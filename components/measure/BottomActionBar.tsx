@@ -117,7 +117,14 @@ export default function BottomActionBar({
             onClick={onBack}
             disabled={backDisabled}
             style={{ minHeight: 56 }}
-            className={`min-w-0 flex-1 overflow-hidden rounded-full border-2 border-outline px-2 font-bold uppercase leading-tight text-on-surface transition-colors disabled:opacity-35 ${fitLabel(
+            /* Lighter than it was: a hairline rather than a 2px
+               border, medium rather than bold. Three heavy pills
+               under a 34px serif heading shouted louder than the
+               question did, and two of the three are things you
+               rarely press. Next keeps its fill and is now the only
+               emphatic thing in the row — which is what emphasis is
+               for. */
+            className={`min-w-0 flex-1 overflow-hidden rounded-full border border-outline-variant px-2 font-medium uppercase leading-tight text-on-surface-variant transition-colors disabled:opacity-35 ${fitLabel(
               backLabel,
             )}`}
           >
@@ -129,7 +136,7 @@ export default function BottomActionBar({
             type="button"
             onClick={onMenu}
             style={{ minHeight: 56 }}
-            className="flex min-w-0 flex-1 flex-col items-center justify-center rounded-full border-2 border-outline px-3 text-on-surface"
+            className="flex min-w-0 flex-1 flex-col items-center justify-center rounded-full border border-outline-variant px-3 text-on-surface-variant"
           >
             <span
               className="material-symbols-outlined"
@@ -138,7 +145,7 @@ export default function BottomActionBar({
             >
               menu
             </span>
-            <span className="mt-0.5 text-[11px] font-bold uppercase tracking-widest">
+            <span className="mt-0.5 text-[11px] font-medium uppercase tracking-widest">
               Steps
             </span>
           </button>

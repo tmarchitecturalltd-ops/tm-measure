@@ -240,14 +240,23 @@ export default function GuidedRoomFlow({
    * the app has just done, and inviting a worse answer than the one it
    * already holds — a typed 3.5 replacing a measured 3.47.
    *
-   * There was a screen after the scan listing every wall length, on
-   * the reasoning that numbers you are never shown are barely better
-   * than numbers you were asked to invent. Removed on review: it
-   * arrived at the moment the customer had just been told the phone
-   * had done the work, and asked them to read a table confirming it.
-   * The figures are still on the review screen before anything is
-   * sent, which is the point at which checking them is a decision
-   * rather than an interruption.
+   * The screen listing what the scan measured is back.
+   *
+   * It was removed once, on the reasoning that it arrived just after
+   * the customer had been told the phone had done the work and asked
+   * them to read a table confirming it — an interruption rather than
+   * a decision, with the figures available on the review screen
+   * anyway.
+   *
+   * That held while the only scanner was LiDAR, which people trust
+   * because Apple's own interface did the capture. It does not hold
+   * for a camera trace. There the customer has just tapped four
+   * corners themselves, has no idea whether it worked, and the very
+   * next thing the app did was ask for a photograph — so the first
+   * question asked, every time, was "where are the measurements?".
+   * Trust in a new instrument is built by showing its readings, and
+   * a survey nobody checked until the end is one where the mistake
+   * is found after the walking is done.
    *
    * Stairs and photos stay: neither comes out of a scan.
    */
@@ -289,7 +298,7 @@ export default function GuidedRoomFlow({
       mustScan
         ? ["name", "scan"]
         : scanned
-        ? ["name", "photos"]
+        ? ["name", "measured", "photos"]
         : [
             "name",
             "shape",
@@ -301,7 +310,7 @@ export default function GuidedRoomFlow({
           ],
     [scanned, mustScan],
   );
-  const [stepIndex, setStepIndex] = useState(0);
+  const [rawStepIndex, setStepIndex] = useState(0);
   /**
    * Typing lengths or tracing the outline. Starts on whichever the room
    * already looks like, so returning to a drawn room does not silently
@@ -358,6 +367,25 @@ export default function GuidedRoomFlow({
   const wallInputs = useRef<(HTMLInputElement | null)[]>([]);
 
 
+  /*
+   * Clamped, because the step list changes under it.
+   *
+   * `steps` is seven questions for a typed room and three for a
+   * scanned one. Measuring a room with the camera flips it from the
+   * first to the second *while the flow is open* — so someone who
+   * had reached, say, the windows question at index 5 was left
+   * pointing at index 5 of a three-item list. `steps[5]` is
+   * undefined, every `step === "..."` test is false, and the screen
+   * renders its header, its progress bar and its buttons around a
+   * completely empty body. Reported as getting stuck on a page
+   * showing nothing but "Room 1 of 1", which is exactly what it was.
+   *
+   * Clamped on read rather than corrected in an effect: this is a
+   * derived value, and deriving it is both simpler and immune to the
+   * next thing that resizes the list. Writers may still set an index
+   * past the end; it just cannot be observed.
+   */
+  const stepIndex = Math.min(rawStepIndex, Math.max(0, steps.length - 1));
   const step = steps[stepIndex];
   const isLast = stepIndex === steps.length - 1;
 

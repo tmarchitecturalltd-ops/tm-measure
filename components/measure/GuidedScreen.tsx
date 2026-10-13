@@ -331,9 +331,49 @@ export default function GuidedScreen({
           wide ? "px-3 py-2" : "justify-center px-5 py-5"
         }`}
       >
-        <div className={wide ? "w-full" : "mx-auto w-full max-w-xl"}>
+        {/* A new question arrives rather than appears.
+            Motion as punctuation, not decoration. Every screen in
+            this flow has the same furniture — corners, hairline,
+            heading, buttons — so one question replacing another was
+            a silent swap of the middle of the screen, and the eye
+            had no reason to go back to the top and start reading.
+            A 0.45s rise is long enough to notice and short enough
+            not to wait for, and keying it to scrollKey means it
+            replays on each question rather than once per mount.
+
+            Not applied to the floor plan, which is a canvas being
+            worked on rather than a question being asked; re-animating
+            it every time something is tapped would be seasickness.
+            prefers-reduced-motion is honoured globally in
+            globals.css, so this is off for anyone who has asked for
+            that. */}
+        <div
+          key={wide ? undefined : scrollKey}
+          className={`${wide ? "w-full" : "mx-auto w-full max-w-xl"} ${
+            wide ? "" : "tm-fade-up"
+          }`}
+        >
+          {/* ── Typography pass ─────────────────────────────────────
+              The question is the screen, and it was not being
+              treated as one.
+
+              An architectural practice gets its authority from type
+              and space: a large heading, a long way from a small
+              label, with nothing boxed in. This screen had a 14px
+              eyebrow 8px above a 30px heading 20px above the
+              controls — three bands of similar weight, evenly
+              spaced, which reads as a form rather than as a
+              question. Everything looked equally important, so
+              nothing was.
+
+              The eyebrow drops to 12px and loses its bold; the
+              heading grows and gains room beneath it. The gap
+              between the smallest and largest thing on screen is
+              what does the work, which is why portfolios set a 48pt
+              title over 11pt body and look expensive while doing
+              almost nothing. */}
           {eyebrow && (
-            <p className="font-label mb-2 text-sm font-bold uppercase tracking-widest text-primary">
+            <p className="font-label mb-3 text-xs font-medium uppercase tracking-[0.3em] text-on-surface-variant/70">
               {eyebrow}
             </p>
           )}
@@ -341,7 +381,7 @@ export default function GuidedScreen({
               empty heading holding open five rems of margin. The floor
               plan step uses this: the grid is the heading. */}
           {title && (
-            <h2 className="font-headline mb-5 text-3xl leading-tight text-on-surface">
+            <h2 className="font-headline mb-7 text-[34px] font-normal leading-[1.1] tracking-[-0.01em] text-on-surface">
               {title}
             </h2>
           )}
