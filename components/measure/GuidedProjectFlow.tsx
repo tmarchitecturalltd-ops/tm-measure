@@ -115,8 +115,29 @@ export default function GuidedProjectFlow({
   const step = steps[stepIndex];
   const isLast = stepIndex === steps.length - 1;
 
+  /**
+   * A ruled line, not a box.
+   *
+   * This was a white rounded rectangle with a pale border — the
+   * default shape of a web form, and on these screens the only
+   * object present. A question, and one empty container floating in
+   * a cream field: nothing to look at, nothing with any weight, and
+   * the whole screen reading as a placeholder. Reported as the pages
+   * looking flat, which they did.
+   *
+   * A field set as large type on a single rule is how a form is set
+   * in a printed document, and it is the same move the rest of this
+   * app has been making — hairlines instead of cards, type doing the
+   * work. The answer becomes the second-largest thing on the screen
+   * after the question, which is the correct hierarchy: what you
+   * type matters more than the box you type it into.
+   *
+   * 22px rather than 16 also clears iOS's 16px zoom-on-focus
+   * threshold by a wide margin, and is simply easier to read at
+   * arm's length in a hallway.
+   */
   const input =
-    "w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-base outline-none ring-primary/30 focus:border-primary/70 focus:ring-2";
+    "w-full border-0 border-b border-outline-variant bg-transparent px-0 pb-2 pt-1 text-[22px] text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/40 focus:border-primary";
 
   /**
    * Only the three things a submission is useless without.

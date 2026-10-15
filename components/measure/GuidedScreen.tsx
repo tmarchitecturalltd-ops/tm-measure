@@ -149,7 +149,36 @@ export default function GuidedScreen({
   return (
     <div
       className="fixed inset-0 z-[45] flex flex-col"
-      style={{ backgroundColor: "#fcf9f5" }}
+      /*
+       * Drafting paper.
+       *
+       * Replaces a flat cream fill, and before that a 1920px
+       * Unsplash photo of an office fetched over the network and
+       * darkened to 15% behind an opaque surface — a request for an
+       * image nobody could see, in an app used in hallways with one
+       * bar of signal.
+       *
+       * Two rule scales like real paper: a fine 28px grid with a
+       * heavier line every fifth. Drawn in the ink colour at 3% and
+       * 5%, which on cream is visible as texture and nowhere near
+       * strong enough to compete with a word of text. Fixed, so the
+       * grid is the sheet and the content moves across it.
+       *
+       * Inline rather than a class: rules added to globals.css below
+       * the existing ones were not reaching the browser, and a
+       * full-screen takeover whose background might not paint is a
+       * page you cannot read.
+       */
+      style={{
+        backgroundColor: "#fcf9f5",
+        backgroundImage: [
+          "linear-gradient(rgba(28,28,26,0.05) 1px, transparent 1px)",
+          "linear-gradient(90deg, rgba(28,28,26,0.05) 1px, transparent 1px)",
+          "linear-gradient(rgba(28,28,26,0.03) 1px, transparent 1px)",
+          "linear-gradient(90deg, rgba(28,28,26,0.03) 1px, transparent 1px)",
+        ].join(","),
+        backgroundSize: "140px 140px, 140px 140px, 28px 28px, 28px 28px",
+      }}
     >
       {/* ── Corners ───────────────────────────────────────────────── */}
       <div
@@ -349,9 +378,7 @@ export default function GuidedScreen({
             that. */}
         <div
           key={wide ? undefined : scrollKey}
-          className={`${wide ? "w-full" : "mx-auto w-full max-w-xl"} ${
-            wide ? "" : "tm-fade-up"
-          }`}
+          className={wide ? "w-full" : "mx-auto w-full max-w-xl"}
         >
           {/* ── Typography pass ─────────────────────────────────────
               The question is the screen, and it was not being
@@ -373,7 +400,10 @@ export default function GuidedScreen({
               title over 11pt body and look expensive while doing
               almost nothing. */}
           {eyebrow && (
-            <p className="font-label mb-3 text-xs font-medium uppercase tracking-[0.3em] text-on-surface-variant/70">
+            <p
+              className="font-label mb-3 text-xs font-medium uppercase tracking-[0.3em] text-on-surface-variant/70"
+              style={wide ? undefined : { animation: "tmFadeUp 0.4s ease-out both" }}
+            >
               {eyebrow}
             </p>
           )}
@@ -381,12 +411,30 @@ export default function GuidedScreen({
               empty heading holding open five rems of margin. The floor
               plan step uses this: the grid is the heading. */}
           {title && (
-            <h2 className="font-headline mb-7 text-[34px] font-normal leading-[1.1] tracking-[-0.01em] text-on-surface">
+            <h2
+              className="font-headline mb-7 text-[34px] font-normal leading-[1.1] tracking-[-0.01em] text-on-surface"
+              style={
+                wide ? undefined : { animation: "tmFadeUp 0.4s ease-out 0.07s both" }
+              }
+            >
               {title}
             </h2>
           )}
 
-          {children}
+          {/* The answer arrives last. Not decoration: on a screen
+              where the label, the question and the field are three
+              lines of similar length, the order they appear in is
+              the only thing that says which to read first. The floor
+              plan is excluded — it is a drawing being worked on, not
+              a question being asked, and re-animating it on every
+              tap would be unbearable. */}
+          {wide ? (
+            children
+          ) : (
+            <div style={{ animation: "tmFadeUp 0.45s ease-out 0.14s both" }}>
+              {children}
+            </div>
+          )}
         </div>
       </div>
 

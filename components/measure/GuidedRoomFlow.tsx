@@ -389,8 +389,18 @@ export default function GuidedRoomFlow({
   const step = steps[stepIndex];
   const isLast = stepIndex === steps.length - 1;
 
+  /**
+   * Ruled lines rather than boxes — see the matching note in
+   * GuidedProjectFlow, which explains why.
+   *
+   * It matters more here than there. The wall questions put six of
+   * these on one screen, and six bordered rectangles stacked up is
+   * the most form-like thing in the app, on the screen where the
+   * customer is already doing the most work. Six rules is a page
+   * from a notebook.
+   */
   const input =
-    "w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-base outline-none ring-primary/30 focus:border-primary/70 focus:ring-2";
+    "w-full border-0 border-b border-outline-variant bg-transparent px-0 pb-2 pt-1 text-[22px] text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/40 focus:border-primary";
 
   /**
    * Whether the customer may continue.

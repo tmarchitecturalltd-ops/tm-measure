@@ -208,15 +208,41 @@ button {
   animation: tmFadeUp 0.45s ease-out 0.12s both;
 }
 
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  background: url("https://images.unsplash.com/photo-1497366216548-37526070297c?w=1920&q=60&auto=format&fit=crop")
-    center / cover no-repeat;
-  filter: brightness(0.15) saturate(0.5);
-}
+/*
+ * Drafting paper, not a photograph.
+ *
+ * This used to pull a 1920px Unsplash photo of an office over the
+ * network and darken it to 15% brightness behind an opaque cream
+ * surface — a request for an image literally nobody could see, from
+ * a third-party CDN, in an app whose customers are often standing in
+ * a hallway with one bar of signal. In the packaged iOS build it
+ * simply never arrived.
+ *
+ * What replaces it costs nothing to load and is the right background
+ * for this product: a measured grid, the surface an architect's
+ * drawing is made on. Two scales, like real paper — a fine 28px rule
+ * with a heavier one every fifth line. Set in the ink colour at 3%
+ * and 5%, which on cream is just visible enough to read as texture
+ * and far too faint to compete with a word of text.
+ *
+ * `fixed` so it does not scroll: the grid is the sheet, and the
+ * content moves across it.
+ */
+/*
+ * The grid and the stagger live inline on GuidedScreen, not here.
+ *
+ * Classes added to this file after `.tm-fade-up` above did not reach
+ * the browser — verified by reading document.styleSheets, where
+ * `.tm-fade-up` is present and anything added below it is not, after
+ * a clean restart of the dev server. Whatever the cause in the
+ * Turbopack CSS pipeline, a full-screen takeover is the wrong place
+ * to depend on a stylesheet resolving: when its background failed to
+ * paint, the page underneath showed through and the screen was
+ * unreadable.
+ *
+ * The keyframes above DO get emitted, so inline styles reference
+ * `tmFadeUp` by name and only the timings sit on the elements.
+ */
 
 section {
   background-color: rgba(252, 249, 245, 0.96) !important;
