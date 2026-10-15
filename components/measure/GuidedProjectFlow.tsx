@@ -137,7 +137,7 @@ export default function GuidedProjectFlow({
    * arm's length in a hallway.
    */
   const input =
-    "w-full border-0 border-b border-outline-variant bg-transparent px-0 pb-2 pt-1 text-[22px] text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/40 focus:border-primary";
+    "w-full rounded-t-md border-0 border-b-2 border-outline-variant bg-surface-container-lowest/70 px-3 pb-2 pt-2.5 text-[22px] text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/40 focus:border-primary focus:bg-surface-container-lowest";
 
   /**
    * Only the three things a submission is useless without.

@@ -6288,7 +6288,31 @@ export default function MeasureIntakeForm() {
           }
           // On a LiDAR phone the sensor measures; the typed fields are
           // not offered unless a scan has actually failed.
-          scanRequired={arSupport === "yes"}
+          /*
+           * Measuring is a step, on any phone that can measure.
+           *
+           * This read `arSupport === "yes"` — LiDAR only — which was
+           * right when LiDAR was the only sensor the app could use.
+           * It no longer is. On a non-LiDAR phone the camera trace
+           * was not part of the guided sequence at all: the customer
+           * got the full typed run of shape, walls, ceiling, doors
+           * and windows, and the one thing that would have answered
+           * all five was a button somewhere off to the side.
+           *
+           * Worse, tracing it anyway collapsed the step list from
+           * seven questions to three underneath them, which is how
+           * "Here's what the scan measured" started appearing at a
+           * point in the flow where it made no sense.
+           *
+           * Now: name the room, measure it, see what came back, take
+           * a photo. The typed questions remain for a phone that
+           * cannot do either, and for anyone whose scan fails —
+           * manualEscape inside the flow still brings them back.
+           */
+          scanRequired={
+            SCAN_ENABLED &&
+            (arSupport === "yes" || arTraceSupport === "yes")
+          }
           scanFailed={scanAttempts > 0}
         />
       )}

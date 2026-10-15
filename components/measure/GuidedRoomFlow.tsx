@@ -400,7 +400,7 @@ export default function GuidedRoomFlow({
    * from a notebook.
    */
   const input =
-    "w-full border-0 border-b border-outline-variant bg-transparent px-0 pb-2 pt-1 text-[22px] text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/40 focus:border-primary";
+    "w-full rounded-t-md border-0 border-b-2 border-outline-variant bg-surface-container-lowest/70 px-3 pb-2 pt-2.5 text-[22px] text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/40 focus:border-primary focus:bg-surface-container-lowest";
 
   /**
    * Whether the customer may continue.
@@ -857,10 +857,17 @@ export default function GuidedRoomFlow({
 
       {step === "scan" && (
         <div className="space-y-4">
+          {/* Two sensors, two sets of instructions.
+              This step used to be reachable only on a LiDAR phone,
+              so the words described LiDAR: walk round the room
+              pointing at each wall. A camera trace works the
+              opposite way — you stand still and tap the corners —
+              and telling someone to sweep the walls is telling them
+              to do the wrong thing with the right tool. */}
           <p className="text-base leading-relaxed text-on-surface-variant">
-            Your phone can measure this room itself — walls, ceiling, doors
-            and windows — more precisely than a tape, and there&apos;s
-            nothing to type afterwards.
+            {scanIsLidar
+              ? "Your phone can measure this room itself — walls, ceiling, doors and windows — more precisely than a tape, and there's nothing to type afterwards."
+              : "Your phone can measure this room from its camera. You tap each corner of the floor and it works out the real sizes — no tape measure, and nothing to type afterwards."}
           </p>
           <button
             type="button"
@@ -868,7 +875,7 @@ export default function GuidedRoomFlow({
             style={{ minHeight: 64 }}
             className="w-full rounded-2xl bg-primary px-6 text-base font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 active:scale-[0.98]"
           >
-            Scan this room
+            {scanIsLidar ? "Scan this room" : "Measure this room"}
           </button>
           {onScanHouse && (
             <button
@@ -881,8 +888,9 @@ export default function GuidedRoomFlow({
             </button>
           )}
           <p className="text-sm text-on-surface-variant">
-            Hold the phone up and walk slowly round the room, pointing it at
-            each wall in turn. Tap Done when the whole room is covered.
+            {scanIsLidar
+              ? "Hold the phone up and walk slowly round the room, pointing it at each wall in turn. Tap Done when the whole room is covered."
+              : "Hold the phone up and move it slowly for a few seconds while it finds the floor. Then tap each corner of the room in turn — aim where the walls meet the floor, not at the furniture — and tap Done."}
           </p>
 
           {/* The way out.
