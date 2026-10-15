@@ -25,6 +25,7 @@ import {
   parseMeters,
   scanOutlineWorthKeeping,
   roomFootprint,
+  rotatePointM,
   roomBoundingBox,
   snapToGrid,
   autoLayoutRooms,
@@ -305,7 +306,12 @@ export default function MeasureIntakeForm() {
    * will be in manual-entry / corner-tap mode only. Cheap and offline-safe.
    */
   const [arSupport, setArSupport] = useState<"unknown" | "yes" | "no">("unknown");
-  const [arReason, setArReason] = useState<string | null>(null);
+  /* The plugin's reason for refusing LiDAR used to be kept here and
+     shown on the project screen — "no LiDAR sensor", "iOS too old".
+     That was Apple's explanation of a limitation, in front of a
+     customer who has not yet been told there is anything to be
+     limited about. What replaced it says what this phone *will* do,
+     which is the only part they can act on. */
   useEffect(() => {
     let alive = true;
     // Race the RoomPlan probe against a 2 s timeout so a hung promise
@@ -326,17 +332,10 @@ export default function MeasureIntakeForm() {
       try {
         const r = await Promise.race([RoomPlan.isSupported(), timeout]);
         if (!alive) return;
-        if (r.supported) {
-          setArSupport("yes");
-          setArReason(null);
-        } else {
-          setArSupport("no");
-          setArReason(r.reason ?? null);
-        }
+        setArSupport(r.supported ? "yes" : "no");
       } catch {
         if (!alive) return;
         setArSupport("no");
-        setArReason(null);
       }
     })();
     return () => {
@@ -3143,6 +3142,44 @@ export default function MeasureIntakeForm() {
         submittedAt: new Date().toISOString(),
         roomCount: rooms.length,
         remoteId: data.submissionId,
+        /*
+         * The shapes, so the home screen can draw what was sent.
+         *
+         * Placed rooms only, in their plan positions, so the set
+         * reads as one floor plan rather than a pile of unrelated
+         * outlines. A room with no traced polygon contributes its
+         * rectangle, which is what the drawing contains anyway.
+         *
+         * Six at most. This goes into localStorage next to
+         * everything else the app keeps, and a twenty-room house
+         * with full outlines would be the largest thing in there by
+         * a distance — for a thumbnail an inch wide, where the
+         * seventh room is a smudge.
+         */
+        outlines: rooms
+          .slice(0, 6)
+          .map((r) => {
+            const p = placements[r.id];
+            if (!p?.positionM) return null;
+            const size = roomFootprint(r);
+            const local =
+              r.floorPolygonM && r.floorPolygonM.length >= 3
+                ? r.floorPolygonM
+                : [
+                    { x: 0, z: 0 },
+                    { x: size.widthM, z: 0 },
+                    { x: size.widthM, z: size.lengthM },
+                    { x: 0, z: size.lengthM },
+                  ];
+            return local.map((pt) => {
+              const rot = rotatePointM(pt, p.rotationDeg ?? 0);
+              return {
+                x: Number((p.positionM!.x + rot.x).toFixed(2)),
+                z: Number((p.positionM!.z + rot.z).toFixed(2)),
+              };
+            });
+          })
+          .filter((o): o is { x: number; z: number }[] => o !== null),
       });
       // Clear the autosaved draft now that the project is in the
       // architect's hands — next time the form opens it'll start fresh.
@@ -3596,25 +3633,71 @@ export default function MeasureIntakeForm() {
                     : "Pick once — units lock when you continue. Entries are stored in metres; the review step shows both."}
                 </p>
               </div>
+              {/* How this phone will measure — named, in plain words.
+                  This said "Device capability", then "AR scan
+                  available" or "Manual / corner-tap mode only". Three
+                  pieces of jargon in two lines, on a screen a
+                  homeowner reads before they have measured anything,
+                  describing the single most interesting thing the app
+                  does. It had also quietly gone out of date: a phone
+                  without LiDAR no longer corner-taps, it traces with
+                  the camera, and the screen was still promising the
+                  old tool.
+                  Named like a feature rather than reported like a
+                  diagnostic — the thing the customer wants to know is
+                  whether they need a tape measure, so that is the
+                  line. */}
               {SCAN_ENABLED && (
-              <div>
-                <span className="font-label mb-2 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
-                  Device capability
-                </span>
-                {arSupport === "unknown" && (
-                  <p className="text-sm text-on-surface-variant">Checking AR capability…</p>
-                )}
-                {arSupport === "yes" && (
-                  <p className="rounded-md bg-primary/10 px-3 py-2 text-sm text-primary">
-                    AR scan available — you&apos;ll get the option to LiDAR-scan each room.
-                  </p>
-                )}
-                {arSupport === "no" && (
-                  <p className="rounded-md bg-surface-container-high px-3 py-2 text-sm text-on-surface-variant">
-                    Manual / corner-tap mode only{arReason ? ` — ${arReason}` : "."} You&apos;ll still get accurate dimensions from photo taps.
-                  </p>
-                )}
-              </div>
+                <div>
+                  <span className="font-label mb-2 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
+                    How you&apos;ll measure
+                  </span>
+                  {arSupport === "unknown" || arTraceSupport === "unknown" ? (
+                    <p className="text-sm text-on-surface-variant">
+                      Checking what this phone can do…
+                    </p>
+                  ) : (
+                    (() => {
+                      const mode =
+                        arSupport === "yes"
+                          ? {
+                              icon: "sensors",
+                              name: "Room scan",
+                              body: "Your phone has a depth sensor, so it measures each room by itself — walls, doors and windows. No tape measure.",
+                            }
+                          : arTraceSupport === "yes"
+                            ? {
+                                icon: "straighten",
+                                name: "Camera measure",
+                                body: "Point at each corner of the room and tap. The camera works out the real sizes. No tape measure.",
+                              }
+                            : {
+                                icon: "edit",
+                                name: "By hand",
+                                body: "This phone can't measure on its own, so you'll type the wall lengths. A tape measure will be handy.",
+                              };
+                      return (
+                        <div className="flex gap-3 rounded-xl border border-outline-variant/40 p-3">
+                          <span
+                            className="material-symbols-outlined shrink-0 text-primary"
+                            style={{ fontSize: "22px" }}
+                            aria-hidden
+                          >
+                            {mode.icon}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-base font-medium text-on-surface">
+                              {mode.name}
+                            </span>
+                            <span className="mt-0.5 block text-sm leading-snug text-on-surface-variant">
+                              {mode.body}
+                            </span>
+                          </span>
+                        </div>
+                      );
+                    })()
+                  )}
+                </div>
               )}
             </div>
             <button

@@ -44,6 +44,25 @@ export type RecentSubmission = {
   roomCount: number;
   /** Optional Apps Script-issued submission id ("AB12CD34"). */
   remoteId?: string;
+  /**
+   * The rooms' outlines, in metres, as they were sent.
+   *
+   * Kept so the home screen can draw the plan the customer made
+   * rather than listing it. Every reference the app has for "what
+   * you sent" was a line of text and a tick, which is a receipt;
+   * the thing they actually spent an hour producing is a drawing,
+   * and it is the one piece of imagery in the whole product that is
+   * genuinely theirs. Stock photography of somebody else's house
+   * would be worse than nothing here.
+   *
+   * Outlines only — no names, no dimensions, nothing identifying.
+   * This sits in the browser's own storage on a shared family
+   * device, so it holds the least that will still draw.
+   *
+   * Optional because every submission recorded before this existed
+   * has none, and those rows still have to render.
+   */
+  outlines?: { x: number; z: number }[][];
 };
 
 function isBrowser(): boolean {

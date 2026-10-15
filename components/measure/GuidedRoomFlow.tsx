@@ -911,11 +911,49 @@ export default function GuidedRoomFlow({
             Nothing to type — the scan measured all of this. Have a quick
             look and carry on.
           </p>
-          <dl className="divide-y divide-outline-variant/30 rounded-xl border border-outline-variant/30 bg-surface-container-lowest">
+
+          {/* The room, at a glance, set large.
+              Everything on this screen was 16px in a bordered table —
+              the readout typeset as a receipt. These numbers are the
+              entire product of the customer walking round their own
+              house tapping corners, and the first thing they want is
+              not a list of six walls but "how big is it". Floor area
+              answers that in one figure anyone can sanity-check
+              against a room they are standing in, and setting it at
+              40px is the difference between a screen that reports and
+              a screen that shows. The detail stays underneath for
+              anyone who wants it. */}
+          {(() => {
+            const poly = room.floorPolygonM;
+            if (!poly || poly.length < 3) return null;
+            const area =
+              Math.abs(
+                poly.reduce((sum, p, i) => {
+                  const q = poly[(i + 1) % poly.length];
+                  return sum + (p.x * q.z - q.x * p.z);
+                }, 0),
+              ) / 2;
+            if (!(area > 0)) return null;
+            return (
+              <div className="border-b border-outline-variant/30 pb-4">
+                <p className="font-headline text-[40px] leading-none text-on-surface">
+                  {area.toFixed(1)}
+                  <span className="ml-1.5 text-xl text-on-surface-variant">
+                    m²
+                  </span>
+                </p>
+                <p className="mt-1.5 text-sm text-on-surface-variant">
+                  Floor area, from {poly.length} corners
+                </p>
+              </div>
+            );
+          })()}
+
+          <dl className="divide-y divide-outline-variant/30">
             {room.walls
               .filter((w) => w.lengthM.trim())
               .map((w, i) => (
-                <div key={w.id} className="flex justify-between px-4 py-3">
+                <div key={w.id} className="flex justify-between py-2.5">
                   <dt className="text-base text-on-surface-variant">
                     {w.label || `Wall ${i + 1}`}
                   </dt>
@@ -925,14 +963,14 @@ export default function GuidedRoomFlow({
                 </div>
               ))}
             {room.ceilingHeightM.trim() && (
-              <div className="flex justify-between px-4 py-3">
+              <div className="flex justify-between py-2.5">
                 <dt className="text-base text-on-surface-variant">Ceiling</dt>
                 <dd className="text-base font-semibold text-on-surface">
                   {room.ceilingHeightM} m
                 </dd>
               </div>
             )}
-            <div className="flex justify-between px-4 py-3">
+            <div className="flex justify-between py-2.5">
               <dt className="text-base text-on-surface-variant">
                 Doors and windows
               </dt>
@@ -941,7 +979,7 @@ export default function GuidedRoomFlow({
               </dd>
             </div>
             {(room.floorPolygonM?.length ?? 0) >= 3 && (
-              <div className="flex justify-between px-4 py-3">
+              <div className="flex justify-between py-2.5">
                 <dt className="text-base text-on-surface-variant">Shape</dt>
                 <dd className="text-base font-semibold text-on-surface">
                   {room.floorPolygonM!.length} corners

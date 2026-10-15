@@ -285,7 +285,21 @@ export default function AppHome() {
         </div>
       </header>
 
-      <main className="mx-auto w-full min-h-0 max-w-3xl flex-1 overflow-y-auto px-4 pt-4 md:px-6 md:pt-6">
+      {/* Centred when it is short, top-aligned when it is not.
+          The explainer block fills the empty state and the recent
+          list fills the returning one — but a customer with a draft
+          and no submissions yet has neither, and that is the most
+          common state of all in the first week. They were getting
+          the resume card, the start button, and 270px of nothing
+          beneath it: the same hole the explainer was written to
+          close, reappearing in the one state it does not cover.
+          Rather than inventing more content to fill it, the band
+          centres what it has. The space then sits above and below
+          as framing instead of pooling underneath as an absence,
+          which is what space is for in a practice layout. Long
+          content still scrolls from the top as normal — the same
+          pattern GuidedScreen uses for its questions. */}
+      <main className="mx-auto flex w-full min-h-0 max-w-3xl flex-1 flex-col justify-center overflow-y-auto px-4 py-4 md:px-6 md:py-6">
         {/* ── Continue where you left off ────────────────────────
             First, above the tiles, and only when there is something to
             continue.
@@ -360,17 +374,32 @@ export default function AppHome() {
                   body: "A draughtsman checks every survey by hand. Drawings back by email.",
                 },
               ].map((s) => (
+                /* Oversized numeral behind the text, not beside it.
+                   The numbers were 18px gold digits in a flex row —
+                   the same size as the titles they were numbering,
+                   so they read as part of the sentence rather than
+                   as a sequence, and three rows of similar-sized
+                   type is the definition of flat.
+                   Set at 52px in a pale gold and placed *behind* the
+                   words, they do two jobs at once. They become
+                   unmistakably a count, and the overlap puts the
+                   text in front of something — which is the only
+                   depth cue on this page, and it costs no shadow, no
+                   blur and no extra height. It is also the oldest
+                   trick in editorial layout and all over the
+                   practice portfolios: a huge faint figure with the
+                   content sitting over its shoulder. */
                 <li
                   key={s.n}
-                  className="flex gap-3 border-b border-outline-variant/25 py-3"
+                  className="relative border-b border-outline-variant/25 py-3.5"
                 >
                   <span
-                    className="font-headline shrink-0 text-lg leading-none text-primary"
+                    className="font-headline pointer-events-none absolute -top-1 left-0 select-none text-[52px] leading-none text-primary/20"
                     aria-hidden
                   >
                     {s.n}
                   </span>
-                  <span className="min-w-0">
+                  <span className="relative block min-w-0 pl-9">
                     <span className="block text-base font-medium text-on-surface">
                       {s.title}
                     </span>
@@ -476,7 +505,35 @@ export default function AppHome() {
                     i > 0 ? "border-t border-outline-variant/25" : ""
                   }`}
                 >
-                  <span className="min-w-0">
+                  {/* The plan they drew, not a tick.
+                      This row said "4 rooms · yesterday" with a green
+                      check — a receipt. What the customer actually
+                      spent an hour producing is a drawing, and it is
+                      the only imagery in the whole app that is
+                      genuinely theirs. A line plan of their own house
+                      also says what the product is in a way no amount
+                      of copy does, and it is the house style: the
+                      architectural boards are full of plans used
+                      exactly this way.
+                      Falls back to the tick for anything submitted
+                      before outlines were stored. */}
+                  {planThumb(r.outlines) ? (
+                    <span
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-outline-variant/30 bg-surface-container-lowest"
+                      aria-hidden
+                    >
+                      <svg width={40} height={40} viewBox="0 0 40 40">
+                        <path
+                          d={planThumb(r.outlines)!}
+                          fill="none"
+                          stroke="#b89650"
+                          strokeWidth={1.25}
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                  ) : null}
+                  <span className="min-w-0 flex-1">
                     <span className="block truncate font-headline text-sm font-semibold text-on-surface">
                       {r.projectName || "(untitled project)"}
                     </span>
@@ -486,13 +543,15 @@ export default function AppHome() {
                       {r.remoteId ? ` · #${r.remoteId}` : ""}
                     </span>
                   </span>
-                  <span
-                    className="material-symbols-outlined shrink-0 text-primary"
-                    style={{ fontSize: "18px" }}
-                    aria-hidden
-                  >
-                    check
-                  </span>
+                  {!planThumb(r.outlines) && (
+                    <span
+                      className="material-symbols-outlined shrink-0 text-primary"
+                      style={{ fontSize: "18px" }}
+                      aria-hidden
+                    >
+                      check
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -627,6 +686,62 @@ export default function AppHome() {
       </nav>
     </div>
   );
+}
+
+/**
+ * Several room outlines, scaled to fit one small square, as an SVG
+ * path.
+ *
+ * Deliberately not `outlineThumbnail` from measure-core: that takes
+ * one polygon and fits it to the box, which is right for a row
+ * showing a single room on the scan review screen and wrong here.
+ * These rooms are in plan positions relative to each other, so each
+ * one has to be scaled by the *same* factor or the plan stops being
+ * a plan — a kitchen drawn as large as the house it sits in.
+ *
+ * One shared scale, one shared centring, aspect ratio preserved.
+ * Returns null when there is nothing to draw, which is every
+ * submission made before outlines were stored.
+ */
+function planThumb(
+  outlines: { x: number; z: number }[][] | undefined,
+  box = 40,
+  pad = 4,
+): string | null {
+  if (!outlines || outlines.length === 0) return null;
+  const pts = outlines.flat();
+  if (pts.length < 3) return null;
+
+  const xs = pts.map((p) => p.x);
+  const zs = pts.map((p) => p.z);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minZ = Math.min(...zs);
+  const maxZ = Math.max(...zs);
+  const w = maxX - minX;
+  const h = maxZ - minZ;
+  if (!(w > 0) || !(h > 0)) return null;
+
+  const inner = box - pad * 2;
+  const scale = Math.min(inner / w, inner / h);
+  // Centre whichever axis has slack, so a long thin bungalow sits in
+  // the middle of its square rather than against one edge.
+  const offX = pad + (inner - w * scale) / 2;
+  const offZ = pad + (inner - h * scale) / 2;
+
+  return outlines
+    .filter((o) => o.length >= 3)
+    .map(
+      (o) =>
+        o
+          .map((p, i) => {
+            const x = offX + (p.x - minX) * scale;
+            const z = offZ + (p.z - minZ) * scale;
+            return `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${z.toFixed(1)}`;
+          })
+          .join(" ") + " Z",
+    )
+    .join(" ");
 }
 
 /**

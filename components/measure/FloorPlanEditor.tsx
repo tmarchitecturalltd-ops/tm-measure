@@ -13,6 +13,38 @@
  *     canvas; tap a pill to drop it at the floor's origin, then drag
  *     it into place.
  *
+ * Three planes, and what belongs on each
+ * ──────────────────────────────────────────────────────────────────
+ * This is the densest screen in the app and the only one where depth
+ * is doing a job rather than decorating. Everything drawn here sits
+ * on one of three layers, and knowing which is what stops the next
+ * addition landing in the wrong one:
+ *
+ *   Background   the grid. Fixed to the drawing's own scale, because
+ *                it is a measuring reference — if it moved at a
+ *                different rate from the rooms it would stop being
+ *                one. No parallax here, ever.
+ *   Midground    the rooms, openings, stairs and dimensions. This is
+ *                the drawing. It pans and zooms as one.
+ *   Foreground   the control strip, the ceiling row, the insert
+ *                panel, and a selected room's chips. Pinned, opaque,
+ *                and separated by a hairline rather than a shadow.
+ *
+ * Depth is signalled by occlusion, surface contrast and a hairline —
+ * not by blur or drop shadows. An architectural drawing has neither,
+ * and translucency over a technical plan gives you a drawing you
+ * cannot read behind a panel you cannot read.
+ *
+ * The z-scale, written down so nobody has to invent one:
+ *
+ *   z-0    canvas and drawing
+ *   z-10   pinned control strips
+ *   z-20   insert panel, selection chips and handles
+ *   z-40   the app's sticky header
+ *   z-45   the guided-screen takeover
+ *   z-50   menus and sheets
+ *   z-60   the one-time How it works overlay
+ *
  * Implementation notes
  * ──────────────────────────────────────────────────────────────────
  * • The SVG viewBox is declared in METRES, so a `<rect width="3">`
@@ -1747,10 +1779,30 @@ export default function FloorPlanEditor({
             door. As an overlay the layout never changes: the grid is
             the same size whatever is on top of it, and closing the
             panel gives the space straight back. */}
+        {/* Foreground plane, done the way a drawing does it.
+            This was a gold-bordered panel at 95% opacity with an xl
+            drop shadow — the consumer-app way to say "this floats".
+            Two problems with it here. The translucency let the plan
+            show through the panel, and a technical drawing read
+            faintly behind text is not atmosphere, it is a drawing you
+            cannot read and a panel you cannot read. And the shadow is
+            the one effect an architectural drawing never contains, so
+            it announced the app as software at the densest, most
+            technical screen in it.
+            Depth now comes from the three cues a draughtsman would
+            use: it is completely opaque, so it occludes; it is a
+            different surface from the canvas behind it; and it has a
+            hairline round it and a single pixel of highlight along
+            the top edge, which reads as a lifted sheet. Occlusion is
+            the strongest depth cue there is and costs no GPU, which
+            matters on a phone that may be running an ARKit session. */}
         {openPanel && (
           <div
-            className="absolute inset-x-2 top-2 z-20 max-h-[70%] overflow-y-auto rounded-xl border border-[#b89650]/60 p-3 shadow-xl"
-            style={{ backgroundColor: "#fffdf8f2" }}
+            className="absolute inset-x-2 top-2 z-20 max-h-[70%] overflow-y-auto rounded-xl border border-outline-variant/50 p-3"
+            style={{
+              backgroundColor: "#ffffff",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9)",
+            }}
           >
           {openPanel === "rooms" && (
             <>
