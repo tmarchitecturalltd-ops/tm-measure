@@ -24,6 +24,7 @@ import {
 import {
   parseMeters,
   scanOutlineWorthKeeping,
+  untangleOutline,
   roomFootprint,
   rotatePointM,
   roomBoundingBox,
@@ -360,6 +361,18 @@ export default function MeasureIntakeForm() {
   const [arTraceSupport, setArTraceSupport] = useState<
     "unknown" | "yes" | "no"
   >("unknown");
+
+  /**
+   * Last camera frame per room, as a data URL. Memory only.
+   *
+   * Shown blurred behind that room's measurements. Not in the
+   * RoomDraft and so not in the saved draft: these are photographs
+   * of someone's home at tens of kilobytes each, and localStorage is
+   * neither big enough nor the right place for them. Losing them on
+   * reload is correct — the backdrop is a nicety, the numbers are
+   * the survey.
+   */
+  const [scanFrames, setScanFrames] = useState<Record<string, string>>({});
   useEffect(() => {
     let alive = true;
     const timeout = new Promise<{ supported: false }>((resolve) =>
@@ -1081,7 +1094,18 @@ export default function MeasureIntakeForm() {
         const result = await RoomPlan.startArFloorTrace({
           title: room?.name?.trim() || "Trace this room",
         });
-        const pts = result?.pointsM ?? [];
+        /*
+         * Straighten the outline before anything uses it.
+         *
+         * Corners arrive in tap order, and tap order is not always
+         * round the room — skip one and come back for it and the
+         * outline crosses itself. Everything downstream then
+         * compounds it: the wall lengths below are taken between
+         * consecutive points, so a bowtie produces diagonals across
+         * the room instead of walls, and the floor area goes to
+         * nonsense because the crossed lobes cancel.
+         */
+        const pts = untangleOutline(result?.pointsM ?? []);
         if (pts.length < 3) {
           setHouseScanError(
             "That trace only caught a couple of corners. Walk the room and tap each one.",
@@ -1157,6 +1181,23 @@ export default function MeasureIntakeForm() {
                 },
           ),
         );
+
+        /*
+         * The camera's last frame, kept in memory only.
+         *
+         * Shown blurred behind the measurements on the next screen,
+         * so the figures sit over the room they describe instead of
+         * on blank cream. Deliberately not part of the RoomDraft:
+         * drafts are serialised into localStorage, and a photograph
+         * of someone's kitchen at ~60KB of base64 per room has no
+         * business in there. It lives for one screen and goes.
+         */
+        if (result.frameJpegBase64) {
+          setScanFrames((prev) => ({
+            ...prev,
+            [roomId]: `data:image/jpeg;base64,${result.frameJpegBase64}`,
+          }));
+        }
 
         setScanAttempts(0);
         setForcedAllView(false);
@@ -6242,6 +6283,9 @@ export default function MeasureIntakeForm() {
             SCAN_ENABLED ? () => scanRoom(rooms[activeRoomIndex].id) : undefined
           }
           scanIsLidar={arSupport === "yes"}
+          scanFrame={scanFrames[rooms[activeRoomIndex].id]}
+          allRooms={rooms}
+          placements={placements}
           onScanHouse={
             arSupport === "yes" ? () => void startHouseScan() : undefined
           }

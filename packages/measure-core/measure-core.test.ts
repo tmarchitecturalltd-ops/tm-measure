@@ -37,6 +37,8 @@ import {
   looksLikeStrayCapture,
   looksLikeMergedCapture,
   outlineThumbnail,
+  untangleOutline,
+  polygonSelfIntersects,
 } from "./src/scan.ts";
 import type { RoomDraft } from "./src/types.ts";
 import {
@@ -1797,4 +1799,77 @@ test("a rotated sliver is still rejected", () => {
       `a spike at ${deg}° is not a 4.34 x 3.33 room`,
     );
   }
+});
+
+test("a bowtie outline is untangled, a good one is left alone", () => {
+  /*
+   * From a real trace: an L-shaped bedroom came back as a figure of
+   * eight, because the corners were tapped out of order. The wall
+   * lengths were right and their sequence was not, so the drawing
+   * showed two crossed lobes and the floor area was meaningless —
+   * a self-intersecting shoelace cancels itself out.
+   */
+  const square = [
+    { x: 0, z: 0 },
+    { x: 4, z: 0 },
+    { x: 4, z: 3 },
+    { x: 0, z: 3 },
+  ];
+  assert.equal(polygonSelfIntersects(square), false);
+  assert.deepEqual(
+    untangleOutline(square),
+    square,
+    "a polygon that is already simple must come back untouched",
+  );
+
+  // Same four corners, two swapped — the classic bowtie.
+  const bowtie = [
+    { x: 0, z: 0 },
+    { x: 4, z: 0 },
+    { x: 0, z: 3 },
+    { x: 4, z: 3 },
+  ];
+  assert.equal(polygonSelfIntersects(bowtie), true, "this one crosses itself");
+
+  const fixed = untangleOutline(bowtie);
+  assert.equal(
+    polygonSelfIntersects(fixed),
+    false,
+    "and must not cross itself afterwards",
+  );
+  assert.equal(fixed.length, 4, "no corner may be dropped");
+
+  // The area is the real test: a bowtie's shoelace cancels to
+  // something far below the true 12 m², which is how a wrong room
+  // reaches a drawing looking plausible.
+  const area = (poly: { x: number; z: number }[]) =>
+    Math.abs(
+      poly.reduce((s, p, i) => {
+        const q = poly[(i + 1) % poly.length];
+        return s + (p.x * q.z - q.x * p.z);
+      }, 0),
+    ) / 2;
+  assert.ok(area(bowtie) < 7, `the tangled area is nonsense (${area(bowtie)})`);
+  assert.equal(Number(area(fixed).toFixed(2)), 12, "the real room is 12 m²");
+});
+
+test("an L-shape tapped in order is not reordered", () => {
+  /*
+   * The guard that matters. The angular sort straightens anything,
+   * including shapes that did not need straightening — so it must
+   * only run on outlines that genuinely cross. An L tapped
+   * correctly has a reflex corner and would be simplified by a
+   * blind sort, losing the alcove that is the whole reason for
+   * tracing the room.
+   */
+  const lShape = [
+    { x: 0, z: 0 },
+    { x: 4, z: 0 },
+    { x: 4, z: 2 },
+    { x: 2.5, z: 2 },
+    { x: 2.5, z: 3 },
+    { x: 0, z: 3 },
+  ];
+  assert.equal(polygonSelfIntersects(lShape), false);
+  assert.deepEqual(untangleOutline(lShape), lShape, "the alcove survives");
 });

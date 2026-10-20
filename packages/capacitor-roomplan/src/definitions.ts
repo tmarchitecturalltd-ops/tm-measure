@@ -145,6 +145,21 @@ export interface ArFloorTraceResult {
    * sure of.
    */
   estimatedPoints: number;
+  /**
+   * The last camera frame, base64 JPEG, no data-URL prefix.
+   *
+   * So the screen reporting the measurements can show the room they
+   * describe. Without it the customer steps out of a live view of
+   * their own kitchen onto a blank page of figures, and a survey
+   * that should feel like measuring a house starts feeling like
+   * filling in a form.
+   *
+   * Downscaled and compressed hard, because it is displayed
+   * blurred. Held for one screen and dropped — deliberately never
+   * written into the saved draft, which is not the place for a
+   * photograph of somebody's home.
+   */
+  frameJpegBase64?: string;
 }
 
 /** Optional knobs for `startScan`. */

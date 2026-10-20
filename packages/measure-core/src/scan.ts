@@ -272,6 +272,91 @@ export function looksLikeStrayCapture(
 }
 
 /**
+ * Untangle a room outline that crosses itself.
+ *
+ * A traced room is the corners in the order they were tapped, and
+ * people do not always go round. Skip one and come back for it, tap
+ * the far corner before the near one, or simply lose your place in a
+ * six-sided room, and two of the edges cross — the outline becomes a
+ * bowtie. Reported as an L-shaped room coming out twisted, and the
+ * drawing was exactly that: a figure of eight with the right wall
+ * lengths in the wrong order.
+ *
+ * Nothing downstream can survive it. The shoelace area of a
+ * self-intersecting polygon is meaningless — the crossed lobes
+ * cancel — so the floor area is wrong, the mitred wall faces fold
+ * through each other, and the DXF contains a shape no room has.
+ *
+ * The fix is to sort the corners by their bearing from the centre.
+ * Any set of points ordered that way traces a simple polygon, and
+ * for the shapes a room is actually made of it is the one the
+ * customer meant: going round is going round, whichever corner you
+ * started from.
+ *
+ * Applied only when the outline genuinely crosses itself. A correct
+ * polygon is returned untouched, which matters because the angular
+ * sort is not always right for a deeply concave room — it will
+ * straighten a tight U into something simpler but not identical. A
+ * simplified room is a recoverable error; a bowtie is not.
+ */
+export function untangleOutline(
+  polygon: { x: number; z: number }[],
+): { x: number; z: number }[] {
+  if (polygon.length < 4) return polygon;
+  if (!polygonSelfIntersects(polygon)) return polygon;
+
+  const cx = polygon.reduce((s, p) => s + p.x, 0) / polygon.length;
+  const cz = polygon.reduce((s, p) => s + p.z, 0) / polygon.length;
+  return [...polygon].sort(
+    (a, b) => Math.atan2(a.z - cz, a.x - cx) - Math.atan2(b.z - cz, b.x - cx),
+  );
+}
+
+/** Do any two non-adjacent edges of this closed polygon cross? */
+export function polygonSelfIntersects(
+  polygon: { x: number; z: number }[],
+): boolean {
+  const n = polygon.length;
+  if (n < 4) return false;
+  for (let i = 0; i < n; i++) {
+    const a1 = polygon[i];
+    const a2 = polygon[(i + 1) % n];
+    for (let j = i + 1; j < n; j++) {
+      // Skip edges that share an endpoint — touching is not crossing.
+      if (j === i || (j + 1) % n === i || (i + 1) % n === j) continue;
+      if (segmentsCross(a1, a2, polygon[j], polygon[(j + 1) % n])) return true;
+    }
+  }
+  return false;
+}
+
+function segmentsCross(
+  p1: { x: number; z: number },
+  p2: { x: number; z: number },
+  p3: { x: number; z: number },
+  p4: { x: number; z: number },
+): boolean {
+  const d = (
+    a: { x: number; z: number },
+    b: { x: number; z: number },
+    c: { x: number; z: number },
+  ) => (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x);
+
+  const d1 = d(p3, p4, p1);
+  const d2 = d(p3, p4, p2);
+  const d3 = d(p1, p2, p3);
+  const d4 = d(p1, p2, p4);
+
+  // Strict crossing only. Collinear and touching cases are left
+  // alone: a room with two corners on the same line is odd but not
+  // broken, and "fixing" it would reorder a polygon that was right.
+  return (
+    ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+    ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
+  );
+}
+
+/**
  * Is this one room, or several the sensor joined together?
  *
  * The opposite failure to looksLikeStrayCapture, and the more

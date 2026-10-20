@@ -24,8 +24,18 @@
  */
 
 import { useMemo, useRef, useState } from "react";
-import type { Opening, RoomDraft, RoomShape } from "@tm-designs/measure-core";
-import { validateRoom } from "@tm-designs/measure-core";
+import type {
+  Opening,
+  RoomDraft,
+  RoomPlacement,
+  RoomShape,
+} from "@tm-designs/measure-core";
+import {
+  outlineThumbnail,
+  roomFootprint,
+  validateRoom,
+} from "@tm-designs/measure-core";
+import RoomsSoFar from "@/components/measure/RoomsSoFar";
 import WallPositionPicker from "@/components/measure/WallPositionPicker";
 import VoiceRecorder from "@/components/measure/VoiceRecorder";
 import LengthHint from "@/components/measure/LengthHint";
@@ -166,6 +176,14 @@ type Props = {
   /** Room names, for the jump list in the menu. */
   roomNames?: string[];
   /**
+   * Every room in the survey, for the strip showing what has been
+   * measured so far. Not just this one — the point is the
+   * accumulation.
+   */
+  allRooms?: RoomDraft[];
+  /** Real positions, where any have been set on the plan. */
+  placements?: Record<string, RoomPlacement>;
+  /**
    * Where Back goes from the first question.
    *
    * It used to be disabled there, which is correct in the sense that
@@ -182,6 +200,15 @@ type Props = {
   scanRequired?: boolean;
   /** Last scan attempt failed or was cancelled — see the escape hatch. */
   scanFailed?: boolean;
+  /**
+   * The camera's final frame from this room's trace, as a data URL.
+   *
+   * Shown blurred behind the measurements, so the figures sit over
+   * the room they describe. Absent on a typed room, on a LiDAR scan,
+   * and after a reload — it is held in memory only, and the screen
+   * falls back to plain cream.
+   */
+  scanFrame?: string;
   /**
    * Which storey this room is on. 0 is the ground floor.
    *
@@ -221,6 +248,8 @@ export default function GuidedRoomFlow({
   onScanHouse,
   onGoToRoom,
   roomNames = [],
+  allRooms,
+  placements,
   onAddRoom,
   onRemoveRoom,
   onGoToPlan,
@@ -228,6 +257,7 @@ export default function GuidedRoomFlow({
   onBackFromFirst,
   scanRequired = false,
   scanFailed = false,
+  scanFrame,
   roomFloor,
   onSetFloor,
 }: Props) {
@@ -924,7 +954,165 @@ export default function GuidedRoomFlow({
       )}
 
       {step === "measured" && (
-        <div className="space-y-4">
+        <div className="relative space-y-4">
+          {/* The room, behind its own measurements.
+              Without this the customer walks out of a live view of
+              their own kitchen onto a blank page of figures, and a
+              survey that should feel like measuring a house starts
+              feeling like filling in a form. The last camera frame,
+              blurred hard and dropped to a fifth opacity, gives the
+              numbers somewhere to sit — recognisably their room,
+              nowhere near legible enough to compete with a digit.
+              Bleeds past the content on both sides so it reads as a
+              backdrop rather than an image someone has inserted.
+              Absent on a typed room, on LiDAR, and after a reload,
+              where the screen simply falls back to cream. */}
+          {/* ── The result, as the payoff it is ──────────────────
+              Three things at once, because the restrained version of
+              this screen kept being described as a boring survey
+              form and the restrained version was my judgement, not
+              the brief.
+
+              Depth: the figures sit on a raised white card with a
+              real shadow, lifted clear of the page.
+              Photography: the customer's own room, full width behind
+              it, blurred — the app boards are built on exactly this
+              and it is the only imagery in the product that is
+              genuinely theirs.
+              Scale: the floor area at 56px against 12px labels, with
+              the room's own outline drawn beside it at 96px.
+
+              The outline is the part that earns its place. It is the
+              shape they just walked, drawn from their own corners,
+              and it says "this is a drawing office" in a way no
+              amount of type can. */}
+          {scanFrame && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -inset-x-7 -top-10 -z-10 h-72 overflow-hidden"
+            >
+              <img
+                src={scanFrame}
+                alt=""
+                className="h-full w-full object-cover"
+                style={{ filter: "blur(22px) saturate(0.75)", opacity: 0.55 }}
+              />
+              {/* A scrim, so text over the photograph stays legible
+                  whatever the room happened to look like — a dark
+                  kitchen and a sunlit one must both end up readable. */}
+              <div
+                className="absolute inset-0"
+                style={{
+                  background:
+                    "linear-gradient(to bottom, rgba(252,249,245,0.45), rgba(252,249,245,0.98))",
+                }}
+              />
+            </div>
+          )}
+
+          {(() => {
+            const poly = room.floorPolygonM;
+            const thumb =
+              poly && poly.length >= 3 ? outlineThumbnail(poly, 96, 8) : null;
+            const area =
+              poly && poly.length >= 3
+                ? Math.abs(
+                    poly.reduce((sum, p, i) => {
+                      const q = poly[(i + 1) % poly.length];
+                      return sum + (p.x * q.z - q.x * p.z);
+                    }, 0),
+                  ) / 2
+                : 0;
+            const size = roomFootprint(room);
+
+            return (
+              <div className="rounded-2xl bg-surface-container-lowest p-5 shadow-[0_18px_40px_-20px_rgba(28,28,26,0.45),0_2px_6px_-2px_rgba(28,28,26,0.12)]">
+                <div className="flex items-start gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-label text-xs font-medium uppercase tracking-[0.25em] text-primary">
+                      Measured
+                    </p>
+                    {area > 0 ? (
+                      <p className="font-headline mt-1 text-[56px] leading-[0.9] text-on-surface">
+                        {area.toFixed(1)}
+                        <span className="ml-1.5 align-top text-xl text-on-surface-variant">
+                          m²
+                        </span>
+                      </p>
+                    ) : (
+                      <p className="font-headline mt-1 text-[40px] leading-none text-on-surface">
+                        {size.widthM.toFixed(2)}
+                        <span className="mx-1 text-xl text-on-surface-variant">
+                          ×
+                        </span>
+                        {size.lengthM.toFixed(2)}
+                        <span className="ml-1.5 text-xl text-on-surface-variant">
+                          m
+                        </span>
+                      </p>
+                    )}
+                    <p className="mt-2 text-sm text-on-surface-variant">
+                      {size.widthM.toFixed(2)} × {size.lengthM.toFixed(2)} m
+                      {room.ceilingHeightM.trim()
+                        ? ` · ${room.ceilingHeightM} m high`
+                        : ""}
+                    </p>
+                  </div>
+
+                  {/* The shape they walked, at a size you can see. */}
+                  {thumb && (
+                    <span
+                      className="shrink-0 rounded-xl bg-primary/5 p-1"
+                      aria-hidden
+                    >
+                      <svg width={96} height={96} viewBox="0 0 96 96">
+                        <path
+                          d={thumb.path}
+                          fill="rgba(184,150,80,0.18)"
+                          stroke="#b89650"
+                          strokeWidth={2}
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                  )}
+                </div>
+
+                {/* Solid gold strip — the one block of flat colour on
+                    the screen, carrying the two counts that otherwise
+                    disappear into a list. */}
+                <div className="mt-4 flex overflow-hidden rounded-xl">
+                  <div className="flex-1 bg-primary px-4 py-3 text-on-primary">
+                    <p className="font-headline text-2xl leading-none">
+                      {room.doors.length}
+                    </p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.2em] text-on-primary/80">
+                      Doors
+                    </p>
+                  </div>
+                  <div className="flex-1 bg-primary/85 px-4 py-3 text-on-primary">
+                    <p className="font-headline text-2xl leading-none">
+                      {room.windows.length}
+                    </p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.2em] text-on-primary/80">
+                      Windows
+                    </p>
+                  </div>
+                  {poly && poly.length >= 3 && (
+                    <div className="flex-1 bg-primary/70 px-4 py-3 text-on-primary">
+                      <p className="font-headline text-2xl leading-none">
+                        {poly.length}
+                      </p>
+                      <p className="mt-1 text-xs uppercase tracking-[0.2em] text-on-primary/80">
+                        Corners
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           <p className="text-sm text-on-surface-variant">
             Nothing to type — the scan measured all of this. Have a quick
             look and carry on.
@@ -941,32 +1129,10 @@ export default function GuidedRoomFlow({
               40px is the difference between a screen that reports and
               a screen that shows. The detail stays underneath for
               anyone who wants it. */}
-          {(() => {
-            const poly = room.floorPolygonM;
-            if (!poly || poly.length < 3) return null;
-            const area =
-              Math.abs(
-                poly.reduce((sum, p, i) => {
-                  const q = poly[(i + 1) % poly.length];
-                  return sum + (p.x * q.z - q.x * p.z);
-                }, 0),
-              ) / 2;
-            if (!(area > 0)) return null;
-            return (
-              <div className="border-b border-outline-variant/30 pb-4">
-                <p className="font-headline text-[40px] leading-none text-on-surface">
-                  {area.toFixed(1)}
-                  <span className="ml-1.5 text-xl text-on-surface-variant">
-                    m²
-                  </span>
-                </p>
-                <p className="mt-1.5 text-sm text-on-surface-variant">
-                  Floor area, from {poly.length} corners
-                </p>
-              </div>
-            );
-          })()}
-
+          {/* The wall-by-wall detail, demoted.
+              It used to be the whole screen. It is now what you read
+              if the headline figures made you want to check
+              something, which is the right order. */}
           <dl className="divide-y divide-outline-variant/30">
             {room.walls
               .filter((w) => w.lengthM.trim())
@@ -1005,6 +1171,21 @@ export default function GuidedRoomFlow({
               </div>
             )}
           </dl>
+
+          {/* What they have built, so far.
+              The moment a room's figures land is the moment to show
+              it joining the others — it is the only point in a
+              forty-question survey where something visibly
+              accumulates. The room just measured is drawn stronger
+              so the customer sees their own contribution arrive
+              rather than hunting for what changed. */}
+          {allRooms && allRooms.length > 1 && (
+            <RoomsSoFar
+              rooms={allRooms}
+              placements={placements}
+              highlightRoomId={room.id}
+            />
+          )}
 
           {/* An escape hatch, not an invitation.
               The sensor is more reliable than a person typing, so the

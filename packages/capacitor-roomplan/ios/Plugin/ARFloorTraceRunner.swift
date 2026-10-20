@@ -595,8 +595,32 @@ final class ARFloorTraceRunner: NSObject {
         let alignment: ARRaycastQuery.TargetAlignment =
             mode == .height ? .any : .horizontal
 
-        var found: ARRaycastResult?
-        var usedTarget = "mapped"
+        /*
+         * Take the hit nearest the floor, not the first one.
+         *
+         * `raycast` returns every surface along the ray, and `.first`
+         * is the nearest to the camera — which in a bedroom is the
+         * bed. Worse, `.existingPlaneInfinite` extends a detected
+         * plane across the whole room, so the top of a bed becomes
+         * an invisible sheet at mattress height covering the floor
+         * beside it. Tapping the carpet in the gap between two beds
+         * hit that sheet, came back half a metre up, and the
+         * worktop guard then refused it: "that looks like a worktop,
+         * not the floor", while the customer was pointing directly
+         * at the floor.
+         *
+         * Sorting the candidates by how close they are to the known
+         * floor fixes that, and it fixes the furniture problem in
+         * the same move — the floor plane extended *under* a bed is
+         * exactly what we want when the corner is behind one, and it
+         * is now the result that wins rather than the one that gets
+         * shadowed. Point at where the corner would be and the
+         * reading comes from the floor, through the furniture.
+         *
+         * With no floor found yet, lowest wins: nothing in a room is
+         * below the floor.
+         */
+        var candidates: [(ARRaycastResult, String)] = []
         for (target, label) in targets {
             guard
                 let query = scene.raycastQuery(
@@ -605,11 +629,34 @@ final class ARFloorTraceRunner: NSObject {
                     alignment: alignment
                 )
             else { continue }
-            if let hit = scene.session.raycast(query).first {
-                found = hit
-                usedTarget = label
-                break
+            for hit in scene.session.raycast(query) {
+                candidates.append((hit, label))
             }
+            // Mapped geometry is trusted on its own; only reach for
+            // the looser targets when it produced nothing at all.
+            if !candidates.isEmpty { break }
+        }
+
+        var found: ARRaycastResult?
+        var usedTarget = "mapped"
+        if mode == .height {
+            // Height mode wants whatever was aimed at, floor or
+            // ceiling, so the nearest hit is the right one.
+            found = candidates.first?.0
+            usedTarget = candidates.first?.1 ?? "mapped"
+        } else if let floor = floorY {
+            let best = candidates.min {
+                abs($0.0.worldTransform.columns.3.y - floor)
+                    < abs($1.0.worldTransform.columns.3.y - floor)
+            }
+            found = best?.0
+            usedTarget = best?.1 ?? "mapped"
+        } else {
+            let lowest = candidates.min {
+                $0.0.worldTransform.columns.3.y < $1.0.worldTransform.columns.3.y
+            }
+            found = lowest?.0
+            usedTarget = lowest?.1 ?? "mapped"
         }
 
         guard let hit = found else {
@@ -626,8 +673,22 @@ final class ARFloorTraceRunner: NSObject {
             // floor — a worktop or a table is a horizontal plane too,
             // and a corner placed on one is wrong by the height of
             // the worktop.
+            /*
+             * A last resort, now that the nearest-to-floor hit wins.
+             *
+             * Reaching here means even the lowest surface along that
+             * ray is half a metre up — so the floor genuinely has
+             * not been mapped there and every candidate was
+             * furniture. The old wording blamed the customer for
+             * pointing at a worktop while they were pointing at
+             * carpet; it now says what will actually help, which is
+             * to let ARKit see some open floor first.
+             */
             if let floor = floorY, p.y - floor > 0.35 {
-                setStatus("That looks like a worktop, not the floor")
+                setStatus(
+                    "Can't find the floor there yet — sweep the phone over some "
+                        + "clear floor nearby, then tap the corner again"
+                )
                 return
             }
             /*
@@ -851,6 +912,40 @@ final class ARFloorTraceRunner: NSObject {
             "trackingQuality": trackingWord(worstTracking),
             "estimatedPoints": estimatedTaps,
         ]
+
+        /*
+         * The last thing they saw, to sit behind the numbers.
+         *
+         * The screen after this one reports what the trace measured,
+         * and it used to do that on flat cream — the customer walks
+         * out of a live view of their own kitchen into an abstract
+         * readout, and the two have no visible connection. Handing
+         * back the final frame lets that screen show the room the
+         * figures describe, blurred behind them.
+         *
+         * Small on purpose. Downscaled to 720px and compressed hard,
+         * because it is going to be blurred to within an inch of its
+         * life: detail is wasted and this crosses the Capacitor
+         * bridge as base64, which is a third bigger again. It is
+         * held in memory for one screen and never written to the
+         * draft — a photograph of someone's home does not belong in
+         * localStorage.
+         */
+        if let shot = sceneView?.snapshot() {
+            let maxSide: CGFloat = 720
+            let scale = min(1, maxSide / max(shot.size.width, shot.size.height))
+            let size = CGSize(
+                width: shot.size.width * scale,
+                height: shot.size.height * scale
+            )
+            UIGraphicsBeginImageContextWithOptions(size, true, 1)
+            shot.draw(in: CGRect(origin: .zero, size: size))
+            let small = UIGraphicsGetImageFromCurrentImageContext()
+            UIGraphicsEndImageContext()
+            if let data = small?.jpegData(compressionQuality: 0.4) {
+                payload["frameJpegBase64"] = data.base64EncodedString()
+            }
+        }
 
         // Ceiling height, if ARKit found a plane above us. Reported
         // rather than assumed: a room with no detected ceiling simply
