@@ -27,6 +27,7 @@ import {
   untangleOutline,
   squareUpOutline,
   axisAlignOutline,
+  placeOpeningOnOutline,
   roomFootprint,
   rotatePointM,
   roomBoundingBox,
@@ -225,9 +226,24 @@ function notesForCustomer(notes: string): string {
  * point of the flag.
  */
 function scannedOpening(
-  o: { widthM: number; parentWallId?: string; offsetFromWallStartM?: number },
+  o: {
+    widthM: number;
+    parentWallId?: string;
+    offsetFromWallStartM?: number;
+    midpoint?: { x: number; z: number };
+  },
   walls: { id?: string }[] | undefined,
   id: string,
+  /**
+   * The floor outline the drawing will be built from, in the same
+   * frame as `o.midpoint`, before any squaring or rotation.
+   *
+   * When present it decides the placement, because it is the shape
+   * the opening will be drawn on. The wall id and offset are a
+   * description of a different object and are only a fallback now.
+   * See placeOpeningOnOutline.
+   */
+  outline?: { x: number; z: number }[],
 ): {
   id: string;
   widthM: string;
@@ -235,6 +251,19 @@ function scannedOpening(
   wallIndex?: number;
   positionM?: string;
 } {
+  const placed = o.midpoint
+    ? placeOpeningOnOutline(o.midpoint, outline)
+    : null;
+  if (placed) {
+    return {
+      id,
+      widthM: o.widthM.toFixed(2),
+      note: "Detected by scan",
+      wallIndex: placed.wallIndex,
+      positionM: placed.positionM.toFixed(2),
+    };
+  }
+
   const wallIndex =
     o.parentWallId && walls
       ? walls.findIndex((w) => w.id === o.parentWallId)
@@ -842,11 +871,15 @@ export default function MeasureIntakeForm() {
         ceilingHeightM: sr.heightM
           ? sr.heightM.toFixed(2)
           : defaultCeilingHeightM.trim(),
+        // Placed against the sensor's own polygon, which is the
+        // frame the opening midpoints are reported in. Unshifted
+        // here on purpose: an edge index and a distance along that
+        // edge mean the same thing wherever the shape sits.
         doors: (sr.doors ?? []).map((d) =>
-          scannedOpening(d, sr.walls, newId()),
+          scannedOpening(d, sr.walls, newId(), sr.floorPolygonM),
         ),
         windows: (sr.windows ?? []).map((w) =>
-          scannedOpening(w, sr.walls, newId()),
+          scannedOpening(w, sr.walls, newId(), sr.floorPolygonM),
         ),
         irregularNotes: "",
         notes: stamp,
@@ -986,6 +1019,60 @@ export default function MeasureIntakeForm() {
               { id: newId(), label: "Wall 4", lengthM: sr.lengthM.toFixed(2) },
             ];
 
+        /*
+         * Tidy the outline, the same way a traced room is tidied.
+         *
+         * This path had none of it. A LiDAR room went to CAD at
+         * whatever heading the customer happened to be facing when
+         * they pressed Start, with every wall a degree or two off
+         * square — reported as the CAD drawing being rotated, which
+         * it was, and nothing here was turning it.
+         *
+         * Order matters, and so does the frame. Openings are placed
+         * against `sensorOutline` — the polygon exactly as the
+         * sensor reported it — because that is the frame the
+         * opening midpoints are in, and they are not shifted to the
+         * room corner the way the outline is. Everything after that
+         * is free: translating, squaring and rotating all keep the
+         * corners in the same order, so an edge index goes on
+         * pointing at the same wall.
+         */
+        const sensorOutline = sr.floorPolygonM ?? [];
+        /*
+         * Brought back to its own corner, from the polygon itself
+         * rather than from originM.
+         *
+         * originM is documented as present only on merged house
+         * scans and this is the single-room path, so the old
+         * `sr.originM ? shift : keep` left the outline at raw ARKit
+         * world coordinates whenever it was absent. Harmless until
+         * something rotates it: axisAlignOutline turns the shape
+         * about the origin, and a room sitting twelve metres from
+         * the origin swings right off the sheet.
+         *
+         * The polygon's own minimum corner is the same number
+         * originM is meant to be, and it is always there.
+         */
+        const minX = sensorOutline.length
+          ? Math.min(...sensorOutline.map((p) => p.x))
+          : 0;
+        const minZ = sensorOutline.length
+          ? Math.min(...sensorOutline.map((p) => p.z))
+          : 0;
+        const rawOutline = sensorOutline.map((pt) => ({
+          x: Number((pt.x - minX).toFixed(3)),
+          z: Number((pt.z - minZ).toFixed(3)),
+        }));
+        const keepOutline = scanOutlineWorthKeeping(
+          sr.floorPolygonM,
+          sr.widthM,
+          sr.lengthM,
+        );
+        const tidyOutline = keepOutline
+          ? axisAlignOutline(squareUpOutline(untangleOutline(rawOutline)))
+              .polygon
+          : undefined;
+
         setRooms((prev) =>
           prev.map((r) =>
             r.id !== roomId
@@ -997,41 +1084,40 @@ export default function MeasureIntakeForm() {
                     ? sr.heightM.toFixed(2)
                     : r.ceilingHeightM || defaultCeilingHeightM.trim(),
                   doors: (sr.doors ?? []).map((d) =>
-                    scannedOpening(d, sr.walls, newId()),
+                    scannedOpening(d, sr.walls, newId(), sensorOutline),
                   ),
                   windows: (sr.windows ?? []).map((w) =>
-                    scannedOpening(w, sr.walls, newId()),
+                    scannedOpening(w, sr.walls, newId(), sensorOutline),
                   ),
                   // "custom" only when a polygon is actually kept —
                   // a custom-shaped room with no polygon falls through
                   // to a rectangle anyway, but says otherwise on screen.
-                  shape: scanOutlineWorthKeeping(sr.floorPolygonM, sr.widthM, sr.lengthM) ? "custom" : "rectangle",
+                  shape: keepOutline ? "custom" : "rectangle",
                   measuredByScan: true,
                   // Raw count from the sensor, kept whether or not the
                   // outline survived our checks. See scanCornerCount.
                   scanCornerCount: sr.floorPolygonM?.length ?? 0,
                   /*
-                   * Outline, translated to the room's own corner.
+                   * Outline, squared up and turned the right way.
                    *
-                   * This previously kept the raw points on the belief
-                   * that a single-room scan reports them room-locally.
-                   * It does not: CaptureSerializer is shared, and it
-                   * emits the polygon in the capture's world frame with
-                   * originM as its minimum corner — the same as the
-                   * house scan. So the outline was drawn at ARKit world
-                   * coordinates, far from the room's anchor, which is
-                   * half of why a scanned room came out as a spike.
+                   * The translation to the room's own corner was
+                   * already here: a single-room scan does not report
+                   * points room-locally, whatever the old comment
+                   * believed — CaptureSerializer is shared and emits
+                   * the capture's world frame with originM as the
+                   * minimum corner. Without the shift the outline
+                   * was drawn at ARKit world coordinates, far from
+                   * the room's anchor, which is half of why a
+                   * scanned room came out as a spike.
                    *
-                   * Only kept when it survives scanPolygonIsUsable; a
-                   * rough floor polygon is worse than the rectangle.
+                   * The squaring and the rotation are new, and are
+                   * the other half: see tidyOutline above.
+                   *
+                   * Only kept when it survives scanPolygonIsUsable;
+                   * a rough floor polygon is worse than the
+                   * rectangle.
                    */
-                  floorPolygonM:
-                    sr.originM && scanOutlineWorthKeeping(sr.floorPolygonM, sr.widthM, sr.lengthM)
-                      ? sr.floorPolygonM!.map((pt) => ({
-                          x: Number((pt.x - sr.originM!.x).toFixed(3)),
-                          z: Number((pt.z - sr.originM!.z).toFixed(3)),
-                        }))
-                      : undefined,
+                  floorPolygonM: tidyOutline,
                 },
           ),
         );

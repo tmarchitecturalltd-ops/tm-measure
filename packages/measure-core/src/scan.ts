@@ -379,13 +379,40 @@ function segmentsCross(
  * walls in proportion to their length, so a 5 m wall absorbs more
  * of it than a 1 m one.
  *
- * Refused when the room is not rectilinear. If any wall sits more
- * than 15 degrees off an axis, the shape is a bay or a splay or a
- * genuinely angled room, and squaring it would destroy the one
- * thing the survey was for. Better a wonky drawing of an unusual
- * room than a tidy drawing of the wrong one.
+ * Decided wall by wall, not for the room as a whole.
+ *
+ * This used to give up entirely the moment any one wall sat more
+ * than 15 degrees off an axis, on the reasoning that such a room is
+ * a bay or a splay and squaring it would destroy the thing the
+ * survey was for. The first half of that is right and the
+ * conclusion was wrong, because it threw away the eight walls it
+ * could have helped along with the two it could not. A real
+ * Victorian front room — four square walls and a three-sided bay —
+ * got no correction at all and reached the drawing askew, bay and
+ * all. Reported as the CAD drawing being rotated.
+ *
+ * So the test is now per wall. A wall near an axis is noise around
+ * a right angle and gets snapped; a wall well off one is a bay
+ * cheek and is left at exactly the angle it was measured at. The
+ * splay survives, the room around it comes out square.
+ *
+ * The tolerance had to come down to 8 degrees as part of that,
+ * because it changed job. At 15 it was a wide net for deciding when
+ * to do *nothing*, and wide was the safe direction: a shape that
+ * fell outside it was returned untouched. The same number now
+ * decides when to *move a wall*, where wide is the dangerous
+ * direction — an 11 degree splay is inside 15, and snapping it
+ * flattens a real feature of somebody's house.
+ *
+ * 8 is above the measurement: tap and LiDAR error put a wall one to
+ * three degrees off square, so there is comfortable room for noise
+ * underneath it. And it is below the architecture: a wall a joiner
+ * built off square, a bay cheek, a splayed corner are all steeper
+ * than 8 degrees, because nobody builds a feature that shallow.
+ * Anything in between is left alone, which is the conservative
+ * answer in a drawing someone is going to build from.
  */
-export const SQUARE_UP_TOLERANCE_DEG = 15;
+export const SQUARE_UP_TOLERANCE_DEG = 8;
 
 export function squareUpOutline(
   polygon: { x: number; z: number }[],
@@ -405,56 +432,160 @@ export function squareUpOutline(
   for (let i = 1; i < n; i++) if (lengths[i] > lengths[longest]) longest = i;
   const axis = Math.atan2(edges[longest].dz, edges[longest].dx);
 
-  // Which quarter turn each wall belongs to, and how far off it is.
-  const quarters: number[] = [];
+  /*
+   * Each wall's direction: snapped to a quarter turn if it is close
+   * to one, kept exactly as measured if it is not.
+   */
+  const dirs: { x: number; z: number }[] = [];
+  let snappedAny = false;
   for (let i = 0; i < n; i++) {
-    const rel = Math.atan2(edges[i].dz, edges[i].dx) - axis;
+    const measured = Math.atan2(edges[i].dz, edges[i].dx);
+    const rel = measured - axis;
     const q = Math.round(rel / (Math.PI / 2));
     const offBy = Math.abs(rel - q * (Math.PI / 2)) * (180 / Math.PI);
-    if (offBy > SQUARE_UP_TOLERANCE_DEG) return polygon;
-    quarters.push(((q % 4) + 4) % 4);
+    const a = offBy <= SQUARE_UP_TOLERANCE_DEG
+      ? axis + q * (Math.PI / 2)
+      : measured;
+    if (offBy <= SQUARE_UP_TOLERANCE_DEG && offBy > 1e-9) snappedAny = true;
+    dirs.push({ x: Math.cos(a), z: Math.sin(a) });
   }
+  if (!snappedAny) return polygon;
 
   /*
-   * Close the loop by sharing out the error.
+   * Close the loop without touching any angle.
    *
-   * Walls along one axis must cancel, and so must walls along the
-   * other. They will not, by a few centimetres. Scaling each axis
-   * group to make it cancel puts the correction where the
-   * measurement error actually came from — proportional to length,
-   * because a long wall accumulates more drift than a short one.
+   * Walking the snapped directions with the measured lengths leaves
+   * a gap of a few centimetres, because the angles have moved and
+   * the lengths have not. Only the lengths may change now — a bay
+   * cheek that was kept at 40 degrees has to still be at 40
+   * degrees when this is done, or the whole point of keeping it is
+   * lost.
+   *
+   * Finding the smallest set of length changes that closes the gap
+   * is two equations in n unknowns, so there are many answers and
+   * we want the gentlest. Weighting each wall by its own length
+   * gives it: the correction lands in proportion to how much drift
+   * a wall could have accumulated, so a 5 m wall absorbs more of it
+   * than a 1 m one, and nothing is nudged more than it has to be.
+   *
+   *   M = sum_i  L_i * (d_i outer d_i)        (2x2, symmetric)
+   *   solve M . lambda = gap
+   *   dL_i = L_i * (d_i . lambda)
+   *
+   * which satisfies sum_i d_i * dL_i = gap exactly.
    */
-  const scaled = [...lengths];
-  for (const pair of [
-    [0, 2],
-    [1, 3],
-  ]) {
-    const idx = quarters
-      .map((q, i) => (q === pair[0] || q === pair[1] ? i : -1))
-      .filter((i) => i >= 0);
-    if (idx.length === 0) continue;
-    const signed = idx.reduce(
-      (s, i) => s + (quarters[i] === pair[0] ? lengths[i] : -lengths[i]),
-      0,
-    );
-    const total = idx.reduce((s, i) => s + lengths[i], 0);
-    if (total < 1e-6) continue;
-    for (const i of idx) {
-      const share = (signed * lengths[i]) / total;
-      scaled[i] -= quarters[i] === pair[0] ? share : -share;
-    }
+  let gx = 0;
+  let gz = 0;
+  let mxx = 0;
+  let mxz = 0;
+  let mzz = 0;
+  for (let i = 0; i < n; i++) {
+    gx -= dirs[i].x * lengths[i];
+    gz -= dirs[i].z * lengths[i];
+    mxx += lengths[i] * dirs[i].x * dirs[i].x;
+    mxz += lengths[i] * dirs[i].x * dirs[i].z;
+    mzz += lengths[i] * dirs[i].z * dirs[i].z;
   }
+
+  // Singular only if every wall is parallel, which is not a room.
+  const det = mxx * mzz - mxz * mxz;
+  if (Math.abs(det) < 1e-9) return polygon;
+  const lx = (mzz * gx - mxz * gz) / det;
+  const lz = (mxx * gz - mxz * gx) / det;
+
+  const scaled = lengths.map(
+    (L, i) => L + L * (dirs[i].x * lx + dirs[i].z * lz),
+  );
+  // A correction big enough to invert a wall means the outline was
+  // not a near-rectilinear room in the first place. Leave it alone
+  // rather than emit something folded.
+  if (scaled.some((L) => L <= 0.01)) return polygon;
 
   const out: { x: number; z: number }[] = [polygon[0]];
   for (let i = 0; i < n - 1; i++) {
-    const a = axis + quarters[i] * (Math.PI / 2);
     const prev = out[i];
     out.push({
-      x: Number((prev.x + Math.cos(a) * scaled[i]).toFixed(3)),
-      z: Number((prev.z + Math.sin(a) * scaled[i]).toFixed(3)),
+      x: Number((prev.x + dirs[i].x * scaled[i]).toFixed(3)),
+      z: Number((prev.z + dirs[i].z * scaled[i]).toFixed(3)),
     });
   }
   return out;
+}
+
+/**
+ * Put a scanned door or window on the outline it belongs to.
+ *
+ * RoomPlan reports an opening as a wall id plus a distance along
+ * that wall, and the app believed both. Neither survives the trip
+ * to the drawing.
+ *
+ * The wall id is matched inside the plugin by comparing the
+ * opening's centre to each wall's *centre*, so a window near the
+ * end of a five-metre wall is "nearest" to the midpoint of the
+ * short wall round the corner, and gets drawn there. That is how a
+ * front door ended up on the chimney breast.
+ *
+ * The distance is measured along RoomPlan's wall, which is the
+ * inner face and stops short of the corners, while the drawing is
+ * built from the floor outline, which does not. The two disagree by
+ * the wall thickness at each end — and an opening reported as
+ * centred on a wall 600 mm shorter than the edge it is drawn on
+ * lands 300 mm from the middle. Which is the figure that came back
+ * from a tape measure.
+ *
+ * Both problems come from the same place: a wall and an edge are
+ * not the same object. So neither is used. The opening carries its
+ * own measured centre point, and that point is dropped
+ * perpendicularly onto each edge of the outline the drawing will
+ * actually use. Nearest edge wins, and the distance along it comes
+ * out of the same projection.
+ *
+ * Positions are frame-independent once they are an edge index and a
+ * distance, so this is safe to run before the outline is squared or
+ * rotated — rotating a shape does not renumber its edges.
+ *
+ * Returns null when there is no outline to place against, leaving
+ * the caller to fall back to whatever the sensor said.
+ */
+export function placeOpeningOnOutline(
+  centreM: { x: number; z: number },
+  polygon: { x: number; z: number }[] | undefined,
+): { wallIndex: number; positionM: number } | null {
+  if (!polygon || polygon.length < 3) return null;
+
+  const n = polygon.length;
+  let bestIndex = -1;
+  let bestDist = Infinity;
+  let bestAlong = 0;
+
+  for (let i = 0; i < n; i++) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % n];
+    const ex = b.x - a.x;
+    const ez = b.z - a.z;
+    const len2 = ex * ex + ez * ez;
+    if (len2 < 1e-9) continue;
+
+    // How far along the edge the foot of the perpendicular sits,
+    // clamped so an opening slightly past a corner lands at the
+    // corner rather than off the end of the wall.
+    const tRaw = ((centreM.x - a.x) * ex + (centreM.z - a.z) * ez) / len2;
+    const t = Math.max(0, Math.min(1, tRaw));
+    const dx = centreM.x - (a.x + ex * t);
+    const dz = centreM.z - (a.z + ez * t);
+    const d = Math.hypot(dx, dz);
+    if (d < bestDist) {
+      bestDist = d;
+      bestIndex = i;
+      bestAlong = t * Math.sqrt(len2);
+    }
+  }
+
+  if (bestIndex < 0) return null;
+  return {
+    wallIndex: bestIndex,
+    positionM: Number(bestAlong.toFixed(3)),
+  };
 }
 
 /**

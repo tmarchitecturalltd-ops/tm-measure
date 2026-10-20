@@ -40,6 +40,8 @@ import {
   untangleOutline,
   polygonSelfIntersects,
   squareUpOutline,
+  placeOpeningOnOutline,
+  axisAlignOutline,
 } from "./src/scan.ts";
 import type { RoomDraft } from "./src/types.ts";
 import {
@@ -1935,6 +1937,180 @@ test("a nearly-square room is squared up; an angled one is left alone", () => {
     splayed,
     "a genuinely angled wall must survive untouched",
   );
+});
+
+test("an opening is placed on the outline, not on RoomPlan's wall", () => {
+  /*
+   * The 300 mm window.
+   *
+   * Reported from a tape measure: a window the app drew 300 mm left
+   * of where it is, on a wall it is genuinely centred on.
+   *
+   * The cause is that RoomPlan's walls are inner faces and stop
+   * short of the corners, while the drawing is built from the floor
+   * outline, which does not. Here the room is 5 m across the floor
+   * and RoomPlan called the wall 4.4 m — 300 mm missing at each end,
+   * a 150 mm wall. A window centred on that wall is 2.2 m from the
+   * wall's start, and 2.2 m along a 5 m edge is 300 mm left of the
+   * middle. Exactly the reported error, and nothing in the old path
+   * could have found it, because an offset along a wall carries no
+   * hint of which wall it was measured along.
+   *
+   * A point does not have the problem.
+   */
+  const outline = [
+    { x: 0, z: 0 },
+    { x: 5, z: 0 },
+    { x: 5, z: 4 },
+    { x: 0, z: 4 },
+  ];
+
+  // Dead centre of the front wall, as the sensor saw it.
+  const placed = placeOpeningOnOutline({ x: 2.5, z: 0.02 }, outline);
+  assert.ok(placed, "a point on a wall must land somewhere");
+  assert.equal(placed!.wallIndex, 0, "on the wall it is touching");
+  assert.ok(
+    Math.abs(placed!.positionM - 2.5) < 0.05,
+    `centred means 2.5 along a 5 m edge, got ${placed!.positionM}`,
+  );
+
+  /*
+   * And the door on the chimney breast.
+   *
+   * The plugin matched an opening to whichever wall had the nearest
+   * MIDPOINT, so a door near the end of a long wall was captured by
+   * the short wall round the corner. Here the door sits at x=4.6 on
+   * the front wall; the right-hand wall's midpoint (5, 2) is 2.0 m
+   * away while the front wall's midpoint (2.5, 0) is 2.1 m away —
+   * so midpoint matching picks the wrong one, and projection picks
+   * the right one.
+   */
+  const door = placeOpeningOnOutline({ x: 4.6, z: 0.03 }, outline);
+  assert.equal(door!.wallIndex, 0, "a door is in the wall it is touching");
+  assert.ok(
+    Math.abs(door!.positionM - 4.6) < 0.05,
+    "and at the distance along it that was measured",
+  );
+
+  // Nothing to place against is a real answer, not a guess.
+  assert.equal(placeOpeningOnOutline({ x: 1, z: 1 }, undefined), null);
+  assert.equal(placeOpeningOnOutline({ x: 1, z: 1 }, [{ x: 0, z: 0 }]), null);
+});
+
+test("placing an opening survives squaring and rotating the outline", () => {
+  /*
+   * Why the app is allowed to place openings first and tidy the
+   * shape afterwards. An edge index and a distance along that edge
+   * are not coordinates, so turning the sheet of paper cannot move
+   * a window.
+   */
+  const outline = [
+    { x: 0, z: 0 },
+    { x: 5.02, z: 0.07 },
+    { x: 4.96, z: 4.03 },
+    { x: -0.03, z: 3.98 },
+  ];
+  const before = placeOpeningOnOutline({ x: 2.5, z: 0.05 }, outline)!;
+  const tidied = axisAlignOutline(squareUpOutline(outline)).polygon;
+
+  assert.equal(tidied.length, outline.length, "same number of corners");
+  assert.equal(
+    before.wallIndex,
+    0,
+    "the window is on the first edge before tidying",
+  );
+
+  // The edge it points at must still be the same wall: same index,
+  // and near enough the same length to carry the same offset.
+  const edgeLen = (p: { x: number; z: number }[], i: number) =>
+    Math.hypot(
+      p[(i + 1) % p.length].x - p[i].x,
+      p[(i + 1) % p.length].z - p[i].z,
+    );
+  assert.ok(
+    Math.abs(edgeLen(tidied, before.wallIndex) - edgeLen(outline, before.wallIndex)) < 0.1,
+    "and that edge is still the length the offset was measured against",
+  );
+});
+
+test("a bay room gets its square walls squared and keeps its bay", () => {
+  /*
+   * The case that was getting no help at all.
+   *
+   * A Victorian front room: four walls that should be square, plus
+   * a three-sided bay off the front. Because the bay cheeks are 45
+   * degrees off axis, the old all-or-nothing rule refused the whole
+   * outline — so the four square walls stayed a degree or two out
+   * and the drawing reached CAD rotated, which is what came back
+   * from the field.
+   */
+  const bayRoom = [
+    { x: 0, z: 0 },
+    { x: 4.03, z: 0.06 },          // front wall, left of the bay
+    { x: 4.56, z: 0.61 },          // bay cheek, 45 degrees
+    { x: 5.38, z: 0.55 },          // bay face
+    { x: 5.92, z: 0.04 },          // bay cheek back
+    { x: 9.01, z: -0.03 },         // front wall, right of the bay
+    { x: 8.97, z: 4.02 },
+    { x: -0.05, z: 3.96 },
+  ];
+  const out = squareUpOutline(bayRoom);
+
+  assert.notDeepEqual(
+    out,
+    bayRoom,
+    "the square walls must actually be corrected, not left alone",
+  );
+  assert.equal(out.length, bayRoom.length, "every corner survives");
+  assert.equal(
+    polygonSelfIntersects(out),
+    false,
+    "and the result must not fold over itself",
+  );
+
+  const angleOf = (
+    poly: { x: number; z: number }[],
+    i: number,
+  ): number => {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    return (Math.atan2(b.z - a.z, b.x - a.x) * 180) / Math.PI;
+  };
+
+  // The bay cheeks are the whole reason the survey was worth doing.
+  // Edges 1 and 3 are the splayed returns, at 46 and -43 degrees.
+  // Edge 2 between them is the bay face, only 4 degrees off the
+  // front wall, so it is squared with it — which is right.
+  for (const i of [1, 3]) {
+    assert.ok(
+      Math.abs(angleOf(out, i) - angleOf(bayRoom, i)) < 0.05,
+      `bay cheek ${i} must keep the angle it was measured at`,
+    );
+  }
+
+  /*
+   * And every other wall comes out square.
+   *
+   * Checked on the axis-aligned outline, because that is the pair
+   * the app ships and the only point at which "square" means
+   * square to the page. squareUpOutline makes the walls square to
+   * each other about the room's own longest wall, which leaves the
+   * whole room tilted by however far that wall was out;
+   * axisAlignOutline is what then turns the sheet of paper.
+   */
+  const aligned = axisAlignOutline(out).polygon;
+  for (const i of [0, 2, 4, 5, 6, 7]) {
+    const a = ((angleOf(aligned, i) % 90) + 90) % 90;
+    const off = Math.min(a, 90 - a);
+    // A tenth of a degree rather than nothing, because corners are
+    // stored to the millimetre and the bay face is only 820 mm
+    // long: 1 mm of rounding over 820 is already 0.07 degrees.
+    // Still tight enough to prove the 4 degree error was taken out.
+    assert.ok(
+      off < 0.15,
+      `wall ${i} should be square, was ${off.toFixed(3)} off`,
+    );
+  }
 });
 
 test("squaring up keeps an L-shape an L-shape", () => {

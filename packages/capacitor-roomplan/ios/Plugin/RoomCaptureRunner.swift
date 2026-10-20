@@ -671,32 +671,54 @@ enum CaptureSerializer {
         let height = Double(o.dimensions.y)
         let oMid = midpointXZ(o.transform)
 
-        // Match to nearest wall by distance from opening midpoint to wall
-        // midpoint. Fine for well-separated walls; RoomPlan already
-        // snaps openings to their parent wall axis, so ambiguity is rare.
+        /*
+         * Match to the nearest wall by distance to the wall itself,
+         * not to the wall's centre.
+         *
+         * Comparing centre to centre looks reasonable and is wrong
+         * in a way that only shows up in real rooms. A window near
+         * the end of a five-metre wall is three metres from that
+         * wall's midpoint, while the two-metre wall round the corner
+         * has its midpoint one metre away — so the window is matched
+         * to the wall it is nowhere near, and drawn on it. In a room
+         * with a chimney breast, whose returns are short walls with
+         * midpoints close to everything, this is how a front door
+         * ends up on the chimney.
+         *
+         * Distance to the nearest point of the wall's base line is
+         * the question actually being asked. An opening is in the
+         * wall it is touching.
+         */
         var parentId: String? = nil
         var offset: Double? = nil
         var minDist = Double.greatestFiniteMagnitude
         for w in walls {
             let wMid = midpointXZ(w.transform)
-            let dx = oMid.0 - wMid.0
-            let dz = oMid.1 - wMid.1
+            let wLen = Double(w.dimensions.x)
+            let dir = localXAxisXZ(w.transform)
+            let half = wLen / 2.0
+            let startX = wMid.0 - dir.0 * half
+            let startZ = wMid.1 - dir.1 * half
+
+            // dir is unit length (a rotation matrix column), so the
+            // dot product is the distance along the wall from start.
+            // Clamped: an opening past the end of a wall is at its
+            // end, not beyond it.
+            let relX = oMid.0 - startX
+            let relZ = oMid.1 - startZ
+            let alongRaw = relX * dir.0 + relZ * dir.1
+            let along = max(0, min(wLen, alongRaw))
+
+            let footX = startX + dir.0 * along
+            let footZ = startZ + dir.1 * along
+            let dx = oMid.0 - footX
+            let dz = oMid.1 - footZ
             let d = (dx * dx + dz * dz).squareRoot()
+
             if d < minDist {
                 minDist = d
                 parentId = w.identifier.uuidString
-
-                // Project onto wall axis to get distance from wall start.
-                let wLen = Double(w.dimensions.x)
-                let dir = localXAxisXZ(w.transform)
-                let half = wLen / 2.0
-                let startX = wMid.0 - dir.0 * half
-                let startZ = wMid.1 - dir.1 * half
-                let relX = oMid.0 - startX
-                let relZ = oMid.1 - startZ
-                // dir is unit length (rotation matrix column) → dot product
-                // is the signed offset along the wall from start → end.
-                offset = relX * dir.0 + relZ * dir.1
+                offset = alongRaw
             }
         }
 
@@ -704,6 +726,18 @@ enum CaptureSerializer {
             "id": o.identifier.uuidString,
             "widthM": width,
             "heightM": height,
+            /*
+             * Where the opening actually is.
+             *
+             * The wall id and the offset above both describe the
+             * opening in terms of a wall, and the drawing is built
+             * from the floor outline, which is a different object
+             * with different corners and different lengths. Carrying
+             * the plain centre point lets the app place the opening
+             * on the outline directly and skip the translation
+             * entirely. See placeOpeningOnOutline.
+             */
+            "midpoint": ["x": oMid.0, "z": oMid.1],
         ]
         if let p = parentId { out["parentWallId"] = p }
         if let off = offset, off.isFinite { out["offsetFromWallStartM"] = off }

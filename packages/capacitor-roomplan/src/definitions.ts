@@ -255,9 +255,25 @@ export interface RoomPlanOpening {
   widthM: number;
   heightM: number;
   /**
-   * Distance from the parent wall's `start` endpoint to the left edge
-   * of the opening, along the wall's length axis. Useful for drawing
-   * the door on a plan.
+   * The opening's centre, in the same XZ frame as the walls and the
+   * floor polygon.
+   *
+   * Prefer this over the wall id and offset below. A wall and a
+   * floor-outline edge are different objects — RoomPlan's walls are
+   * inner faces that stop short of the corners — so an offset
+   * measured along one and applied to the other lands in the wrong
+   * place, by the wall thickness at each end. A point does not have
+   * that problem. See `placeOpeningOnOutline` in measure-core.
+   */
+  midpoint?: { x: number; z: number };
+  /**
+   * Distance from the parent wall's `start` endpoint to the CENTRE
+   * of the opening, along the wall's length axis.
+   *
+   * This said "to the left edge" for a long time and the plugin has
+   * always reported the centre. Nothing was broken by it — the app
+   * reads it as the centre too — but it cost an afternoon of hunting
+   * a half-width error that was never there.
    */
   offsetFromWallStartM?: number;
 }
