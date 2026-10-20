@@ -77,7 +77,7 @@ export default function ScanResultFilter({ rooms, onConfirm, onBack }: Props) {
       }
     >
       <p className="mb-3 text-base leading-relaxed text-on-surface-variant">
-        Untick anything that isn&apos;t a room — a scan often catches a
+        Untick anything that isn&apos;t a room. A scan often catches a
         doorway or the room next door in passing.
       </p>
 
@@ -217,7 +217,7 @@ export default function ScanResultFilter({ rooms, onConfirm, onBack }: Props) {
                     windowCount: r.windows?.length ?? 0,
                   }) && (
                     <span className="mt-1 block text-sm text-primary">
-                      This looks like more than one room — if it is,
+                      This looks like more than one room. If it is,
                       scan them separately
                     </span>
                   )}

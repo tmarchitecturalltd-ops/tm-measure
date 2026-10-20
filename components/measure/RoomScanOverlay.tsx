@@ -482,7 +482,7 @@ export default function RoomScanOverlay({
     }
     introShownRef.current = true;
     setScanHintTone("action");
-    setScanHint("Tap each ceiling corner — keep the phone still");
+    setScanHint("Tap each ceiling corner. Keep the phone still");
   }, [phase, scanMode, setupDismissed, tiltPermission, calibratedFocalPx]);
 
   /*
@@ -518,8 +518,8 @@ export default function RoomScanOverlay({
      */
     setScanHint(
       cornerCount >= 3
-        ? "Last corner — still from the same spot"
-        : `${cornerCount} marked — stay where you are for the rest`,
+        ? "Last corner. Still from the same spot"
+        : `${cornerCount} marked. Stay where you are for the rest`,
     );
   }, [cornerCount, phase, scanMode]);
   /**
@@ -774,7 +774,7 @@ export default function RoomScanOverlay({
   const requireTiltReading = useCallback((): boolean => {
     if (hasTiltReadingRef.current) return true;
     setErrorMsg(
-      "No reading from the phone's motion sensor, so the angle it's held at is unknown — and every measurement depends on it. Enable Motion & Orientation access, then scan again.",
+      "No reading from the phone's motion sensor, so the angle it's held at is unknown. And every measurement depends on it. Enable Motion & Orientation access, then scan again.",
     );
     setPhase("error");
     return false;
@@ -842,7 +842,7 @@ export default function RoomScanOverlay({
     const video = videoRef.current;
     const taps = pixelTapsRef.current;
     if (!video || taps.length !== 2) {
-      setErrorMsg("Need two taps to measure a wall — try again.");
+      setErrorMsg("Need two taps to measure a wall. Try again.");
       setPhase("error");
       return;
     }
@@ -875,15 +875,15 @@ export default function RoomScanOverlay({
     if (!a || !b) {
       setErrorMsg(
         tapPlane === "ceiling"
-          ? "Those taps are below the horizon — point further up and re-tap the two ceiling corners."
-          : "Those taps are above the horizon — point further down and re-tap the two floor corners.",
+          ? "Those taps are below the horizon. Point further up and re-tap the two ceiling corners."
+          : "Those taps are above the horizon. Point further down and re-tap the two floor corners.",
       );
       setPhase("error");
       return;
     }
     const lengthM = Math.hypot(a.xM - b.xM, a.zM - b.zM);
     if (!Number.isFinite(lengthM) || lengthM <= 0) {
-      setErrorMsg("Couldn't compute that wall — re-tap the two corners.");
+      setErrorMsg("Couldn't compute that wall. Re-tap the two corners.");
       setPhase("error");
       return;
     }
@@ -918,12 +918,12 @@ export default function RoomScanOverlay({
         confidence: calibratedFocalPx !== null ? "medium" : "low",
         notes: [
           `Measured wall by wall: ${widthM.toFixed(2)} m × ${lengthM2.toFixed(2)} m.`,
-          "Assumes a rectangular room — opposite walls taken as equal.",
+          "Assumes a rectangular room. Opposite walls taken as equal.",
           planeOffsetM !== undefined
             ? `Ceiling corners, ${ceilH.toFixed(2)} m ceiling.`
             : "Floor corners.",
           calibratedFocalPx === null
-            ? "Not calibrated — run calibration for a tighter result."
+            ? "Not calibrated. Run calibration for a tighter result."
             : "Calibrated lens.",
         ],
         areaM2: Number((widthM * lengthM2).toFixed(2)),
@@ -997,8 +997,8 @@ export default function RoomScanOverlay({
     if (!p) {
       setErrorMsg(
         planeOffsetM !== undefined
-          ? "That tap is below the horizon — aim higher, where the far wall meets the ceiling."
-          : "That tap is above the horizon — aim lower, where the far wall meets the floor.",
+          ? "That tap is below the horizon. Aim higher, where the far wall meets the ceiling."
+          : "That tap is above the horizon. Aim lower, where the far wall meets the floor.",
       );
       setPhase("error");
       return;
@@ -1007,7 +1007,7 @@ export default function RoomScanOverlay({
     // gap between the wall at your back and the phone.
     const spanM = Math.hypot(p.xM, p.zM) + BODY_OFFSET_M;
     if (!Number.isFinite(spanM) || spanM <= 0) {
-      setErrorMsg("Couldn't read that tap — try again.");
+      setErrorMsg("Couldn't read that tap. Try again.");
       setPhase("error");
       return;
     }
@@ -1033,10 +1033,10 @@ export default function RoomScanOverlay({
           `Wall-to-wall spans: ${widthM.toFixed(2)} m × ${lengthM.toFixed(2)} m.`,
           `Includes a ${(BODY_OFFSET_M * 100).toFixed(0)} cm allowance for the gap between the wall behind you and the phone.`,
           planeOffsetM !== undefined
-            ? `Measured to the ceiling line using a ${ceilH.toFixed(2)} m ceiling — accuracy depends on that being right.`
-            : "Ceiling height defaulted to 2.40 m — please confirm in review.",
+            ? `Measured to the ceiling line using a ${ceilH.toFixed(2)} m ceiling. Accuracy depends on that being right.`
+            : "Ceiling height defaulted to 2.40 m. Please confirm in review.",
           calibratedFocalPx === null
-            ? "Not calibrated — run calibration for a tighter result."
+            ? "Not calibrated. Run calibration for a tighter result."
             : "Calibrated lens.",
         ],
         areaM2: Number((widthM * lengthM).toFixed(2)),
@@ -1056,7 +1056,7 @@ export default function RoomScanOverlay({
     const video = videoRef.current;
     const taps = pixelTapsRef.current;
     if (!video || taps.length !== 4) {
-      setErrorMsg("Scan input was incomplete — please try again.");
+      setErrorMsg("Scan input was incomplete. Please try again.");
       setPhase("error");
       return;
     }
@@ -1147,15 +1147,15 @@ export default function RoomScanOverlay({
     const notes = [
       ...out.notes,
       planeOffsetM !== undefined
-        ? `Measured from ceiling corners using a ${ceilH.toFixed(2)} m ceiling — accuracy depends on that height being right.`
-        : "Ceiling height defaulted to 2.40 m — please confirm in review.",
+        ? `Measured from ceiling corners using a ${ceilH.toFixed(2)} m ceiling. Accuracy depends on that height being right.`
+        : "Ceiling height defaulted to 2.40 m. Please confirm in review.",
     ];
     // The solver assumes one fixed camera pose. A wide pitch spread means
     // the phone was tilted or turned between corners, which distorts scale
     // badly — say so plainly rather than presenting a confident wrong number.
     if (tiltSpread > 10) {
       notes.unshift(
-        `Phone moved between corners (${Math.round(tiltSpread)}° of tilt change) — measurements are unreliable. Stand where all four corners are visible and rescan without moving.`,
+        `Phone moved between corners (${Math.round(tiltSpread)}° of tilt change). Measurements are unreliable. Stand where all four corners are visible and rescan without moving.`,
       );
     }
     // If tilt came only from fallback, downgrade confidence a notch.
@@ -1166,7 +1166,7 @@ export default function RoomScanOverlay({
         ? "medium"
         : out.confidence;
     if (!tiltFromDevice) {
-      notes.push("Phone tilt sensor unavailable — used 30° default. Accuracy ±15 cm.");
+      notes.push("Phone tilt sensor unavailable. Used 30° default. Accuracy ±15 cm.");
     }
     // A moved phone invalidates the single-pose model outright, so this
     // outranks the re-projection check below.
@@ -1176,10 +1176,10 @@ export default function RoomScanOverlay({
       // re-project tightly. The math is still returned — just flagged.
       confidence = confidence === "high" ? "medium" : "low";
       notes.push(
-        `Re-projection error ${reproPx.toFixed(0)} px (limit ${reproThresh.toFixed(0)} px) — geometry didn't close cleanly. Re-tap the corners or recalibrate.`,
+        `Re-projection error ${reproPx.toFixed(0)} px (limit ${reproThresh.toFixed(0)} px). Geometry didn't close cleanly. Re-tap the corners or recalibrate.`,
       );
     } else {
-      notes.push(`Re-projection error ${reproPx.toFixed(1)} px — geometry closes cleanly.`);
+      notes.push(`Re-projection error ${reproPx.toFixed(1)} px. Geometry closes cleanly.`);
     }
 
     setResult({
@@ -1240,7 +1240,7 @@ export default function RoomScanOverlay({
       const upper = imageWidthPx * 1.37;
       if (result < lower || result > upper) {
         setCalibError(
-          "Calibration result looks implausible — re-tap the ends of the reference (e.g. a 1 m tape) more carefully.",
+          "Calibration result looks implausible. Re-tap the ends of the reference (e.g. a 1 m tape) more carefully.",
         );
         return;
       }
@@ -1442,7 +1442,7 @@ export default function RoomScanOverlay({
               () =>
                 resolve({
                   supported: false,
-                  reason: "Availability check timed out — using corner-tap mode.",
+                  reason: "Availability check timed out. Using corner-tap mode.",
                 }),
               2000,
             ),
@@ -1492,7 +1492,7 @@ export default function RoomScanOverlay({
       );
       if (!room.rectangular) {
         notes.push(
-          "Floor polygon is non-rectangular — room may have bays, alcoves or irregular corners.",
+          "Floor polygon is non-rectangular. Room may have bays, alcoves or irregular corners.",
         );
       }
       notes.push(`Scan completed in ${r.durationS.toFixed(1)} s.`);
@@ -1538,7 +1538,7 @@ export default function RoomScanOverlay({
       const dims = applyRoomPlanResult(r);
       setRoomPlanRunning(false);
       if (!dims) {
-        setErrorMsg("RoomPlan returned no room data — please try again.");
+        setErrorMsg("RoomPlan returned no room data. Please try again.");
         setPhase("error");
         return;
       }
@@ -1752,7 +1752,7 @@ export default function RoomScanOverlay({
                   </p>
                   <p className="mb-2 text-sm text-white/60">
                     Put a long object <strong className="text-white">on the
-                    floor</strong> — a 1 m tape, floor tile edge or A4 sheet —
+                    floor</strong>. A 1 m tape, floor tile edge or A4 sheet 
                     and tap each end. Teaches the app your camera lens.
                   </p>
                   {calibratedFocalPx === null && (
@@ -1804,7 +1804,7 @@ export default function RoomScanOverlay({
                     onClick={() => setSetupDismissed(true)}
                     className="w-full text-sm font-bold uppercase tracking-widest text-white/50 underline"
                   >
-                    Skip — expect measurements to be out by 10–20%
+                    Skip. Expect measurements to be out by 10–20%
                   </button>
                 </div>
               </div>
@@ -1955,7 +1955,7 @@ export default function RoomScanOverlay({
                       className={`mt-0.5 block text-sm ${measureMode === "room" ? "text-[#1c1c1a]/70" : "text-white/60"}`}
                     >
                       All four ceiling corners visible at once, and the phone
-                      still for all four taps — you can&apos;t turn to reach
+                      still for all four taps. You can&apos;t turn to reach
                       one. Large rooms only; use Wall to wall otherwise,
                       which lets you move between walls.
                     </span>
@@ -2147,7 +2147,7 @@ export default function RoomScanOverlay({
                       }}
                     >
                       This number sets the scale. Get it wrong and every
-                      measurement is wrong by the same proportion — 10 cm
+                      measurement is wrong by the same proportion. 10 cm
                       out here is 17 cm out on a 4 m wall.
                     </p>
                     {/* An explicit tick, not a filled-in field.
@@ -2190,7 +2190,7 @@ export default function RoomScanOverlay({
                     </button>
                     <div className={lensPickerOpen ? "block" : "hidden"}>
                     <p className="mb-2 text-sm text-white/60">
-                      Can&apos;t fit the wall in? Pick an ultra-wide lens — it
+                      Can&apos;t fit the wall in? Pick an ultra-wide lens. It
                       sees roughly twice as much.
                     </p>
                     <div className="mb-4 flex flex-col gap-1.5">
@@ -2364,7 +2364,7 @@ export default function RoomScanOverlay({
                 {roomPlanSupport === "yes" ? (
                   <>
                     <p className="mb-2 font-semibold" style={{ color: GOLD }}>
-                      Apple RoomPlan ready — full LiDAR sweep in one pass.
+                      Apple RoomPlan ready. Full LiDAR sweep in one pass.
                     </p>
                     <p className="mb-3 text-white/60">
                       Hold the phone vertically and walk slowly around the room
@@ -2444,9 +2444,9 @@ export default function RoomScanOverlay({
                         {cornerCount === 0 &&
                           (wallLengths.length === 0
                             ? tapPlane === "ceiling"
-                              ? "Back against a wall — tap where the far wall meets the CEILING ×3"
-                              : "Back against a wall — tap where the far wall meets the FLOOR ×3"
-                            : "Now turn 90°, back to the next wall — tap opposite ×3")}
+                              ? "Back against a wall. Tap where the far wall meets the CEILING ×3"
+                              : "Back against a wall. Tap where the far wall meets the FLOOR ×3"
+                            : "Now turn 90°, back to the next wall. Tap opposite ×3")}
                         {cornerCount >= 1 && "Measuring…"}
                       </>
                     ) : measureMode === "wall" ? (
@@ -2458,7 +2458,7 @@ export default function RoomScanOverlay({
                     ) : (
                       <>
                         {cornerCount === 0 && "Tap corner 1 ×3"}
-                        {cornerCount === 1 && "Corner 2 — clockwise ×3"}
+                        {cornerCount === 1 && "Corner 2. Clockwise ×3"}
                         {cornerCount === 2 && "Corner 3 ×3"}
                         {cornerCount === 3 && "Corner 4 ×3"}
                         {cornerCount >= 4 && "Measuring…"}
@@ -2477,7 +2477,7 @@ export default function RoomScanOverlay({
                 </div>
                 {!hudCollapsed && (
                   <p className="mb-1 text-white/55">
-                    Same spot 3 times — the median absorbs tremor. Stay still.
+                    Same spot 3 times. The median absorbs tremor. Stay still.
                   </p>
                 )}
 
@@ -2572,7 +2572,7 @@ export default function RoomScanOverlay({
                     <span
                       className="rounded-full px-3 py-1 text-sm font-bold uppercase tracking-widest"
                       style={{ backgroundColor: "rgba(244,168,156,0.18)", color: "#f4a89c" }}
-                      title={`Tilt spread ${tiltSpreadDeg.toFixed(1)}° — hold still to tap`}
+                      title={`Tilt spread ${tiltSpreadDeg.toFixed(1)}°. Hold still to tap`}
                     >
                       ✋ Hold still
                     </span>
@@ -2770,7 +2770,7 @@ export default function RoomScanOverlay({
                     </label>
                     <p className="mb-3 text-sm text-white/45">
                       Both taps must be on the floor. The side of a bin or box
-                      won&apos;t work — those points sit above it.
+                      won&apos;t work. Those points sit above it.
                     </p>
                   </>
                 ) : (
@@ -2832,7 +2832,7 @@ export default function RoomScanOverlay({
                 </p>
                 <p className="text-white/55">
                   We&apos;re still working on the on-device vision pipeline. For now, please
-                  switch to <span className="font-semibold">Corner mark</span> — it uses the
+                  switch to <span className="font-semibold">Corner mark</span>. It uses the
                   same camera and gives you a real measurement in four taps.
                 </p>
               </div>

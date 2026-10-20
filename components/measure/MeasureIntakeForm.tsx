@@ -26,6 +26,7 @@ import {
   scanOutlineWorthKeeping,
   untangleOutline,
   squareUpOutline,
+  axisAlignOutline,
   roomFootprint,
   rotatePointM,
   roomBoundingBox,
@@ -325,7 +326,7 @@ export default function MeasureIntakeForm() {
         () =>
           resolve({
             supported: false,
-            reason: "AR check timed out — using corner-tap mode.",
+            reason: "AR check timed out. Using corner-tap mode.",
           }),
         2000,
       ),
@@ -532,7 +533,7 @@ export default function MeasureIntakeForm() {
           if (i === 3) return { ...w, lengthM: lm };
           return w;
         });
-        const stamp = `[Auto-scan ${new Date().toISOString()} — W×L×H ${wm}×${lm}×${hm} m]`;
+        const stamp = `[Auto-scan ${new Date().toISOString()}. W×L×H ${wm}×${lm}×${hm} m]`;
         return {
           ...r,
           walls,
@@ -640,9 +641,9 @@ export default function MeasureIntakeForm() {
             .slice(0, wallMeasurements.length)
             .map((w) => w.lengthM || "?")
             .join(" × ");
-          const stamp = `[Auto-scan ${capturedAt} — ${wallSummary}${
+          const stamp = `[Auto-scan ${capturedAt}. ${wallSummary}${
             ceiling ? ` × ${ceiling.valueM.toFixed(2)}` : ""
-          } m — overall ${overall}]`;
+          } m. Overall ${overall}]`;
 
           return {
             ...r,
@@ -756,7 +757,7 @@ export default function MeasureIntakeForm() {
     const scanned = result.rooms ?? [];
     if (!scanned.length) return;
 
-    const stamp = `[Whole-property LiDAR scan ${new Date().toISOString()} — ${scanned.length} room${scanned.length === 1 ? "" : "s"}]`;
+    const stamp = `[Whole-property LiDAR scan ${new Date().toISOString()}. ${scanned.length} room${scanned.length === 1 ? "" : "s"}]`;
     const nextPlacements: Record<string, RoomPlacement> = {};
 
     const built: RoomDraft[] = scanned.map((sr, i) => {
@@ -1142,9 +1143,21 @@ export default function MeasureIntakeForm() {
         // Room-local, measured from the outline's own corner — the
         // same convention a RoomPlan scan uses, so the plan editor
         // and the DXF cannot tell the two apart.
-        const minX = Math.min(...pts.map((p) => p.x));
-        const minZ = Math.min(...pts.map((p) => p.z));
-        const local = pts.map((p) => ({
+        /*
+         * Square to the page, then moved to its own corner.
+         *
+         * The heading ARKit reports is whichever way the customer
+         * was facing when they started, so without this a
+         * rectangular room lands on the plan at a random tilt and
+         * everyone who sees it thinks the app has measured it
+         * crooked. Turning the outline is turning the paper: the
+         * walls, the angles between them and the area are all
+         * untouched.
+         */
+        const aligned = axisAlignOutline(pts);
+        const minX = Math.min(...aligned.polygon.map((p) => p.x));
+        const minZ = Math.min(...aligned.polygon.map((p) => p.z));
+        const local = aligned.polygon.map((p) => ({
           x: Number((p.x - minX).toFixed(3)),
           z: Number((p.z - minZ).toFixed(3)),
         }));
@@ -2301,7 +2314,7 @@ export default function MeasureIntakeForm() {
       // them when they have nothing else to be called.
       const where = named || (ri !== null ? `room ${ri + 1}` : "");
       setNavBlock({
-        message: `${v[0].message.replace(/\.$/, "")}${where ? ` — in ${where}` : ""}`,
+        message: `${v[0].message.replace(/\.$/, "")}${where ? `. In ${where}` : ""}`,
         roomIndex: ri,
       });
       return;
@@ -2318,7 +2331,7 @@ export default function MeasureIntakeForm() {
     if (next === "review" && !rooms.some((r) => placements[r.id]?.positionM)) {
       setNavBlock({
         message:
-          "None of your rooms are on the plan yet — put them on it, or press Review again to send without a drawing",
+          "None of your rooms are on the plan yet. Put them on it, or press Review again to send without a drawing",
         roomIndex: null,
         placeAll: true,
         // Not a fault in a room, so no "Fix it" button: there is
@@ -2379,7 +2392,26 @@ export default function MeasureIntakeForm() {
    * The measurements, the shapes, the doors and the photographs are
    * all unaffected. Only the arrangement is deferred.
    */
-  const skipPlanStep = arSupport === "yes" || planAlreadyDone;
+  /*
+   * LiDAR comes back to the plan after all — for features, not for
+   * arranging.
+   *
+   * Skipping it entirely was right about arranging and wrong about
+   * everything else, because the plan step is also the only place
+   * in the app that can add a staircase or correct a door. RoomPlan
+   * never reports stairs: they are not a room and not a wall, so a
+   * LiDAR survey of a two-storey house arrived with no way to say
+   * the stairs existed. The one thing only the customer can tell us
+   * was the one thing they could not.
+   *
+   * So the step is back for everyone. What changes is what it asks
+   * for: rooms that arrived already positioned are left where the
+   * sensor put them, anything unplaced is laid out automatically on
+   * arrival, and the page leads with adding stairs and doors rather
+   * than with dragging boxes. Nobody is asked to arrange a plan the
+   * scan already produced.
+   */
+  const skipPlanStep = planAlreadyDone;
 
   /**
    * Give every room a position, so a drawing can be produced.
@@ -2402,7 +2434,22 @@ export default function MeasureIntakeForm() {
     });
   }, [rooms, placements]);
 
-  const goPlan = () => advanceTo("plan");
+  /*
+   * Lay out anything loose on the way in, not on the way out.
+   *
+   * This ran only when the plan step was skipped, because that was
+   * the one case where nobody would ever position the rooms. Now
+   * that a scanned survey comes here too, it has to run on arrival:
+   * a single-room LiDAR scan carries no position, and the customer
+   * is not here to arrange rooms — they are here to put the stairs
+   * in. Landing them on an empty grid with their rooms in a pile
+   * would be asking for exactly the work this step is meant to
+   * have saved them.
+   */
+  const goPlan = () => {
+    ensureEveryRoomPlaced();
+    advanceTo("plan");
+  };
 
   const goReview = () => advanceTo("review");
 
@@ -2440,7 +2487,7 @@ export default function MeasureIntakeForm() {
         return {
           message: i.message,
           where: room
-            ? `${roomDisplayLabel(room, ri)} — room ${ri + 1} of ${rooms.length}`
+            ? `${roomDisplayLabel(room, ri)}. Room ${ri + 1} of ${rooms.length}`
             : null,
         };
       }),
@@ -2500,15 +2547,15 @@ export default function MeasureIntakeForm() {
   const savedLabel = useMemo(() => {
     void savedTick; // dependency: recompute as the tick advances
     if (draftSaveOk === false) {
-      return "Couldn't save on this device — finish in one go if you can";
+      return "Couldn't save on this device. Finish in one go if you can";
     }
     if (!lastSavedAt) return "Your answers save as you go";
     const mins = Math.floor((Date.now() - lastSavedAt) / 60_000);
-    if (mins < 1) return "Saved — you can close the app and come back";
-    if (mins === 1) return "Saved 1 min ago — safe to close the app";
-    if (mins < 60) return `Saved ${mins} min ago — safe to close the app`;
+    if (mins < 1) return "Saved. You can close the app and come back";
+    if (mins === 1) return "Saved 1 min ago. Safe to close the app";
+    if (mins < 60) return `Saved ${mins} min ago. Safe to close the app`;
     const hrs = Math.floor(mins / 60);
-    return `Saved ${hrs} hr${hrs === 1 ? "" : "s"} ago — safe to close the app`;
+    return `Saved ${hrs} hr${hrs === 1 ? "" : "s"} ago. Safe to close the app`;
   }, [lastSavedAt, savedTick, draftSaveOk]);
 
   /* ── Room pager ─────────────────────────────────────────────────
@@ -2961,7 +3008,7 @@ export default function MeasureIntakeForm() {
       setStep("project");
       setSubmitStatus("error");
       setSubmitError(
-        `${missingDetails.message} You skipped ${missingDetails.field} earlier — we've taken you back to it.`,
+        `${missingDetails.message} You skipped ${missingDetails.field} earlier. We've taken you back to it.`,
       );
       return;
     }
@@ -3258,11 +3305,11 @@ export default function MeasureIntakeForm() {
           raw,
         )
       ) {
-        friendly = "Couldn't reach the server. Check your internet connection and try again — your draft is safe.";
+        friendly = "Couldn't reach the server. Check your internet connection and try again. Your draft is safe.";
       } else if (/Rate limit reached/i.test(raw)) {
-        friendly = "We're rate-limited right now. Please try again in an hour — your draft is safe.";
+        friendly = "We're rate-limited right now. Please try again in an hour. Your draft is safe.";
       } else if (/Server responded 5\d\d/i.test(raw)) {
-        friendly = "TM Designs' server is having a wobble. Please try again in a few minutes — your draft is safe.";
+        friendly = "TM Designs' server is having a wobble. Please try again in a few minutes. Your draft is safe.";
       } else if (/Server responded 4\d\d/i.test(raw)) {
         friendly = "The server refused this submission. Please email inquiries@tmdesignsltd.com if it keeps happening.";
       }
@@ -3279,7 +3326,7 @@ export default function MeasureIntakeForm() {
       `TM Measure intake (summary)\n\n${JSON.stringify(payload, null, 2)}\n\nNote: attach photos from your device separately until upload is connected.`,
     );
     window.location.href = `mailto:inquiries@tmdesignsltd.com?subject=${encodeURIComponent(
-      `Measurement intake — ${projectName}`,
+      `Measurement intake. ${projectName}`,
     )}&body=${body}`;
   };
 
@@ -3403,11 +3450,11 @@ export default function MeasureIntakeForm() {
 
       <main className="mx-auto max-w-5xl px-4 md:px-6">
         <p className="mb-8 max-w-3xl text-sm leading-relaxed text-on-surface-variant">
-          We&apos;ll walk you through each room —{" "}
+          We&apos;ll walk you through each room {" "}
           <strong className="font-semibold text-on-surface">
             walls, doors, windows, photos and notes
           </strong>{" "}
-          — then a quick floor plan. Enter lengths in{" "}
+. Then a quick floor plan. Enter lengths in{" "}
           <strong className="font-semibold text-on-surface">metres</strong>; the
           review step shows metric and imperial side by side before anything is
           sent.
@@ -3485,7 +3532,7 @@ export default function MeasureIntakeForm() {
                 Which room should we scan?
               </h2>
               <p className="mt-2 text-sm leading-relaxed text-on-surface-variant">
-                You have more than one room. Pick the space to measure — results
+                You have more than one room. Pick the space to measure. Results
                 will fill that room&apos;s wall lengths and ceiling height.
               </p>
               <ul className="mt-6 space-y-2">
@@ -3621,7 +3668,7 @@ export default function MeasureIntakeForm() {
                 <input
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value)}
-                  placeholder="e.g. Rear extension — 12 Smith Street"
+                  placeholder="e.g. Rear extension. 12 Smith Street"
                   className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                 />
                 {issueFor("project") && (
@@ -3640,7 +3687,7 @@ export default function MeasureIntakeForm() {
                   className="w-full max-w-xs rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-4 py-3 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                 />
                 <p className="mt-1 text-sm text-on-surface-variant">
-                  Optional. Most homes are the same throughout — enter it once
+                  Optional. Most homes are the same throughout. Enter it once
                   and we&apos;ll pre-fill every room. You can change any room
                   individually under Add detail.
                 </p>
@@ -3680,7 +3727,7 @@ export default function MeasureIntakeForm() {
                 <p className="mt-2 text-sm text-on-surface-variant">
                   {unitLocked
                     ? "Units are locked for this project to prevent metric/imperial mix-ups mid-survey."
-                    : "Pick once — units lock when you continue. Entries are stored in metres; the review step shows both."}
+                    : "Pick once. Units lock when you continue. Entries are stored in metres; the review step shows both."}
                 </p>
               </div>
               {/* How this phone will measure — named, in plain words.
@@ -3713,7 +3760,7 @@ export default function MeasureIntakeForm() {
                           ? {
                               icon: "sensors",
                               name: "Room scan",
-                              body: "Your phone has a depth sensor, so it measures each room by itself — walls, doors and windows. No tape measure.",
+                              body: "Your phone has a depth sensor, so it measures each room by itself. Walls, doors and windows. No tape measure.",
                             }
                           : arTraceSupport === "yes"
                             ? {
@@ -3835,7 +3882,7 @@ export default function MeasureIntakeForm() {
                 </h2>
                 <p className="mt-1 text-sm leading-relaxed text-on-surface-variant">
                   Your phone has a LiDAR sensor. Walk through each room in turn
-                  and it measures the walls, doors and windows for you — then
+                  and it measures the walls, doors and windows for you. Then
                   works out how the rooms fit together, so there&apos;s no floor
                   plan to arrange afterwards.
                 </p>
@@ -3906,7 +3953,7 @@ export default function MeasureIntakeForm() {
                       which reads as an unfinished app to a reviewer and
                       means nothing to a homeowner. */}
                   <p className="mt-2 max-w-xl text-sm text-white/65">
-                    Point your camera at the room and tap the corners — we&apos;ll
+                    Point your camera at the room and tap the corners. We&apos;ll
                     work out the dimensions for you. With several rooms you&apos;ll
                     choose which one to update; a single room opens the scan
                     straight away.
@@ -3985,7 +4032,7 @@ export default function MeasureIntakeForm() {
                       <option key={r.id} value={i}>
                         {i + 1}. {r.name?.trim() || "Unnamed room"}
                         {issues.some((x) => x.path.startsWith(`room-${i}-`))
-                          ? "  — needs attention"
+                          ? ". Needs attention"
                           : ""}
                       </option>
                     ))}
@@ -4168,7 +4215,7 @@ export default function MeasureIntakeForm() {
                       </span>
                       <br />
                       Tick if the room is a true rectangle. Leave unticked if
-                      any corner is off — a bay, a splay, an old house that has
+                      any corner is off. A bay, a splay, an old house that has
                       moved. We&apos;ll draw it as measured either way.
                     </span>
                   </label>
@@ -4203,7 +4250,7 @@ export default function MeasureIntakeForm() {
                       <p className="mt-2 rounded-md bg-amber-100/60 px-3 py-2 text-sm leading-relaxed text-amber-900">
                         You&apos;ve said the corners are square, but walls{" "}
                         {off.map(([, , label]) => label).join(" and ")} don&apos;t
-                        match. In a true rectangle opposite walls are equal —
+                        match. In a true rectangle opposite walls are equal 
                         worth a re-measure, or untick the box if the room really
                         isn&apos;t square.
                       </p>
@@ -4223,7 +4270,7 @@ export default function MeasureIntakeForm() {
                   {room.shape === "l-shape" && (
                     <p className="mt-3 text-sm leading-relaxed text-on-surface-variant">
                       Six walls to measure. Work round the room in order and
-                      the lengths will come back to the start — the wall
+                      the lengths will come back to the start. The wall
                       lengths below are numbered to match.
                     </p>
                   )}
@@ -4301,7 +4348,7 @@ export default function MeasureIntakeForm() {
                     (!room.measuredByScan || measurementsOpen[room.id]) && (
                     <div className="mb-3 rounded-lg bg-surface-container-lowest p-4">
                       <p className="mb-3 text-sm text-on-surface-variant">
-                        Just the two dimensions — we&apos;ll apply them to the
+                        Just the two dimensions. We&apos;ll apply them to the
                         opposite walls for you.
                       </p>
                       <div className="flex flex-col gap-3 sm:flex-row">
@@ -4481,7 +4528,7 @@ export default function MeasureIntakeForm() {
 
                 <div>
                   <label className="font-label mb-2 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
-                    Photos * — corners, openings, overall context
+                    Photos *. Corners, openings, overall context
                   </label>
                   <p className="mb-3 text-sm text-on-surface-variant">
                     Required: at least one reference photo per room so the architect can audit the measurements against what's actually there (radiators, columns, molding, etc.).
@@ -4544,8 +4591,8 @@ export default function MeasureIntakeForm() {
                       Voice memo (optional)
                     </label>
                     <p className="mb-1 text-sm text-on-surface-variant">
-                      Faster than typing. Note anything tricky — radiators,
-                      chimney breasts, an awkward corner — and the architect
+                      Faster than typing. Note anything tricky. Radiators,
+                      chimney breasts, an awkward corner. And the architect
                       hears it in your own words.
                     </p>
                     <VoiceRecorder
@@ -4616,7 +4663,7 @@ export default function MeasureIntakeForm() {
                   />
                   {usesDefaultCeiling(room) && (
                     <p className="mt-1 text-sm text-on-surface-variant">
-                      Inherited from the property default — edit here if this
+                      Inherited from the property default. Edit here if this
                       room differs.
                     </p>
                   )}
@@ -4643,7 +4690,7 @@ export default function MeasureIntakeForm() {
                     </div>
                     {room.doors.length === 0 && (
                       <p className="text-sm text-on-surface-variant">
-                        Optional — add each door opening width.
+                        Optional. Add each door opening width.
                       </p>
                     )}
                     <div className="space-y-3">
@@ -4760,7 +4807,7 @@ export default function MeasureIntakeForm() {
                                 );
                                 setRoom(room.id, { doors });
                               }}
-                              placeholder="e.g. Patio — sliding"
+                              placeholder="e.g. Patio. Sliding"
                               className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             />
                           </div>
@@ -4793,7 +4840,7 @@ export default function MeasureIntakeForm() {
                     </div>
                     {room.windows.length === 0 && (
                       <p className="text-sm text-on-surface-variant">
-                        Optional — rough opening widths.
+                        Optional. Rough opening widths.
                       </p>
                     )}
                     <div className="space-y-3">
@@ -4910,7 +4957,7 @@ export default function MeasureIntakeForm() {
                                 );
                                 setRoom(room.id, { windows });
                               }}
-                              placeholder="e.g. Bay — centre"
+                              placeholder="e.g. Bay. Centre"
                               className="w-full rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-sm outline-none ring-primary/30 focus:border-primary/70 focus:ring-2"
                             />
                           </div>
@@ -5099,7 +5146,7 @@ export default function MeasureIntakeForm() {
 
                 <div className="mb-6">
                   <label className="font-label mb-2 block text-sm font-bold uppercase tracking-widest text-on-surface-variant">
-                    Irregular room — describe bays, angles, L-shape
+                    Irregular room. Describe bays, angles, L-shape
                   </label>
                   <textarea
                     value={room.irregularNotes}
@@ -5395,7 +5442,14 @@ export default function MeasureIntakeForm() {
              steps are — but it wears the same shell and the same bottom
              bar, so it does not read as a different application. */
           <GuidedScreen
-            eyebrow="Floor plan"
+            /* The label says what this step is for, and that differs
+               by how the rooms were measured. A scanned survey
+               arrives already laid out, so the only job left here is
+               the one the sensor cannot do: stairs, and any door it
+               missed. A typed survey still has to be arranged. */
+            eyebrow={
+              arSupport === "yes" ? "Stairs and doors" : "Floor plan"
+            }
             /* No title. "Where do the rooms sit?" was a question the
                grid underneath answers by existing, taking a line of a
                screen whose whole point is the grid. */
@@ -5638,7 +5692,7 @@ export default function MeasureIntakeForm() {
             }
             blockMessage={
               !dxfWillBeAttached
-                ? "No CAD drawing yet — open the floor plan so the rooms get a position."
+                ? "No CAD drawing yet. Open the floor plan so the rooms get a position."
                 : null
             }
           >
@@ -5688,8 +5742,8 @@ export default function MeasureIntakeForm() {
                       {scanned.length === 1 ? "" : "s"}
                     </span>
                     {shaped > 0
-                      ? ` — ${shaped} with alcoves or corners. Nothing to arrange.`
-                      : " — nothing to arrange."}
+                      ? `. ${shaped} with alcoves or corners. Nothing to arrange.`
+                      : ". Nothing to arrange."}
                   </p>
                 );
               })()}
@@ -5718,7 +5772,7 @@ export default function MeasureIntakeForm() {
                       {unplaced.length} door{unplaced.length === 1 ? "" : "s"} or
                       window{unplaced.length === 1 ? "" : "s"} without a position
                     </span>{" "}
-                    — in {names.join(", ")}. We&apos;ll draw them centred on
+. In {names.join(", ")}. We&apos;ll draw them centred on
                     their wall, which is usually wrong. Go back and drag each
                     one roughly into place; it takes a second and saves a
                     round of questions.
@@ -5759,7 +5813,7 @@ export default function MeasureIntakeForm() {
                       const size = roomFootprint(room);
                       const h = parseMeters(room.ceilingHeightM);
                       const fmt = (n: number | null) =>
-                        n && Number.isFinite(n) ? n.toFixed(2) : "—";
+                        n && Number.isFinite(n) ? n.toFixed(2) : "";
                       return (
                         <p className="font-headline text-lg text-on-surface">
                           {fmt(h)}
@@ -5825,7 +5879,7 @@ export default function MeasureIntakeForm() {
                         }
                         return (
                           <li key={many}>
-                            {widths.length} {many} —{" "}
+                            {widths.length} {many} {" "}
                             {lo === hi ? `${lo} m` : `${lo} to ${hi} m wide`}
                           </li>
                         );
@@ -5935,7 +5989,7 @@ export default function MeasureIntakeForm() {
             {submitStatus === "success" ? (
               <div role="status" aria-live="polite" className="tm-lift rounded-2xl border border-primary/40 bg-primary/10 p-6">
                 <p className="font-headline text-lg font-semibold text-on-surface">
-                  Thanks — your measurements are on their way.
+                  Thanks. Your measurements are on their way.
                 </p>
                 <p className="mt-2 text-sm text-on-surface-variant">
                   We&apos;ve received the details for {projectName || "your project"}.
@@ -5951,7 +6005,7 @@ export default function MeasureIntakeForm() {
                       <span className="font-mono text-base text-primary">{lastSubmissionId}</span>
                     </p>
                     <p className="mt-1 text-sm text-on-surface-variant">
-                      Keep this — you can check progress any time at{" "}
+                      Keep this. You can check progress any time at{" "}
                       <Link href="/status" className="text-primary underline">
                         Project status
                       </Link>{" "}
@@ -6021,7 +6075,7 @@ export default function MeasureIntakeForm() {
                       The drawing is built from where the rooms sit on the
                       floor plan, and none of them have been placed yet. Go
                       back to the floor plan step and they will lay
-                      themselves out — you can send without it, but we
+                      themselves out. You can send without it, but we
                       won&apos;t have a plan to draw from.
                     </p>
                     <button

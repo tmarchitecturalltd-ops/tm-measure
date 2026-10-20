@@ -39,7 +39,7 @@ const BEATS: {
   },
   {
     title: "Straight to our drawing board",
-    body: "Send it over and our designers pick it up — no email back-and-forth.",
+    body: "Send it over and our designers pick it up. No email back-and-forth.",
     Icon: DraftingIcon,
   },
 ];
@@ -68,7 +68,7 @@ export default function WelcomeScreen({ onGetStarted }: { onGetStarted: () => vo
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-on-surface-variant">
             TM Measure turns a walk around your home into the measurements our
-            design team needs — usually in under an hour.
+            design team needs. Usually in under an hour.
           </p>
         </div>
 

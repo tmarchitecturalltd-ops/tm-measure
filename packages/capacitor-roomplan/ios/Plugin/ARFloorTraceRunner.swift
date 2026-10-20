@@ -123,6 +123,24 @@ final class ARFloorTraceRunner: NSObject {
     /// Lowest horizontal plane seen — taken to be the floor.
     private var floorY: Float?
 
+    /**
+     * The walls, as lines on the floor.
+     *
+     * Each detected vertical plane reduced to the line it makes
+     * when you look down on it: a point it passes through and the
+     * direction it runs, both in metres on the horizontal.
+     *
+     * This is what makes a corner measurable rather than guessed.
+     * See snapToCorner.
+     */
+    private var wallLines: [UUID: (p: SIMD2<Float>, d: SIMD2<Float>, half: Float)] = [:]
+    /// Largest floor plane mapped so far, in square metres. See
+    /// noteHorizontalPlane: this is what readiness waits on.
+    private var floorAreaM2: Double = 0
+    /// Enough mapped floor to trust a tap. About what you see
+    /// walking into a small bedroom and turning round.
+    private let minFloorAreaM2: Double = 4.0
+
     /// Worst tracking state seen during the session, not the last one.
     /// A trace that was briefly lost and recovered is still suspect.
     private var worstTracking: ARCamera.TrackingState = .normal
@@ -136,6 +154,11 @@ final class ARFloorTraceRunner: NSObject {
     /// it had mapped. Reported out, because a trace built on estimates
     /// deserves less confidence than one built on measured planes.
     private var estimatedTaps = 0
+
+    /// How many corners came from a wall intersection rather than
+    /// from where the thumb landed. The higher this is, the less the
+    /// drawing depends on anyone's aim. See snapToCorner.
+    private var snappedTaps = 0
 
     private var crosshair: UIView?
     private var readySpinner: UIActivityIndicatorView?
@@ -188,13 +211,17 @@ final class ARFloorTraceRunner: NSObject {
 
     private func startSession() {
         let config = ARWorldTrackingConfiguration()
-        // Vertical planes as well, for the height mode. A wall is the
-        // easiest thing in a room for ARKit to lock onto — skirting,
-        // sockets, picture edges — where a plain ceiling is the
-        // hardest, so a tap near the wall-to-ceiling junction has
-        // something to land on even when the ceiling itself offers
-        // nothing. Harmless in floor mode: the raycasts there ask for
-        // horizontal alignment and never see them.
+        // Vertical planes earn their keep twice.
+        //
+        // In height mode a wall is the easiest thing in a room for
+        // ARKit to lock onto — skirting, sockets, picture edges —
+        // where a plain ceiling is the hardest, so a tap near the
+        // wall-to-ceiling junction has something to land on even
+        // when the ceiling itself offers nothing.
+        //
+        // In floor mode they are where the measurements now come
+        // from: a corner is read as the place two walls cross, not
+        // as the place a thumb landed. See snapToCorner.
         config.planeDetection = [.horizontal, .vertical]
         config.worldAlignment = .gravity
         sceneView?.session.run(config, options: [.resetTracking, .removeExistingAnchors])
@@ -385,9 +412,14 @@ final class ARFloorTraceRunner: NSObject {
      * rather than something you discover.
      */
     private func refreshReadiness() {
+        // Floor mode also waits on enough mapped floor; height mode
+        // only needs tracking, since it measures between two taps
+        // and has no floor to be wrong about.
         let ready: Bool
-        if case .normal = currentTracking, floorY != nil {
-            ready = true
+        if case .normal = currentTracking {
+            ready =
+                mode == .height
+                || (floorY != nil && floorAreaM2 >= minFloorAreaM2)
         } else {
             ready = false
         }
@@ -513,6 +545,90 @@ final class ARFloorTraceRunner: NSObject {
         return (dx * dx + dz * dz).squareRoot()
     }
 
+    // MARK: - Corners from walls
+
+    /**
+     * How far a tap may be moved onto a wall intersection.
+     *
+     * Wide enough to cover a thumb aimed into a shadowed corner from
+     * three metres away, narrow enough that it cannot grab the wrong
+     * corner: it is a rare room whose corners are less than 0.7 m
+     * apart.
+     */
+    private let snapRadiusM: Float = 0.7
+
+    /** Below this, two walls are parallel enough to be the same wall. */
+    private let minCornerSine: Float = 0.5  // about 30 degrees
+
+    /**
+     * Move a tapped point onto the intersection of two walls.
+     *
+     * The measurement problem this exists to solve: three traces of
+     * the same room came back with the long wall at 5.22, 5.80 and
+     * 5.39 m. The room did not change. What changed was where a
+     * thumb landed on a phone screen, pointed at a corner that was
+     * four metres away and often behind a sofa. A tap is accurate to
+     * roughly where you can see, and the drawing inherited that.
+     *
+     * But the corner is not really a point anyone needs to hit. It
+     * is where two walls meet, and ARKit has already fitted both
+     * walls across their whole visible length — tens of thousands of
+     * depth samples each, averaged. Two long lines cross at one
+     * place, and that place is known far better than any single
+     * point on either of them.
+     *
+     * So the tap stops being the measurement and becomes the
+     * question: *which* corner do you mean. The answer comes from
+     * the walls. This is also why it degrades honestly — with only
+     * one wall seen, or none, there is nothing to intersect and the
+     * raw tap stands, exactly as before.
+     *
+     * Returns the snapped point, or nil to keep the tap.
+     */
+    private func snapToCorner(_ p: SCNVector3) -> SCNVector3? {
+        guard wallLines.count >= 2 else { return nil }
+
+        let tap = SIMD2<Float>(p.x, p.z)
+        let walls = Array(wallLines.values)
+        var best: SIMD2<Float>?
+        var bestDist = snapRadiusM
+
+        for i in 0..<walls.count {
+            for j in (i + 1)..<walls.count {
+                let a = walls[i]
+                let b = walls[j]
+
+                // Two lines cross once unless they are parallel. The
+                // cross product is the sine of the angle between
+                // them, both directions being unit length.
+                let denom = a.d.x * b.d.y - a.d.y * b.d.x
+                guard abs(denom) > minCornerSine else { continue }
+
+                let delta = b.p - a.p
+                let t = (delta.x * b.d.y - delta.y * b.d.x) / denom
+                let x = a.p + a.d * t
+
+                // Reject a crossing that is off the end of either
+                // wall. Two walls on opposite sides of a hallway meet
+                // somewhere out in the garden, and without this that
+                // phantom is as eligible as a real corner.
+                let overrunA = abs(t) - a.half
+                let alongB = simd_dot(x - b.p, b.d)
+                let overrunB = abs(alongB) - b.half
+                guard overrunA < 1.0, overrunB < 1.0 else { continue }
+
+                let d = simd_length(x - tap)
+                if d < bestDist {
+                    bestDist = d
+                    best = x
+                }
+            }
+        }
+
+        guard let corner = best else { return nil }
+        return SCNVector3(corner.x, p.y, corner.y)
+    }
+
     // MARK: - Tapping
 
     @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
@@ -551,6 +667,13 @@ final class ARFloorTraceRunner: NSObject {
         // ground.
         if mode == .floor, floorY == nil {
             setStatus("Still looking for the floor — point at it and move slowly")
+            return
+        }
+        if mode == .floor, floorAreaM2 < minFloorAreaM2 {
+            setStatus(
+                "Nearly ready — walk the room slowly with the phone pointed at "
+                    + "the floor. The more it sees, the more accurate the result."
+            )
             return
         }
 
@@ -666,7 +789,9 @@ final class ARFloorTraceRunner: NSObject {
         if usedTarget == "estimated" { estimatedTaps += 1 }
 
         let t = hit.worldTransform
-        let p = SCNVector3(t.columns.3.x, t.columns.3.y, t.columns.3.z)
+        // Not a constant: in floor mode the walls get a say in where
+        // this ends up. See snapToCorner.
+        var p = SCNVector3(t.columns.3.x, t.columns.3.y, t.columns.3.z)
 
         if mode == .floor {
             // Ignore a tap that lands on a surface well above the
@@ -691,6 +816,21 @@ final class ARFloorTraceRunner: NSObject {
                 )
                 return
             }
+
+            /*
+             * Hand the corner over to the walls.
+             *
+             * Done before the duplicate and back-at-start checks
+             * below, so those compare the points that will actually
+             * be drawn. Two taps a few centimetres apart that both
+             * snap to the same corner are a duplicate, and should be
+             * caught as one.
+             */
+            if let snapped = snapToCorner(p) {
+                p = snapped
+                snappedTaps += 1
+            }
+
             /*
              * Refuse a corner on top of the last one.
              *
@@ -889,6 +1029,7 @@ final class ARFloorTraceRunner: NSObject {
                     "complete": true,
                     "trackingQuality": trackingWord(worstTracking),
                     "estimatedPoints": estimatedTaps,
+            "snappedPoints": snappedTaps,
                 ])
             )
             return
@@ -911,6 +1052,7 @@ final class ARFloorTraceRunner: NSObject {
             "complete": true,
             "trackingQuality": trackingWord(worstTracking),
             "estimatedPoints": estimatedTaps,
+            "snappedPoints": snappedTaps,
         ]
 
         /*
@@ -1022,13 +1164,94 @@ extension ARFloorTraceRunner: ARSessionDelegate {
 extension ARFloorTraceRunner: ARSCNViewDelegate {
 
     func renderer(_ renderer: SCNSceneRenderer, didAdd node: SCNNode, for anchor: ARAnchor) {
-        guard let plane = anchor as? ARPlaneAnchor else { return }
-        noteHorizontalPlane(plane)
+        notePlane(anchor)
     }
 
     func renderer(_ renderer: SCNSceneRenderer, didUpdate node: SCNNode, for anchor: ARAnchor) {
+        notePlane(anchor)
+    }
+
+    func renderer(_ renderer: SCNSceneRenderer, didRemove node: SCNNode, for anchor: ARAnchor) {
+        // ARKit merges planes as it understands the room better, and
+        // retires the losers. A retired wall left in the list is a
+        // wall that is no longer there, and corners would still snap
+        // to it.
+        wallLines.removeValue(forKey: anchor.identifier)
+    }
+
+    /**
+     * Sort a plane into floor, ceiling or wall.
+     *
+     * Previously every plane went through the horizontal path,
+     * including the walls — so a wall's centre, about chest height,
+     * was eligible to become the ceiling.
+     */
+    /**
+     * How big a plane is, on any iOS this pod supports.
+     *
+     * `planeExtent` arrived in iOS 16 and deprecated `extent` in the
+     * same release, so neither one spans the range on its own and
+     * the pod targets 14.0. `height` and the old `z` are the same
+     * measurement under different names.
+     */
+    private func planeSize(_ plane: ARPlaneAnchor) -> (w: Float, h: Float) {
+        if #available(iOS 16.0, *) {
+            return (plane.planeExtent.width, plane.planeExtent.height)
+        }
+        return (plane.extent.x, plane.extent.z)
+    }
+
+    private func notePlane(_ anchor: ARAnchor) {
         guard let plane = anchor as? ARPlaneAnchor else { return }
-        noteHorizontalPlane(plane)
+        switch plane.alignment {
+        case .horizontal:
+            noteHorizontalPlane(plane)
+        case .vertical:
+            noteVerticalPlane(plane)
+        @unknown default:
+            break
+        }
+    }
+
+    /**
+     * Remember a wall as a line on the floor.
+     *
+     * Reduced to looking down on it: the point it passes through,
+     * the direction it runs, and how far it reaches either way. The
+     * vertical part is thrown away because a corner is a position on
+     * the floor, and the floor height is known separately.
+     *
+     * The direction is derived from the plane's normal rather than
+     * from one of its own axes, because which local axis runs
+     * horizontally is ARKit's business and has changed between
+     * releases. The normal is unambiguous: it is the way the wall
+     * faces, so the wall runs at right angles to it.
+     */
+    private func noteVerticalPlane(_ plane: ARPlaneAnchor) {
+        let m = plane.transform
+
+        // World normal: the plane's local +Y.
+        let n = SIMD2<Float>(m.columns.1.x, m.columns.1.z)
+        let nLen = simd_length(n)
+        // A truly horizontal plane has no horizontal normal. Should
+        // not reach here, but dividing by it would be a crash.
+        guard nLen > 0.001 else { return }
+        let nHat = n / nLen
+        let dir = SIMD2<Float>(-nHat.y, nHat.x)
+
+        // World position of the plane's centre, flattened.
+        let c = m * SIMD4<Float>(plane.center.x, plane.center.y, plane.center.z, 1)
+        let pos = SIMD2<Float>(c.x, c.z)
+
+        // Which extent runs along the wall is the same question as
+        // which axis does, so take the larger and be generous. Being
+        // generous is the right error here: walls are usually mapped
+        // in the middle and unmapped at the ends, which is precisely
+        // where the corners are.
+        let size = planeSize(plane)
+        let half = max(size.w, size.h) / 2
+
+        wallLines[plane.identifier] = (p: pos, d: dir, half: half)
     }
 
     /**
@@ -1046,11 +1269,39 @@ extension ARFloorTraceRunner: ARSCNViewDelegate {
      */
     private func noteHorizontalPlane(_ plane: ARPlaneAnchor) {
         let y = plane.transform.columns.3.y
+
+        /*
+         * How much floor has actually been mapped.
+         *
+         * Readiness used to turn on the instant any floor plane
+         * appeared, which can be a scrap half a metre across. Taps
+         * then fell straight through to estimated planes, and the
+         * whole trace was built on ARKit's guesses while the
+         * crosshair said it was ready. A long wall came back 60cm
+         * short.
+         *
+         * Area is the honest measure of whether the sensor knows
+         * the room yet, and it is the thing a few seconds of
+         * sweeping actually improves. Four square metres is about
+         * the floor you see walking into a small bedroom and
+         * turning round: enough to have a plane worth extending
+         * under the furniture, not so much that a cluttered room
+         * can never reach it.
+         */
+        let size = planeSize(plane)
+        if abs(y - (floorY ?? y)) < 0.15 {
+            floorAreaM2 = max(floorAreaM2, Double(size.w * size.h))
+        }
+
         if floorY == nil || y < floorY! {
             let firstFloor = floorY == nil
             floorY = y
             if firstFloor {
-                setStatus("Floor found — tap each corner of the room, going round")
+                floorAreaM2 = Double(size.w * size.h)
+                setStatus(
+                    "Floor found — keep sweeping it slowly for a moment so the "
+                        + "measurements are accurate"
+                )
             }
             refreshReadiness()
         }

@@ -82,11 +82,11 @@ const HINTS: Record<StepId, string> = {
   // it has been drawn. Photographed from above, with the surroundings
   // in shot, so the run between covers can be read off the picture.
   services:
-    "The round or square metal covers in a path or the garden. Take two: one straight down over the cover, and one from further back showing the path with the cover in it and the back of the house behind — so we can see where it sits in relation to the house.",
+    "The round or square metal covers in a path or the garden. Take two: one straight down over the cover, and one from further back showing the path with the cover in it and the back of the house behind. So we can see where it sits in relation to the house.",
   description:
     "A few sentences is plenty. What you want, roughly where, and anything that matters to you.",
   sketches:
-    "Anything you've been collecting — a rough drawing, photos of houses you like, screenshots.",
+    "Anything you've been collecting. A rough drawing, photos of houses you like, screenshots.",
 };
 
 type Props = {

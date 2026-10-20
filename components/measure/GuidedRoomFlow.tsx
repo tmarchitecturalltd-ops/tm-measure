@@ -444,7 +444,7 @@ export default function GuidedRoomFlow({
    */
   const blocked = (): string | null => {
     if (step === "scan" && !scanned) {
-      return "Scan the room to carry on — it only takes a minute.";
+      return "Scan the room to carry on. It only takes a minute.";
     }
     if (step === "name" && !room.name.trim()) {
       return "Give the room a name so we know which one it is.";
@@ -716,7 +716,7 @@ export default function GuidedRoomFlow({
         ...(onGoToPlan
           ? [
               {
-                label: "Done — go to the floor plan",
+                label: "Done. Go to the floor plan",
                 onClick: () => finishRoom(onGoToPlan),
               },
             ]
@@ -896,8 +896,8 @@ export default function GuidedRoomFlow({
               to do the wrong thing with the right tool. */}
           <p className="text-base leading-relaxed text-on-surface-variant">
             {scanIsLidar
-              ? "Your phone can measure this room itself — walls, ceiling, doors and windows — more precisely than a tape, and there's nothing to type afterwards."
-              : "Your phone can measure this room from its camera. You tap each corner of the floor and it works out the real sizes — no tape measure, and nothing to type afterwards."}
+              ? "Your phone can measure this room itself. Walls, ceiling, doors and windows. More precisely than a tape, and there's nothing to type afterwards."
+              : "Your phone can measure this room from its camera. You tap each corner of the floor and it works out the real sizes. No tape measure, and nothing to type afterwards."}
           </p>
           <button
             type="button"
@@ -920,7 +920,7 @@ export default function GuidedRoomFlow({
           <p className="text-sm text-on-surface-variant">
             {scanIsLidar
               ? "Hold the phone up and walk slowly round the room, pointing it at each wall in turn. Tap Done when the whole room is covered."
-              : "Hold the phone up and move it slowly for a few seconds while it finds the floor. Then tap each corner of the room in turn — aim where the walls meet the floor, not at the furniture — and tap Done."}
+              : "Hold the phone up and move it slowly for a few seconds while it finds the floor. Then tap each corner of the room in turn. Aim where the walls meet the floor, not at the furniture. And tap Done."}
           </p>
 
           {/* The way out.
@@ -936,7 +936,7 @@ export default function GuidedRoomFlow({
             <div className="rounded-xl border border-outline-variant/40 p-4">
               <p className="text-sm text-on-surface-variant">
                 Scanning didn&apos;t work? You can measure this room by hand
-                instead — a tape measure and the four wall lengths.
+                instead. A tape measure and the four wall lengths.
               </p>
               <button
                 type="button"
@@ -1114,7 +1114,7 @@ export default function GuidedRoomFlow({
           })()}
 
           <p className="text-sm text-on-surface-variant">
-            Nothing to type — the scan measured all of this. Have a quick
+            Nothing to type. The scan measured all of this. Have a quick
             look and carry on.
           </p>
 
@@ -1198,7 +1198,7 @@ export default function GuidedRoomFlow({
             onClick={onExitGuided}
             className="w-full justify-start rounded-xl border border-outline-variant/40 px-5 py-3 text-left text-sm font-semibold text-on-surface-variant"
           >
-            Something looks wrong — let me edit it
+            Something looks wrong. Let me edit it
           </button>
         </div>
       )}
@@ -1231,7 +1231,7 @@ export default function GuidedRoomFlow({
                 </span>
                 <span className="mt-1 block text-sm text-on-surface-variant">
                   {s === "rectangle"
-                    ? "The usual — a simple box"
+                    ? "The usual. A simple box"
                     : s === "l-shape"
                       ? "Six walls, with a corner taken out"
                       : "Draw the outline yourself"}
@@ -1340,7 +1340,7 @@ export default function GuidedRoomFlow({
               customer was told one thing and stopped by another. */}
           <p className="text-sm text-on-surface-variant">
             Work round the room in order. You can move on with some blank
-            and come back — we&apos;ll ask again before you finish the room.
+            and come back. We&apos;ll ask again before you finish the room.
           </p>
           {room.walls.map((w, i) => (
             <div key={w.id}>
@@ -1416,7 +1416,7 @@ export default function GuidedRoomFlow({
         <div className="space-y-4">
           <p className="text-base leading-relaxed text-on-surface-variant">
             One photo of the whole room is enough. It shows us things the
-            measurements can&apos;t — radiators, alcoves, where the light
+            measurements can&apos;t. Radiators, alcoves, where the light
             comes from.
           </p>
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold uppercase tracking-widest text-on-primary">
@@ -1451,7 +1451,7 @@ export default function GuidedRoomFlow({
               Anything else? (optional)
             </label>
             <p className="mb-2 text-sm text-on-surface-variant">
-              Faster to say than type — awkward corners, sloping ceilings,
+              Faster to say than type. Awkward corners, sloping ceilings,
               anything odd.
             </p>
             <VoiceRecorder

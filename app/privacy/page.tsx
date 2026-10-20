@@ -18,7 +18,9 @@ import Link from "next/link";
 import { renderMarkdown } from "@/lib/renderMarkdown";
 
 export const metadata = {
-  title: "Privacy Policy — TM Measure",
+  // A browser-tab title, where the dash was a separator rather than
+  // punctuation — so it takes a pipe, not a full stop.
+  title: "Privacy Policy | TM Measure",
   description:
     "How TM Architectural Designs Ltd. handles your data when you use the TM Measure app.",
 };

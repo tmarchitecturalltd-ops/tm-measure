@@ -69,7 +69,7 @@ const SECTIONS: TipSection[] = [
     bullets: [
       {
         strong: "Turn every light on.",
-        rest: "Ceiling lights, lamps, even the cooker hood — more sources mean fewer harsh shadows.",
+        rest: "Ceiling lights, lamps, even the cooker hood. More sources mean fewer harsh shadows.",
       },
       {
         strong: "Open blinds and curtains.",
@@ -126,7 +126,7 @@ const SECTIONS: TipSection[] = [
       // was never used.
       {
         strong: "Doors and windows.",
-        rest: "One clear shot of each is plenty — we can read the swing direction from the hinges.",
+        rest: "One clear shot of each is plenty. We can read the swing direction from the hinges.",
       },
       {
         strong: "Awkward bits.",
@@ -225,7 +225,7 @@ export default function PhotoTipsPage() {
               A few small habits make a huge difference
             </h2>
             <p className="mt-3 max-w-prose text-sm leading-relaxed text-on-surface-variant md:text-base">
-              Photos fill the gaps that measurements alone can&apos;t cover —
+              Photos fill the gaps that measurements alone can&apos;t cover 
               they show our team how the space actually feels and stops us from
               sending you back for re-shoots. Five minutes of prep gets you
               there.

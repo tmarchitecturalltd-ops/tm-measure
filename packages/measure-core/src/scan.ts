@@ -458,6 +458,60 @@ export function squareUpOutline(
 }
 
 /**
+ * Turn an outline so its longest wall runs horizontal.
+ *
+ * A traced room is drawn at whatever compass heading the customer
+ * happened to be facing when the session started. That heading says
+ * nothing about the house — it is an artefact of where they stood —
+ * so a perfectly rectangular bedroom lands on the plan at a random
+ * tilt and looks wrong to everybody who sees it.
+ *
+ * Rotating the outline is turning the sheet of paper, not redrawing
+ * the room: every wall length, every angle between walls and the
+ * floor area are untouched.
+ *
+ * The heading is returned rather than thrown away, because it is a
+ * real measurement even though it is not a useful one here. Rooms
+ * arrive unplaced and the customer arranges them on the plan, so
+ * nothing downstream currently uses the angle between one room and
+ * the next. The day they do — a merged whole-house trace, say —
+ * this is the number that puts them back in their true relative
+ * orientation.
+ */
+export function axisAlignOutline(polygon: { x: number; z: number }[]): {
+  polygon: { x: number; z: number }[];
+  headingDeg: number;
+} {
+  const n = polygon.length;
+  if (n < 3) return { polygon, headingDeg: 0 };
+
+  let longest = 0;
+  let best = -1;
+  for (let i = 0; i < n; i++) {
+    const q = polygon[(i + 1) % n];
+    const d = Math.hypot(q.x - polygon[i].x, q.z - polygon[i].z);
+    if (d > best) {
+      best = d;
+      longest = i;
+    }
+  }
+
+  const a = polygon[longest];
+  const b = polygon[(longest + 1) % n];
+  const heading = Math.atan2(b.z - a.z, b.x - a.x);
+  const cos = Math.cos(-heading);
+  const sin = Math.sin(-heading);
+
+  return {
+    polygon: polygon.map((p) => ({
+      x: Number((p.x * cos - p.z * sin).toFixed(3)),
+      z: Number((p.x * sin + p.z * cos).toFixed(3)),
+    })),
+    headingDeg: Number((((heading * 180) / Math.PI + 360) % 360).toFixed(1)),
+  };
+}
+
+/**
  * Is this one room, or several the sensor joined together?
  *
  * The opposite failure to looksLikeStrayCapture, and the more

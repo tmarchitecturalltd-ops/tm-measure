@@ -204,7 +204,7 @@ export default function ArchitectListPage() {
           </div>
           {endpoint && (
             <p className="mt-3 text-xs text-on-surface-variant">
-              Stored locally — only visible on this device. Use Forget when handing the laptop back.
+              Stored locally. Only visible on this device. Use Forget when handing the laptop back.
             </p>
           )}
         </section>
@@ -269,12 +269,12 @@ export default function ArchitectListPage() {
                       {s.projectName || "(unnamed project)"}
                     </p>
                     <p className="mt-1 text-sm text-on-surface-variant">
-                      {s.customerName || "—"} · {s.email || "—"}
+                      {s.customerName || ""} · {s.email || ""}
                     </p>
                   </div>
                   <div className="text-right">
                     <p className="font-label text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                      {s.submittedAt ? new Date(s.submittedAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "—"}
+                      {s.submittedAt ? new Date(s.submittedAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : ""}
                     </p>
                     <p className="mt-1 text-xs text-on-surface-variant">
                       {s.roomCount} room{s.roomCount === 1 ? "" : "s"} · ID {s.id}

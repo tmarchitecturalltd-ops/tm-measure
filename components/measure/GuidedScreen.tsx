@@ -256,7 +256,7 @@ export default function GuidedScreen({
               Nothing here can be got wrong
             </h2>
             <p className="mb-4 text-base leading-relaxed text-on-surface-variant">
-              Skip anything you can&apos;t answer and carry on — we check
+              Skip anything you can&apos;t answer and carry on. We check
               everything before we draw it, and we&apos;ll ask if
               something&apos;s missing. Your answers are saved as you go,
               so you can stop and come back.

@@ -58,7 +58,7 @@ export default function Hero() {
           >
             Extension Plans
             <br />
-            in 2 Weeks —
+            in 2 Weeks 
             <br />
             <em className="text-primary italic">No Site Visit.</em>
           </h1>

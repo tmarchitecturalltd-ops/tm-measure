@@ -20,7 +20,7 @@ const REVIEWS: Review[] = [
     initial: "J",
     name: "James Okafor",
     quote:
-      "Extremely professional and fast. TM Architectural Designs delivered our planning drawings well within the 2-week window. Council approved first time — couldn't ask for more.",
+      "Extremely professional and fast. TM Architectural Designs delivered our planning drawings well within the 2-week window. Council approved first time. Couldn't ask for more.",
     meta: "Google Review · TM Architectural Designs LTD · 1 week ago",
   },
   {
@@ -62,7 +62,7 @@ const REVIEWS: Review[] = [
     initial: "M",
     name: "Marcus Webb",
     quote:
-      "Brilliant service for our single-storey extension. Everything was remote — they worked from photos and measurements I sent. Back in under 2 weeks, approved by the council. Excellent value.",
+      "Brilliant service for our single-storey extension. Everything was remote. They worked from photos and measurements I sent. Back in under 2 weeks, approved by the council. Excellent value.",
     meta: "Google Review · TM Architectural Designs LTD · 4 months ago",
   },
   {
@@ -83,7 +83,7 @@ const REVIEWS: Review[] = [
     initial: "M",
     name: "Michael Patel",
     quote:
-      "Third time using TM Designs and they never disappoint. This time for a garage conversion — drawings were perfect and council approved within days.",
+      "Third time using TM Designs and they never disappoint. This time for a garage conversion. Drawings were perfect and council approved within days.",
     meta: "Verified Google Review · TM Architectural Designs LTD",
   },
   {

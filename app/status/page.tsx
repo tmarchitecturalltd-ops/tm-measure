@@ -178,7 +178,7 @@ export default function StatusPage() {
                         dateStyle: "medium",
                         timeStyle: "short",
                       })
-                    : "—"}
+                    : ""}
                 </dd>
               </div>
               {result.approvedAt && (
@@ -197,7 +197,7 @@ export default function StatusPage() {
             </dl>
             <p className="mt-4 text-xs text-white/55">
               {result.state === "approved"
-                ? "Your measurements have been verified — your designer is preparing the quote now."
+                ? "Your measurements have been verified. Your designer is preparing the quote now."
                 : "We have your submission. The architect typically reviews within two working days."}
             </p>
           </section>

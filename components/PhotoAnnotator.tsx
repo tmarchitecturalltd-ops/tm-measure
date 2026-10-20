@@ -88,7 +88,7 @@ export default function PhotoAnnotator({
     };
     img.onerror = () =>
       setError(
-        "Couldn't load image — Drive may be blocking the request from this device.",
+        "Couldn't load image. Drive may be blocking the request from this device.",
       );
     img.src = imageUrl;
     return () => {
@@ -196,7 +196,7 @@ export default function PhotoAnnotator({
               Annotate photo
             </h2>
             <p className="mt-1 text-xs text-on-surface-variant">
-              Draw on the image, then Save — your annotated copy is added
+              Draw on the image, then Save. Your annotated copy is added
               to the submission&apos;s Drive folder.
             </p>
           </div>

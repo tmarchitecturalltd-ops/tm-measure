@@ -90,13 +90,13 @@ import {
  * numbers per row buried that.
  */
 const DOOR_WIDTHS = [
-  { value: "0.760", label: "760 mm — internal" },
-  { value: "0.800", label: "800 mm — external" },
-  { value: "0.610", label: "610 mm — cupboard" },
-  { value: "0.686", label: "686 mm — narrow" },
-  { value: "0.926", label: "926 mm — wide" },
-  { value: "1.200", label: "1200 mm — double / French" },
-  { value: "1.800", label: "1800 mm — patio" },
+  { value: "0.760", label: "760 mm. Internal" },
+  { value: "0.800", label: "800 mm. External" },
+  { value: "0.610", label: "610 mm. Cupboard" },
+  { value: "0.686", label: "686 mm. Narrow" },
+  { value: "0.926", label: "926 mm. Wide" },
+  { value: "1.200", label: "1200 mm. Double / French" },
+  { value: "1.800", label: "1800 mm. Patio" },
   /*
    * Bi-folds have no standard width.
    *
@@ -106,7 +106,7 @@ const DOOR_WIDTHS = [
    * 1.8 m door where a 4.5 m opening is -- which on a rear extension
    * is most of the wall.
    */
-  { value: "custom", label: "Bi-fold or other — type the width" },
+  { value: "custom", label: "Bi-fold or other. Type the width" },
 ] as const;
 
 /** Windows vary far more than doors, so this is a ladder, not a list. */
@@ -117,7 +117,7 @@ const WINDOW_WIDTHS = [
   { value: "1.500", label: "1500 mm" },
   { value: "1.800", label: "1800 mm (large)" },
   { value: "2.400", label: "2400 mm (bay / picture)" },
-  { value: "custom", label: "Something else — type the width" },
+  { value: "custom", label: "Something else. Type the width" },
 ] as const;
 
 const GOLD = "#b89650";
@@ -1990,7 +1990,7 @@ export default function FloorPlanEditor({
             </button>
           </div>
           <p className="mt-2 text-sm text-[#6e6a5f]">
-            It lands on the first wall — drag it to where it really is.
+            It lands on the first wall. Drag it to where it really is.
           </p>
       </>
             </>
@@ -2832,7 +2832,7 @@ export default function FloorPlanEditor({
             style={{ backgroundColor: "#1c1c1ae8", color: "#fff8ea" }}
           >
             {justAdded === "stairs" ? "Stairs" : justAdded === "door" ? "Door" : "Window"}{" "}
-            added — drag it to where it goes
+            added. Drag it to where it goes
           </div>
         )}
 
@@ -2847,7 +2847,7 @@ export default function FloorPlanEditor({
             style={{ backgroundColor: "#1c1c1ae8", color: "#fff8ea" }}
           >
             <span className="min-w-0 flex-1 text-sm font-semibold">
-              {roomNeedingDoor.name?.trim() || "This room"} has no doors yet —
+              {roomNeedingDoor.name?.trim() || "This room"} has no doors yet 
               they tell us how the rooms join up
             </span>
             <button
@@ -2950,7 +2950,7 @@ export default function FloorPlanEditor({
                     type="button"
                     onClick={() => moveRoomToFloor(r.id, currentFloor)}
                     className="rounded-lg border border-[#d9d3c8] bg-white px-3 py-1.5 text-left text-sm font-semibold text-[#1c1c1a]"
-                    title={`Currently on ${floorLabel(p.floor)} — click to move here`}
+                    title={`Currently on ${floorLabel(p.floor)}. Click to move here`}
                   >
                     {r.name || "Room"}
                     <span className="ml-1 text-sm font-normal text-[#8a6f2f]">

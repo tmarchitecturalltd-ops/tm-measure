@@ -89,7 +89,7 @@ type Submission = {
 
 function fmtMeters(v: unknown): string {
   const n = Number(v);
-  if (!isFinite(n)) return "—";
+  if (!isFinite(n)) return "";
   return `${n.toFixed(2)} m`;
 }
 
@@ -105,7 +105,7 @@ function fmtImperial(v: unknown): string {
 
 function fmtDual(v: unknown): string {
   const m = fmtMeters(v);
-  if (m === "—") return "—";
+  if (m === "") return "";
   return `${m} · ${fmtImperial(v)}`;
 }
 
@@ -370,7 +370,7 @@ export default function ArchitectReviewPage() {
                     submission.internalNote ?? "",
                   )
                 }
-                placeholder="Notes only visible to the TM team — pricing assumptions, follow-ups, anything off-the-record."
+                placeholder="Notes only visible to the TM team. Pricing assumptions, follow-ups, anything off-the-record."
                 className="mt-1 w-full rounded border border-outline-variant/30 bg-surface-container-lowest px-4 py-2 text-sm outline-none ring-primary/40 focus:ring-2"
               />
             </section>

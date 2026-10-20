@@ -477,7 +477,7 @@ function defaultSummary({
 }): string {
   const areaPart = areaM2
     ? `The scan identifies an area of ${areaM2.toFixed(2)} m².`
-    : "Area could not be derived automatically — please verify wall lengths.";
+    : "Area could not be derived automatically. Please verify wall lengths.";
   // These three lines used to claim things the app cannot know. "All
   // primary wall structures were verified with high precision" — nothing
   // verifies them; the bucket comes from geometry sanity checks, not a
@@ -491,7 +491,7 @@ function defaultSummary({
     overall === "high"
       ? "The corners formed a consistent rectangle. Please still check one wall against a tape before confirming."
       : overall === "medium"
-      ? "The geometry checks passed with some slack — check the Medium-confidence rows against a tape."
+      ? "The geometry checks passed with some slack. Check the Medium-confidence rows against a tape."
       : "The geometry checks did not agree. Treat these as rough and measure by hand, or re-scan taking more care over the corner taps.";
   return `${areaPart} ${confidencePart}`;
 }
@@ -507,7 +507,7 @@ function splitPrimaryDisplay(primary: string): {
   smallUnit: string | null;
 } {
   const trimmed = primary.trim();
-  if (!trimmed) return { bigValue: "—", smallUnit: null };
+  if (!trimmed) return { bigValue: "", smallUnit: null };
   // Metric case: "4.20 m" — split on last space
   const lastSpace = trimmed.lastIndexOf(" ");
   if (lastSpace > 0 && /^[\d.,\-]+$/.test(trimmed.slice(0, lastSpace))) {

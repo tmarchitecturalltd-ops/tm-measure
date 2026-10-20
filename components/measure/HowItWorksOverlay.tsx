@@ -54,7 +54,7 @@ const STEPS: { icon: string; title: string; body: string }[] = [
   {
     icon: "photo_camera",
     title: "A photo of each room",
-    body: "It shows what a measurement can't — radiators, alcoves, odd corners.",
+    body: "It shows what a measurement can't. Radiators, alcoves, odd corners.",
   },
   {
     // Said now, not when we get there. Photographing the outside means
@@ -63,7 +63,7 @@ const STEPS: { icon: string; title: string; body: string }[] = [
     // survey gets abandoned three screens from the end.
     icon: "home",
     title: "Then outside",
-    body: "Each side of the house, and any manhole covers — photograph those from above so we can see which way the drains run.",
+    body: "Each side of the house, and any manhole covers. Photograph those from above so we can see which way the drains run.",
   },
   {
     icon: "send",
@@ -156,7 +156,7 @@ export default function HowItWorksOverlay() {
           </ol>
 
           <p className="mt-4 text-sm leading-snug text-on-surface-variant">
-            Your progress saves as you go — stop any time and pick it up
+            Your progress saves as you go. Stop any time and pick it up
             later.
           </p>
         </div>

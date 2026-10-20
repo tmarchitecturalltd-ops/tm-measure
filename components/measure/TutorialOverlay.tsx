@@ -32,19 +32,19 @@ const SLIDES: Slide[] = [
     iconName: "center_focus_strong",
     title: "Calibrate once, measure many",
     body:
-      "Lay a known reference (tape measure, A4 sheet, door frame) on the floor and tap both ends. We solve your camera's focal length and remember it for next time — accuracy lands at ±3 cm.",
+      "Lay a known reference (tape measure, A4 sheet, door frame) on the floor and tap both ends. We solve your camera's focal length and remember it for next time. Accuracy lands at ±3 cm.",
   },
   {
     iconName: "photo_camera",
     title: "One photo per room, minimum",
     body:
-      "Reference photos let the architect verify the dimensions against what's actually there — radiators, chimney breasts, columns. The form won't submit without them.",
+      "Reference photos let the architect verify the dimensions against what's actually there. Radiators, chimney breasts, columns. The form won't submit without them.",
   },
   {
     iconName: "send",
     title: "Send straight to TM Designs",
     body:
-      "Submit reaches us within seconds — measurements, photos, and floor plan all in one go. Quote usually back within two working days.",
+      "Submit reaches us within seconds. Measurements, photos, and floor plan all in one go. Quote usually back within two working days.",
   },
 ];
 

@@ -261,7 +261,7 @@ export default function GuidedProjectFlow({
           <input
             value={projectName}
             onChange={(e) => onProjectName(e.target.value)}
-            placeholder="e.g. Rear extension — 12 Smith Street"
+            placeholder="e.g. Rear extension. 12 Smith Street"
             className={input}
           />
           <p className="mt-2 text-sm text-on-surface-variant">

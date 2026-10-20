@@ -4,11 +4,11 @@ import { useCallback, useState } from "react";
 
 const STEP_DETAILS: Record<string, string> = {
   "01":
-    "Fill in our simple online form with your project details. We'll send you a measuring kit with a laser measurer — no site visit needed, anywhere in the UK.",
+    "Fill in our simple online form with your project details. We'll send you a measuring kit with a laser measurer. No site visit needed, anywhere in the UK.",
   "02":
     "Take photos and measurements using our kit. Our team creates accurate architectural drawings and structural calculations tailored to your project requirements.",
   "03":
-    "You review the draft drawings and request any amendments. We'll refine until you're completely happy — all included in your fixed price.",
+    "You review the draft drawings and request any amendments. We'll refine until you're completely happy. All included in your fixed price.",
   "04":
     "Receive your completed plans within 2 weeks, ready for planning submission or building control approval. 98% of our plans are approved first time.",
 };
@@ -18,7 +18,7 @@ const STEPS = [
     id: "01" as const,
     title: "Send Details",
     body:
-      "Fill in our simple online form with your project details. We'll send you a measuring kit with a laser measurer — no site visit needed, anywhere in the UK.",
+      "Fill in our simple online form with your project details. We'll send you a measuring kit with a laser measurer. No site visit needed, anywhere in the UK.",
   },
   {
     id: "02" as const,
@@ -30,7 +30,7 @@ const STEPS = [
     id: "03" as const,
     title: "Review & Revise",
     body:
-      "Review your draft drawings 100% online. Request any amendments until you're completely happy — all included in your fixed price.",
+      "Review your draft drawings 100% online. Request any amendments until you're completely happy. All included in your fixed price.",
   },
   {
     id: "04" as const,

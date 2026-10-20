@@ -213,7 +213,7 @@ function buildScanResult({
     // the pipeline actually detects.
     confidence: dims.method === "corners" ? ("low" as const) : overall,
     note:
-      dims.method === "corners" ? "Estimated — please confirm" : undefined,
+      dims.method === "corners" ? "Estimated. Please confirm" : undefined,
   };
   const door = dims.doorWidthM
     ? {

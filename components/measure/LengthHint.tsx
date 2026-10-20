@@ -56,7 +56,7 @@ export default function LengthHint({
   if (!Number.isFinite(m) || m <= 0) {
     return (
       <p className="mt-1 text-sm text-on-surface-variant">
-        That doesn&apos;t look like a number — try something like 3.5
+        That doesn&apos;t look like a number. Try something like 3.5
       </p>
     );
   }
@@ -83,7 +83,7 @@ export default function LengthHint({
     return (
       <p className="mt-1 text-sm font-semibold text-[#8a6f2f]">
         {m} metres is about {feet}, which is very small for {what}. Worth a
-        second look — but you can carry on either way.
+        second look. But you can carry on either way.
       </p>
     );
   }
