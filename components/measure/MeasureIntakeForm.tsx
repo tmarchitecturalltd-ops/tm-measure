@@ -25,6 +25,7 @@ import {
   parseMeters,
   scanOutlineWorthKeeping,
   untangleOutline,
+  squareUpOutline,
   roomFootprint,
   rotatePointM,
   roomBoundingBox,
@@ -1105,7 +1106,15 @@ export default function MeasureIntakeForm() {
          * the room instead of walls, and the floor area goes to
          * nonsense because the crossed lobes cancel.
          */
-        const pts = untangleOutline(result?.pointsM ?? []);
+        /*
+         * Untangle, then square up — in that order.
+         *
+         * Squaring works off the angles between consecutive walls,
+         * so it has to see the corners in the right sequence; run on
+         * a crossed outline it would snap the diagonals of a bowtie
+         * and produce something confidently wrong.
+         */
+        const pts = squareUpOutline(untangleOutline(result?.pointsM ?? []));
         if (pts.length < 3) {
           setHouseScanError(
             "That trace only caught a couple of corners. Walk the room and tap each one.",

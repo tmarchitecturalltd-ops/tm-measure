@@ -39,6 +39,7 @@ import {
   outlineThumbnail,
   untangleOutline,
   polygonSelfIntersects,
+  squareUpOutline,
 } from "./src/scan.ts";
 import type { RoomDraft } from "./src/types.ts";
 import {
@@ -1872,4 +1873,84 @@ test("an L-shape tapped in order is not reordered", () => {
   ];
   assert.equal(polygonSelfIntersects(lShape), false);
   assert.deepEqual(untangleOutline(lShape), lShape, "the alcove survives");
+});
+
+test("a nearly-square room is squared up; an angled one is left alone", () => {
+  /*
+   * Reported from a real trace: the room was rectangular, the wall
+   * lengths were about right, and the drawing came out visibly
+   * askew — because a few centimetres of tap error per corner means
+   * no two walls end up parallel.
+   */
+  const wonky = [
+    { x: 0, z: 0 },
+    { x: 4.02, z: 0.07 },
+    { x: 3.96, z: 3.05 },
+    { x: -0.04, z: 2.98 },
+  ];
+  const square = squareUpOutline(wonky);
+
+  // Every corner within a degree of a right angle.
+  for (let i = 0; i < square.length; i++) {
+    const a = square[(i + square.length - 1) % square.length];
+    const b = square[i];
+    const c = square[(i + 1) % square.length];
+    const v1 = { x: a.x - b.x, z: a.z - b.z };
+    const v2 = { x: c.x - b.x, z: c.z - b.z };
+    const cos =
+      (v1.x * v2.x + v1.z * v2.z) /
+      (Math.hypot(v1.x, v1.z) * Math.hypot(v2.x, v2.z));
+    assert.ok(
+      Math.abs(cos) < 0.02,
+      `corner ${i} should be square, cos was ${cos.toFixed(3)}`,
+    );
+  }
+
+  // And it must still be the same room, not a tidier different one.
+  const area = (poly: { x: number; z: number }[]) =>
+    Math.abs(
+      poly.reduce((s, p, i) => {
+        const q = poly[(i + 1) % poly.length];
+        return s + (p.x * q.z - q.x * p.z);
+      }, 0),
+    ) / 2;
+  assert.ok(
+    Math.abs(area(square) - area(wonky)) < 0.5,
+    "squaring must not change the room's size",
+  );
+
+  /*
+   * The guard that matters more than the feature. A bay or a
+   * splayed wall is the single most valuable thing a survey can
+   * record, and squaring it would quietly throw it away.
+   */
+  const splayed = [
+    { x: 0, z: 0 },
+    { x: 4, z: 0 },
+    { x: 3.2, z: 2.4 },
+    { x: 0, z: 3 },
+  ];
+  assert.deepEqual(
+    squareUpOutline(splayed),
+    splayed,
+    "a genuinely angled wall must survive untouched",
+  );
+});
+
+test("squaring up keeps an L-shape an L-shape", () => {
+  const wonkyL = [
+    { x: 0, z: 0 },
+    { x: 4.03, z: 0.05 },
+    { x: 3.98, z: 2.02 },
+    { x: 2.48, z: 1.97 },
+    { x: 2.53, z: 3.01 },
+    { x: 0.02, z: 2.96 },
+  ];
+  const out = squareUpOutline(wonkyL);
+  assert.equal(out.length, 6, "all six corners survive");
+  assert.equal(
+    polygonSelfIntersects(out),
+    false,
+    "and squaring must not fold it over itself",
+  );
 });

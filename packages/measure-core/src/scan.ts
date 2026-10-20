@@ -357,6 +357,107 @@ function segmentsCross(
 }
 
 /**
+ * Square up an outline that was meant to be square.
+ *
+ * Every tapped corner carries a few centimetres of error — where
+ * the finger landed, where ARKit thinks the camera is. Individually
+ * that is fine. Collectively it means no two walls come out
+ * parallel and no corner comes out at ninety degrees, so a plain
+ * rectangular bedroom reaches the drawing visibly askew. Reported
+ * as the room being square but the floor plan looking wonky, which
+ * is exactly right: the lengths were close and the angles were not.
+ *
+ * Almost every room in a British house is rectilinear — walls meet
+ * at right angles and run in one of two directions. That is a very
+ * strong prior, and it lets us treat the small angular errors as
+ * what they are: noise around a known answer.
+ *
+ * So: take the longest wall as the room's axis, snap every other
+ * wall to the nearest quarter turn from it, and rebuild the outline
+ * from the measured lengths. Then close the loop — the snapped
+ * lengths will not quite meet, and the gap is shared out across the
+ * walls in proportion to their length, so a 5 m wall absorbs more
+ * of it than a 1 m one.
+ *
+ * Refused when the room is not rectilinear. If any wall sits more
+ * than 15 degrees off an axis, the shape is a bay or a splay or a
+ * genuinely angled room, and squaring it would destroy the one
+ * thing the survey was for. Better a wonky drawing of an unusual
+ * room than a tidy drawing of the wrong one.
+ */
+export const SQUARE_UP_TOLERANCE_DEG = 15;
+
+export function squareUpOutline(
+  polygon: { x: number; z: number }[],
+): { x: number; z: number }[] {
+  const n = polygon.length;
+  if (n < 4) return polygon;
+
+  const edges = polygon.map((p, i) => {
+    const q = polygon[(i + 1) % n];
+    return { dx: q.x - p.x, dz: q.z - p.z };
+  });
+  const lengths = edges.map((e) => Math.hypot(e.dx, e.dz));
+  if (lengths.some((l) => l < 1e-6)) return polygon;
+
+  // The room's own axis: the direction of its longest wall.
+  let longest = 0;
+  for (let i = 1; i < n; i++) if (lengths[i] > lengths[longest]) longest = i;
+  const axis = Math.atan2(edges[longest].dz, edges[longest].dx);
+
+  // Which quarter turn each wall belongs to, and how far off it is.
+  const quarters: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const rel = Math.atan2(edges[i].dz, edges[i].dx) - axis;
+    const q = Math.round(rel / (Math.PI / 2));
+    const offBy = Math.abs(rel - q * (Math.PI / 2)) * (180 / Math.PI);
+    if (offBy > SQUARE_UP_TOLERANCE_DEG) return polygon;
+    quarters.push(((q % 4) + 4) % 4);
+  }
+
+  /*
+   * Close the loop by sharing out the error.
+   *
+   * Walls along one axis must cancel, and so must walls along the
+   * other. They will not, by a few centimetres. Scaling each axis
+   * group to make it cancel puts the correction where the
+   * measurement error actually came from — proportional to length,
+   * because a long wall accumulates more drift than a short one.
+   */
+  const scaled = [...lengths];
+  for (const pair of [
+    [0, 2],
+    [1, 3],
+  ]) {
+    const idx = quarters
+      .map((q, i) => (q === pair[0] || q === pair[1] ? i : -1))
+      .filter((i) => i >= 0);
+    if (idx.length === 0) continue;
+    const signed = idx.reduce(
+      (s, i) => s + (quarters[i] === pair[0] ? lengths[i] : -lengths[i]),
+      0,
+    );
+    const total = idx.reduce((s, i) => s + lengths[i], 0);
+    if (total < 1e-6) continue;
+    for (const i of idx) {
+      const share = (signed * lengths[i]) / total;
+      scaled[i] -= quarters[i] === pair[0] ? share : -share;
+    }
+  }
+
+  const out: { x: number; z: number }[] = [polygon[0]];
+  for (let i = 0; i < n - 1; i++) {
+    const a = axis + quarters[i] * (Math.PI / 2);
+    const prev = out[i];
+    out.push({
+      x: Number((prev.x + Math.cos(a) * scaled[i]).toFixed(3)),
+      z: Number((prev.z + Math.sin(a) * scaled[i]).toFixed(3)),
+    });
+  }
+  return out;
+}
+
+/**
  * Is this one room, or several the sensor joined together?
  *
  * The opposite failure to looksLikeStrayCapture, and the more
