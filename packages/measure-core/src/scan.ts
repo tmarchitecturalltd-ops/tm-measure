@@ -747,10 +747,36 @@ export function axisAlignOutline(polygon: { x: number; z: number }[]): {
   const cos = Math.cos(-heading);
   const sin = Math.sin(-heading);
 
+  const turned = polygon.map((p) => ({
+    x: p.x * cos - p.z * sin,
+    z: p.x * sin + p.z * cos,
+  }));
+
+  /*
+   * Brought back to its own corner, here rather than by the caller.
+   *
+   * The rotation is about the origin, so an outline that was
+   * already sitting at (0,0) does not stay there -- it swings out
+   * to wherever the turn puts it, often with every coordinate
+   * negative. Every caller wants room-local points, measured from
+   * the outline's own top-left, because that is what the plan
+   * editor and the DXF both assume.
+   *
+   * One caller did this itself and one did not, and the one that
+   * did not shipped: a scanned kitchen drew its outline floating
+   * above the plan while its doors, windows and name label stayed
+   * down on the anchor, as though the room and its openings were
+   * two different rooms. Normalising inside the rotation is the
+   * only version of this that cannot be got wrong, because the two
+   * halves can no longer be separated.
+   */
+  const minX = Math.min(...turned.map((p) => p.x));
+  const minZ = Math.min(...turned.map((p) => p.z));
+
   return {
-    polygon: polygon.map((p) => ({
-      x: Number((p.x * cos - p.z * sin).toFixed(3)),
-      z: Number((p.x * sin + p.z * cos).toFixed(3)),
+    polygon: turned.map((p) => ({
+      x: Number((p.x - minX).toFixed(3)),
+      z: Number((p.z - minZ).toFixed(3)),
     })),
     headingDeg: Number((((heading * 180) / Math.PI + 360) % 360).toFixed(1)),
   };

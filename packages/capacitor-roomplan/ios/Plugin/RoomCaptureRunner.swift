@@ -178,17 +178,53 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionDe
             return
         }
 
-        guard !doorPromptShown, room.doors.isEmpty else { return }
-        doorPromptShown = true
-        DispatchQueue.main.async { [weak self] in
-            self?.modalVC?.showCoaching(
-                "Point at each doorway as you pass it - it tells us how the rooms join up"
-            )
+        if !doorPromptShown, room.doors.isEmpty {
+            doorPromptShown = true
+            DispatchQueue.main.async { [weak self] in
+                self?.modalVC?.showCoaching(
+                    "Point at each doorway as you pass it - it tells us how the rooms join up"
+                )
+            }
+            return
+        }
+
+        /*
+         * A room with walls but no windows.
+         *
+         * Reported from a kitchen where the scan got everything
+         * right except one window it never picked up. Apple's own
+         * coaching covers moving too fast in general, and it fires
+         * on how the phone is moving rather than on what is
+         * missing, so a quick pass across a window that is
+         * otherwise well lit and well tracked produces no warning
+         * at all -- the scan simply comes back one window short.
+         *
+         * Said while the customer is still in the room, because a
+         * missing window is the kind of thing nobody notices on a
+         * drawing until somebody is pricing glazing from it.
+         *
+         * Not a modal, and said once. The scan is a two-handed job
+         * with a live view that has to stay visible, so anything
+         * that stops it to be dismissed costs more than it saves.
+         *
+         * Windowless rooms are real -- a cloakroom, an internal
+         * hall -- so this is phrased as something to check rather
+         * than something that is wrong.
+         */
+        if !windowPromptShown, room.windows.isEmpty, room.walls.count >= 3 {
+            windowPromptShown = true
+            DispatchQueue.main.async { [weak self] in
+                self?.modalVC?.showCoaching(
+                    "No windows picked up yet - hold on each one for a second as you pass it"
+                )
+            }
         }
     }
 
     /// One doorway prompt per scan. See captureSession(_:didAdd:).
     private var doorPromptShown = false
+    /// One window prompt per scan, same reasoning.
+    private var windowPromptShown = false
     /// One partial-room prompt per scan, for the same reason.
     private var partialPromptShown = false
     /// How many rooms this scan has produced so far.

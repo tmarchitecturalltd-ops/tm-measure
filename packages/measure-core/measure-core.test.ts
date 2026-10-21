@@ -26,7 +26,7 @@ import {
   type FloorPoint3D,
   type TapPoint,
 } from "./src/perspective.ts";
-import { roomBoundingBox } from "./src/floorplan.ts";
+import { roomBoundingBox, roomFootprint } from "./src/floorplan.ts";
 import { buildFloorPlanDxf, roomCornersM } from "./src/dxf.ts";
 import { buildWalls, buildDetailedPlanDxf, roomOutlineM } from "./src/dxfPlan.ts";
 import { fixtureFootprintM } from "./src/types.ts";
@@ -2115,6 +2115,92 @@ test("an opening is placed on the outline, not on RoomPlan's wall", () => {
   // Nothing to place against is a real answer, not a guess.
   assert.equal(placeOpeningOnOutline({ x: 1, z: 1 }, undefined), null);
   assert.equal(placeOpeningOnOutline({ x: 1, z: 1 }, [{ x: 0, z: 0 }]), null);
+});
+
+test("an aligned outline sits on its own corner", () => {
+  /*
+   * The rotation is about the origin, so a shape that started at
+   * (0,0) does not stay there. One caller shifted it back and one
+   * did not, and the one that did not shipped: a scanned kitchen
+   * drew its outline floating above the plan while its doors,
+   * windows and name label stayed down on the anchor.
+   *
+   * This outline is deliberately placed well away from the origin
+   * and at an angle, so a missing shift cannot pass by luck.
+   */
+  const away = [
+    { x: 12.4, z: -8.1 },
+    { x: 16.0, z: -5.0 },
+    { x: 14.2, z: -2.9 },
+    { x: 10.6, z: -6.0 },
+  ];
+  const { polygon } = axisAlignOutline(away);
+
+  const xs = polygon.map((p) => p.x);
+  const zs = polygon.map((p) => p.z);
+  assert.ok(
+    Math.abs(Math.min(...xs)) < 0.002,
+    `left edge should be 0, was ${Math.min(...xs)}`,
+  );
+  assert.ok(
+    Math.abs(Math.min(...zs)) < 0.002,
+    `top edge should be 0, was ${Math.min(...zs)}`,
+  );
+  assert.ok(
+    polygon.every((p) => p.x >= -0.002 && p.z >= -0.002),
+    "and nothing is left in negative space",
+  );
+
+  // Turning the paper must not resize the room.
+  const span = (p: { x: number; z: number }[]) => {
+    const a = p.map((q) => q.x);
+    const b = p.map((q) => q.z);
+    return Math.max(...a) - Math.min(...a) + (Math.max(...b) - Math.min(...b));
+  };
+  const area = (p: { x: number; z: number }[]) =>
+    Math.abs(
+      p.reduce((s, q, i) => {
+        const r = p[(i + 1) % p.length];
+        return s + (q.x * r.z - r.x * q.z);
+      }, 0),
+    ) / 2;
+  assert.ok(
+    Math.abs(area(polygon) - area(away)) < 0.01,
+    "the room is the same size after turning",
+  );
+  void span;
+});
+
+test("a scanned room's footprint comes from its outline", () => {
+  /*
+   * The reported case: a kitchen measuring 5.64 by 3.72, whose
+   * sensor walls[0] and walls[1] happened to be 3.71 and 1.90. The
+   * plan drew the room at 3.71 x 1.90 and printed that under it,
+   * next to an outline of the right shape and a DXF with the right
+   * dimensions.
+   */
+  const room = {
+    ...planRoom("k", "Kitchen", 3.71, 1.9),
+    floorPolygonM: [
+      { x: 0, z: 0 },
+      { x: 5.64, z: 0 },
+      { x: 5.64, z: 3.72 },
+      { x: 3.2, z: 3.72 },
+      { x: 3.2, z: 2.0 },
+      { x: 0, z: 2.0 },
+    ],
+  } as unknown as RoomDraft;
+
+  const { widthM, lengthM } = roomFootprint(room);
+  assert.equal(widthM, 5.64, "width is the outline's own width");
+  assert.equal(lengthM, 3.72, "length is the outline's own length");
+
+  // A typed survey has no outline, and there walls[0] and walls[1]
+  // really are the width and the length.
+  const typed = planRoom("t", "Lounge", 4.2, 3.1) as unknown as RoomDraft;
+  const f = roomFootprint(typed);
+  assert.equal(f.widthM, 4.2);
+  assert.equal(f.lengthM, 3.1);
 });
 
 test("placing an opening survives squaring and rotating the outline", () => {

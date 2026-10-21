@@ -1331,13 +1331,11 @@ export default function MeasureIntakeForm() {
          * walls, the angles between them and the area are all
          * untouched.
          */
-        const aligned = axisAlignOutline(pts);
-        const minX = Math.min(...aligned.polygon.map((p) => p.x));
-        const minZ = Math.min(...aligned.polygon.map((p) => p.z));
-        const local = aligned.polygon.map((p) => ({
-          x: Number((p.x - minX).toFixed(3)),
-          z: Number((p.z - minZ).toFixed(3)),
-        }));
+        // axisAlignOutline returns points already measured from the
+        // outline's own corner. It did not always, and this is where
+        // the shift used to be done by hand -- which is exactly why
+        // it now lives in there instead.
+        const local = axisAlignOutline(pts).polygon;
         setRooms((prev) =>
           prev.map((r) =>
             r.id !== roomId

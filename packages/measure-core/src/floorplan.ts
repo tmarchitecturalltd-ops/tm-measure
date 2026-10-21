@@ -56,6 +56,39 @@ export function snapToGrid(m: number, step: number = GRID_STEP_M): number {
 
 /** Parse a RoomDraft's string wall array into numeric {widthM, lengthM}. */
 export function roomFootprint(room: RoomDraft): { widthM: number; lengthM: number } {
+  /*
+   * The real outline decides, when there is one.
+   *
+   * This used to be walls[0] by walls[1] always. For a typed survey
+   * that is right: the customer entered them in order and the first
+   * two are the width and the length.
+   *
+   * For a scanned room it is not even close. The sensor returns its
+   * walls in its own order, so walls[0] and walls[1] are whichever
+   * two it happened to fit first — in a scanned kitchen measuring
+   * 5.64 by 3.72 they were 3.71 and 1.90, and that was the size the
+   * plan drew the room at and the label printed underneath it,
+   * while the outline beside it was the right shape and the DXF
+   * carried the right dimensions. Three numbers for one room, two
+   * of them wrong.
+   *
+   * The outline's bounding box is the footprint by definition, so
+   * where an outline exists it answers the question directly rather
+   * than being approximated by two of its edges.
+   */
+  if (room.floorPolygonM && room.floorPolygonM.length >= 3) {
+    const xs = room.floorPolygonM.map((p) => p.x);
+    const zs = room.floorPolygonM.map((p) => p.z);
+    const widthM = Math.max(...xs) - Math.min(...xs);
+    const lengthM = Math.max(...zs) - Math.min(...zs);
+    if (widthM > 0 && lengthM > 0) {
+      return {
+        widthM: Number(widthM.toFixed(2)),
+        lengthM: Number(lengthM.toFixed(2)),
+      };
+    }
+  }
+
   // We assume rooms are rectangular in the floor plan even if the
   // user recorded an irregular shape elsewhere — the drag-and-drop
   // canvas treats the bounding box as the layout footprint.
