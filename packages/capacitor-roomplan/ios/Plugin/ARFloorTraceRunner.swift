@@ -139,7 +139,26 @@ final class ARFloorTraceRunner: NSObject {
     private var floorAreaM2: Double = 0
     /// Enough mapped floor to trust a tap. About what you see
     /// walking into a small bedroom and turning round.
-    private let minFloorAreaM2: Double = 4.0
+    /*
+     * Down from 4.0, because the taps it was protecting are no
+     * longer fragile.
+     *
+     * Four square metres was set when a tap was only ever a raycast
+     * onto mapped floor, so the gate was the only thing standing
+     * between a thin scrap of plane and a trace built on ARKit's
+     * guesses. A corner now falls back to a wall crossing and then
+     * to the floor plane itself, neither of which needs the floor
+     * mapped at that spot, so most of what the gate was buying is
+     * bought elsewhere.
+     *
+     * What is left is the wait, and the wait is the thing people
+     * complain about: it was reported as taking some time to
+     * calibrate before anything could be tapped. Two and a half
+     * square metres is still a proper look at the floor -- a couple
+     * of seconds of sweeping, not a scrap -- and it is reached
+     * noticeably sooner.
+     */
+    private let minFloorAreaM2: Double = 2.5
 
     /// Worst tracking state seen during the session, not the last one.
     /// A trace that was briefly lost and recovered is still suspect.
@@ -679,6 +698,66 @@ final class ARFloorTraceRunner: NSObject {
      * off the measured floor is better than one off two wall fits,
      * and this would quietly override it.
      */
+    /**
+     * Where the ray through the tap meets the floor, as a plane.
+     *
+     * The last resort, and the one that always has an answer.
+     *
+     * Everything above this asks ARKit what it can see: mapped floor
+     * first, then the walls. Both can come up empty in the same
+     * place at the same time — a corner with a bed in it, in a room
+     * where only one wall has been fitted so far — and the tap was
+     * then refused, with a message asking the customer to reveal
+     * floor that is underneath a bed. Reported as having to tap a
+     * clear corner first before the blocked one would work, which
+     * is a real thing people found by trial and error and should
+     * not have had to.
+     *
+     * But the floor is a plane, and its height is known. The bed
+     * obstructs the *mesh*, not the plane — the floor does not stop
+     * and start again on the other side of the furniture. So the ray
+     * through the tap is intersected with that plane directly, which
+     * is pure arithmetic and cannot fail for want of mapping.
+     *
+     * Last because it is the weakest of the three. It trusts the
+     * aim, where a wall crossing does not, so it inherits whatever
+     * error is in pointing at a corner four metres away. That is
+     * still a measurement, and a measurement beats a refusal.
+     */
+    private func floorPlaneHit(_ location: CGPoint) -> SCNVector3? {
+        guard let scene = sceneView, let floor = floorY else { return nil }
+
+        let near = scene.unprojectPoint(
+            SCNVector3(Float(location.x), Float(location.y), 0)
+        )
+        let far = scene.unprojectPoint(
+            SCNVector3(Float(location.x), Float(location.y), 1)
+        )
+        let dy = far.y - near.y
+
+        // Parallel to the floor: the ray is along the horizon and
+        // never reaches it. Pointing at the wall, not the floor.
+        guard abs(dy) > 1e-5 else { return nil }
+
+        let t = (floor - near.y) / dy
+        // Behind the camera, which is what a tap above the horizon
+        // gives: the plane is met in the wrong direction.
+        guard t > 0 else { return nil }
+
+        let p = SCNVector3(
+            near.x + (far.x - near.x) * t,
+            floor,
+            near.z + (far.z - near.z) * t
+        )
+
+        // A corner twenty metres away is the horizon, not a room.
+        let cam = scene.pointOfView?.worldPosition ?? SCNVector3(0, 0, 0)
+        let reach = distance(cam, p)
+        guard reach < 15 else { return nil }
+
+        return p
+    }
+
     private func cornerAtScreenPoint(_ location: CGPoint) -> SCNVector3? {
         guard let scene = sceneView, let floor = floorY else { return nil }
 
@@ -939,11 +1018,15 @@ final class ARFloorTraceRunner: NSObject {
          * See cornerAtScreenPoint: a corner with a bed in it has no
          * floor to hit, and that is not a reason to refuse the tap.
          */
-        if found == nil, mode == .floor,
-            let fromWalls = cornerAtScreenPoint(location)
-        {
-            placeFloorCorner(fromWalls, fromWalls: true)
-            return
+        if found == nil, mode == .floor {
+            if let fromWalls = cornerAtScreenPoint(location) {
+                placeFloorCorner(fromWalls, fromWalls: true)
+                return
+            }
+            if let onPlane = floorPlaneHit(location) {
+                placeFloorCorner(onPlane, fromWalls: false)
+                return
+            }
         }
 
         guard let hit = found else {
@@ -986,6 +1069,10 @@ final class ARFloorTraceRunner: NSObject {
                  */
                 if let fromWalls = cornerAtScreenPoint(location) {
                     placeFloorCorner(fromWalls, fromWalls: true)
+                } else if let onPlane = floorPlaneHit(location) {
+                    // The floor does not stop under the bed. See
+                    // floorPlaneHit.
+                    placeFloorCorner(onPlane, fromWalls: false)
                 } else {
                     setStatus(
                         "Can't find the floor there yet — sweep the phone over some "

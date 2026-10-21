@@ -46,11 +46,30 @@ type Props = {
   height?: number;
 };
 
-/** A room is worth drawing once it has a size. */
+/**
+ * A room is worth drawing once it has been measured.
+ *
+ * The test used to be roomFootprint's width and length, which looks
+ * right and is not: that helper falls back to a 3x3 m box so an
+ * incomplete room stays visible on the plan canvas, where being
+ * draggable matters more than being accurate. Here the fallback is
+ * exactly wrong -- it gave every untouched room a size, so the
+ * starter room nobody had looked at was drawn as a 3 m square and
+ * counted.
+ *
+ * Reported from a hotel: one room scanned, and the strip said "2
+ * rooms measured" with a phantom box next to the real outline.
+ *
+ * So the question asked is whether anyone measured a wall, which is
+ * the thing roomFootprint is reading and then papering over.
+ */
 function outlineOf(room: RoomDraft): { x: number; z: number }[] | null {
   if (room.floorPolygonM && room.floorPolygonM.length >= 3) {
     return room.floorPolygonM;
   }
+  const measured =
+    Number(room.walls[0]?.lengthM) > 0 && Number(room.walls[1]?.lengthM) > 0;
+  if (!measured) return null;
   const { widthM, lengthM } = roomFootprint(room);
   if (!(widthM > 0) || !(lengthM > 0)) return null;
   return [

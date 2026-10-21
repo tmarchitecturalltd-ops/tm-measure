@@ -2306,7 +2306,24 @@ export default function MeasureIntakeForm() {
   const roomIsBlank = (r: RoomDraft): boolean =>
     !r.name.trim() &&
     !r.walls.some((w) => w.lengthM.trim()) &&
-    !r.ceilingHeightM.trim() &&
+    /*
+     * Not the ceiling height.
+     *
+     * This used to require `!r.ceilingHeightM.trim()`, and addRoom
+     * seeds every new room with the property-wide default -- so a
+     * room that had just been created, and that nobody had so much
+     * as looked at, already carried "2.40" and could never be
+     * blank. Which means nothing was ever pruned.
+     *
+     * The visible symptom: scan one room, and the survey says two
+     * rooms measured, because the starter room was still sitting
+     * there. Reported from a hotel room where exactly one room was
+     * scanned and the screen said "Room 1 of 2".
+     *
+     * A number the app filled in by itself is not work the customer
+     * did, so it cannot be the thing that proves a room is real.
+     * Everything else in this list is something they did.
+     */
     (r.photos?.length ?? 0) === 0 &&
     (r.voiceMemos?.length ?? 0) === 0 &&
     (r.doors?.length ?? 0) === 0 &&
