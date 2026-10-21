@@ -169,7 +169,20 @@ function emptyRoom(): RoomDraft {
   };
 }
 
-type Step = "project" | "rooms" | "exterior" | "proposal" | "plan" | "review";
+/**
+ * The order of the survey.
+ *
+ * The floor plan used to sit after the exterior photos and the
+ * proposal, so the sequence was: measure every room, go outside and
+ * photograph the house, describe what you want built, and only then
+ * arrange the rooms you measured. Moved in front of both, because
+ * arranging the rooms is the end of the indoor job and belongs with
+ * it -- the customer is still inside, still holding the measurements
+ * in their head, and the plan is the thing that makes sense of what
+ * they have just done. Going outside is a change of place and a
+ * change of task, and it reads as one.
+ */
+type Step = "project" | "rooms" | "plan" | "exterior" | "proposal" | "review";
 
 /**
  * Camera / LiDAR scan feature flag.
@@ -2294,17 +2307,19 @@ export default function MeasureIntakeForm() {
   /**
    * Where finishing the rooms should land.
    *
-   * "exterior" is the normal path: rooms, then the outside photos,
-   * then the plan. But someone who reached the room flow *from* the
-   * plan -- by tapping "Add room" on an empty floor -- came back to
-   * find themselves in the exterior photos instead, with the plan
-   * they had been arranging two steps behind them. Finish that room
-   * and it happens again. That is the loop.
-   *
-   * Set when the plan sends them, cleared the moment it is used.
+   * Both answers are "plan" now that the plan comes straight after
+   * the rooms, so this no longer changes the destination. It is kept
+   * because the two cases are still different questions -- the
+   * normal path forward, and the return journey for someone who
+   * reached the room flow *from* the plan by tapping "Add room" on
+   * an empty floor. That used to drop them in the exterior photos
+   * with the plan they had been arranging two steps behind them,
+   * and finishing the next room did it again. If anything is ever
+   * inserted between the rooms and the plan, that loop comes back
+   * the moment this is a plain constant.
    */
   const [roomsReturnTo, setRoomsReturnTo] = useState<"exterior" | "plan">(
-    "exterior",
+    "plan",
   );
 
   /**
@@ -2386,7 +2401,7 @@ export default function MeasureIntakeForm() {
     [rooms, placements, updatePlacement],
   );
 
-  const advanceTo = (next: "plan" | "review") => {
+  const advanceTo = (next: "plan" | "exterior" | "review") => {
     // Blank rooms first, or the customer is asked to fill in rooms
     // that were never theirs. See pruneBlankRooms.
     const v = nonBlockingIssues(pruneBlankRooms());
@@ -2413,11 +2428,28 @@ export default function MeasureIntakeForm() {
      * submission arrive with no drawing. It does not block -- an
      * unplaced survey is still a survey, and the review screen already
      * warns that no CAD file will be attached.
+     *
+     * Checked on the way out of the plan as well as on the way to
+     * review, now that the plan is no longer the last thing before
+     * sending. Leaving it is the moment this is worth raising: the
+     * customer is looking at the empty grid, and two steps later
+     * they are outside photographing the house with no idea the
+     * drawing is still blank.
      */
-    if (next === "review" && !rooms.some((r) => placements[r.id]?.positionM)) {
+    if (
+      (next === "review" || next === "exterior") &&
+      !rooms.some((r) => placements[r.id]?.positionM)
+    ) {
       setNavBlock({
+        // Named after the button that is actually there. From the
+        // plan it now says Outside, and telling someone to press
+        // Review on a screen with no Review on it is the kind of
+        // small wrongness that makes people think they have missed
+        // a step.
         message:
-          "None of your rooms are on the plan yet. Put them on it, or press Review again to send without a drawing",
+          next === "review"
+            ? "None of your rooms are on the plan yet. Put them on it, or press Review again to send without a drawing"
+            : "None of your rooms are on the plan yet. Put them on it, or press Outside again to carry on without a drawing",
         roomIndex: null,
         placeAll: true,
         // Not a fault in a room, so no "Fix it" button: there is
@@ -3663,9 +3695,9 @@ export default function MeasureIntakeForm() {
           {([
             { key: "project", label: "Your details" },
             { key: "rooms", label: "Rooms" },
+            { key: "plan", label: "Floor plan" },
             { key: "exterior", label: "Exterior" },
             { key: "proposal", label: "Proposal" },
-            { key: "plan", label: "Floor plan" },
             { key: "review", label: "Review" },
           ] as const).map((s, i, arr) => {
             const active = step === s.key;
@@ -5332,12 +5364,19 @@ export default function MeasureIntakeForm() {
                   const v = nonBlockingIssues(rooms);
                   setIssues(v);
                   if (v.length) return;
-                  setStep("exterior");
+                  // The plan follows the rooms now -- unless the
+                  // sensor placed them all and there is nothing to
+                  // arrange, in which case the outside work is next.
+                  setStep(skipPlanStep ? "exterior" : "plan");
                 }}
                 className="inline-flex items-center gap-3 rounded-full bg-primary px-7 py-3 text-sm font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/30 transition-all hover:bg-surface-tint hover:shadow-xl active:scale-[0.97]"
-                aria-label="Continue to exterior photos"
+                aria-label={
+                  skipPlanStep
+                    ? "Continue to exterior photos"
+                    : "Continue to the floor plan"
+                }
               >
-                <span>Exterior photos</span>
+                <span>{skipPlanStep ? "Exterior photos" : "Floor plan"}</span>
                 <span
                   className="material-symbols-outlined"
                   aria-hidden
@@ -5423,7 +5462,10 @@ export default function MeasureIntakeForm() {
             <div className="flex justify-between pt-2">
               <button
                 type="button"
-                onClick={() => setStep("rooms")}
+                // The plan comes before this now, so back is the plan
+                // -- unless the sensor placed every room and the plan
+                // was never shown, in which case back is the rooms.
+                onClick={() => setStep(skipPlanStep ? "rooms" : "plan")}
                 className="rounded-full border-2 border-outline-variant/40 px-5 py-2 text-sm font-bold uppercase tracking-widest text-on-surface transition-colors hover:border-primary/60 hover:bg-surface-container-low"
               >
                 ← Back
@@ -5512,10 +5554,10 @@ export default function MeasureIntakeForm() {
               </button>
               <button
                 type="button"
-                onClick={() => setStep("plan")}
+                onClick={goReview}
                 className="rounded-full bg-primary px-7 py-2 text-sm font-bold uppercase tracking-widest text-on-primary shadow-lg shadow-primary/25 transition-all hover:bg-surface-tint active:scale-[0.97]"
               >
-                Floor plan →
+                Review →
               </button>
             </div>
           </section>
@@ -5540,26 +5582,32 @@ export default function MeasureIntakeForm() {
                grid underneath answers by existing, taking a line of a
                screen whose whole point is the grid. */
             title=""
-            progress={0.85}
+            /* Was 0.85, when the plan was the last thing before
+               review. It now has the outside photos and the proposal
+               after it, and a bar that says nearly finished with two
+               steps to go is a promise the app does not keep. */
+            progress={0.6}
             menuOpen={extraMenuOpen}
             onMenuOpenChange={setExtraMenuOpen}
             menuSections={[
               {
                 items: [
                   { label: "Back to the rooms", onClick: () => setStep("rooms") },
-                  { label: "Exterior and proposal", onClick: () => setStep("proposal") },
-                  /* Review, in the menu as well as on the button. The
-                     bottom-bar Review refuses when something is wrong,
-                     and a customer who has just read why wants a second
-                     way to try it. */
+                  { label: "Exterior and proposal", onClick: () => setStep("exterior") },
+                  /* Review, in the menu as well as on the button.
+                     Review is two steps further on now, and this is
+                     the last screen of the indoor job -- somebody who
+                     has photographed the outside already and come back
+                     to move a room should not have to walk forward
+                     through it again. */
                   { label: "Review and send", onClick: goReview },
                 ],
               },
             ]}
             scrollKey="plan"
-            onBack={() => setStep("proposal")}
-            onNext={goReview}
-            nextLabel="Review"
+            onBack={() => setStep("rooms")}
+            onNext={() => advanceTo("exterior")}
+            nextLabel="Outside"
             blockMessage={
               navBlock ? (
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -5765,8 +5813,14 @@ export default function MeasureIntakeForm() {
             /* Back to where they actually came from. A LiDAR survey
                skipped the plan, so sending them "back" to a step they
                never saw would be the same wrong-footing the room flow
-               used to do. */
-            onBack={() => setStep(skipPlanStep ? "proposal" : "plan")}
+               used to do.
+
+               Moot since the plan moved in front of the exterior
+               photos -- the step before review is the proposal for
+               everybody now -- but left as it is rather than
+               simplified, because the reasoning is what matters and
+               the next person to move a step will need it. */
+            onBack={() => setStep("proposal")}
             onNext={submitToBackend}
             nextDisabled={submitStatus === "submitting"}
             nextLabel={
@@ -6270,19 +6324,29 @@ export default function MeasureIntakeForm() {
           sketches={proposalSketches}
           onAddSketches={attachProposalSketches}
           onRemoveSketch={removeProposalSketch}
-          onBackToRooms={() => setStep("rooms")}
           /*
-           * Straight to review when the sensor has already placed
-           * every room -- see planAlreadyDone. Otherwise the plan,
-           * because nothing else knows where the rooms go.
+           * Back out of the outside work to the plan, which is now
+           * the step before it. A LiDAR survey never saw the plan --
+           * the sensor placed the rooms -- so for that journey the
+           * step before is still the rooms.
+           *
+           * The prop is still called onBackToRooms, and the menu
+           * entry it also drives still says "Back to the rooms",
+           * which is only true on one of those two paths. Left for
+           * a pass over the extras flow rather than renamed here,
+           * where it would be a change to a file this one is only
+           * meant to reorder.
+           */
+          onBackToRooms={() => setStep(skipPlanStep ? "rooms" : "plan")}
+          /*
+           * The outside work is the last of the survey now, so this
+           * goes to review either way. ensureEveryRoomPlaced still
+           * runs for a LiDAR survey, which never visited the plan
+           * step that would otherwise have done it.
            */
           onDone={() => {
-            if (skipPlanStep) {
-              ensureEveryRoomPlaced();
-              setStep("review");
-              return;
-            }
-            setStep("plan");
+            if (skipPlanStep) ensureEveryRoomPlaced();
+            goReview();
           }}
         />
       )}
@@ -6398,11 +6462,10 @@ export default function MeasureIntakeForm() {
               return;
             }
             // Back where they came from -- see roomsReturnTo. A LiDAR
-            // phone never returns to the plan, because it never went.
-            setStep(
-              roomsReturnTo === "plan" && skipPlanStep ? "review" : roomsReturnTo,
-            );
-            setRoomsReturnTo("exterior");
+            // phone skips the plan, because the sensor has already
+            // placed every room, so it carries straight on outside.
+            setStep(skipPlanStep ? "exterior" : "plan");
+            setRoomsReturnTo("plan");
           }}
           onExitGuided={() => setGuidedMode(false)}
           issueFor={(suffix) => issueFor(`room-${activeRoomIndex}-${suffix}`)}
