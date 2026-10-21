@@ -565,7 +565,8 @@ type OpeningOnWall = {
   /** Distance along the wall to the opening's centre, in metres. */
   centreM: number;
   widthM: number;
-  kind: "door" | "window";
+  /** "cased" is a doorway with no door hung in it. */
+  kind: "door" | "window" | "cased";
   /** True when nobody said where it goes and we centred it. */
   assumed: boolean;
 };
@@ -584,7 +585,10 @@ function openingsForWall(
         const assumed = !Number.isFinite(pos);
         const centre = assumed ? wallLengthM / 2 : pos;
         return {
-          kind,
+          // A cased opening is a doorway with nothing hung in it, so
+          // it breaks the wall and takes reveals like a door and
+          // then stops: no leaf, no swing. See Opening.cased.
+          kind: kind === "door" && o.cased ? ("cased" as const) : kind,
           widthM: Number.isFinite(width) && width > 0 ? width : 0.8,
           centreM: centre,
           assumed,
@@ -865,6 +869,16 @@ export function buildDetailedPlanDxf(
             };
             out.push(line(LAYER.windows, inset(start, 1 / 3), inset(end, 1 / 3)));
             out.push(line(LAYER.windows, inset(start, 2 / 3), inset(end, 2 / 3)));
+          } else if (o.kind === "cased") {
+            /*
+             * A doorway with nothing in it.
+             *
+             * The jambs above have already closed the wall off at
+             * both reveals, which is the whole drawing: a gap with
+             * square reveals and no leaf and no swing. Nothing more
+             * to add, and adding a door would be a lie about what
+             * is there.
+             */
           } else {
             drawDoor(out, {
               hinge: onInner(start),

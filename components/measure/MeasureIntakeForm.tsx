@@ -72,6 +72,7 @@ import LengthHint from "@/components/measure/LengthHint";
 import {
   RoomPlan,
   type RoomPlanScanResult,
+  type RoomPlanStairs,
 } from "@tm-designs/capacitor-roomplan";
 import {
   clearDraft,
@@ -290,6 +291,51 @@ function scannedOpening(
       ? { positionM: (o.offsetFromWallStartM as number).toFixed(2) }
       : {}),
   };
+}
+
+/**
+ * Staircases the sensor found, as the app stores them.
+ *
+ * RoomPlan has been classifying stairs all along -- it is one of its
+ * object categories -- and nothing ever read `CapturedRoom.objects`,
+ * so a LiDAR survey of a house with a staircase in it produced a
+ * drawing with no staircase and the only route to one was adding it
+ * by hand on the floor plan afterwards.
+ *
+ * Positioned by `worldM`, not against a wall. A staircase genuinely
+ * is a free object in the house far more often than it is a thing
+ * running along one wall of one room, and the sensor gives a centre
+ * and a bearing rather than a wall and an offset, so forcing it onto
+ * a wall would be inventing a relationship in order to throw away a
+ * measurement.
+ *
+ * Direction defaults to "up" and is marked approximate, because
+ * RoomPlan does not report one and the geometry does not imply one.
+ * Up is the better guess: most staircases a homeowner scans are in a
+ * hall on the ground floor, where the flight they are looking at
+ * goes up. The customer can change it, and the drawing says it was
+ * assumed either way.
+ */
+function scannedStairs(
+  sr: { stairs?: RoomPlanStairs[]; originM?: { x: number; z: number } },
+  newId: () => string,
+): RoomStairs[] {
+  return (sr.stairs ?? []).map((s) => ({
+    id: newId(),
+    widthM: s.widthM.toFixed(2),
+    direction: "up" as const,
+    // Same shift the outline gets, so the flight lands on the room
+    // rather than at raw ARKit world coordinates.
+    worldM: {
+      x: Number((s.midpoint.x - (sr.originM?.x ?? 0)).toFixed(3)),
+      z: Number((s.midpoint.z - (sr.originM?.z ?? 0)).toFixed(3)),
+    },
+    headingDeg: Number(s.headingDeg.toFixed(1)),
+    positionApprox: true,
+    notes: s.confident
+      ? "Detected by scan"
+      : "Detected by scan, but the sensor was not certain. Worth checking.",
+  }));
 }
 
 export default function MeasureIntakeForm() {
@@ -888,12 +934,22 @@ export default function MeasureIntakeForm() {
         // frame the opening midpoints are reported in. Unshifted
         // here on purpose: an edge index and a distance along that
         // edge mean the same thing wherever the shape sits.
-        doors: (sr.doors ?? []).map((d) =>
-          scannedOpening(d, sr.walls, newId(), sr.floorPolygonM),
-        ),
+        doors: [
+          ...(sr.doors ?? []).map((d) =>
+            scannedOpening(d, sr.walls, newId(), sr.floorPolygonM),
+          ),
+          // Cased openings travel with the doors. See the note on
+          // the single-room path, and Opening.cased.
+          ...(sr.openings ?? []).map((o) => ({
+            ...scannedOpening(o, sr.walls, newId(), sr.floorPolygonM),
+            cased: true,
+            note: "Opening with no door, detected by scan",
+          })),
+        ],
         windows: (sr.windows ?? []).map((w) =>
           scannedOpening(w, sr.walls, newId(), sr.floorPolygonM),
         ),
+        stairs: scannedStairs(sr, newId),
         irregularNotes: "",
         notes: stamp,
         photos: [],
@@ -1096,12 +1152,34 @@ export default function MeasureIntakeForm() {
                   ceilingHeightM: sr.heightM
                     ? sr.heightM.toFixed(2)
                     : r.ceilingHeightM || defaultCeilingHeightM.trim(),
-                  doors: (sr.doors ?? []).map((d) =>
-                    scannedOpening(d, sr.walls, newId(), sensorOutline),
-                  ),
+                  /*
+                   * Doors and cased openings in one list.
+                   *
+                   * RoomPlan reports a doorway with no door in it
+                   * separately, and the app used to drop that list
+                   * on the floor -- so an opening between a kitchen
+                   * and a diner reached the draughtsman as solid
+                   * wall, which is the worst way round for this
+                   * error to go: a missing door is obvious on a
+                   * drawing and a missing opening is invisible.
+                   * They travel with the doors because placing them
+                   * is the same problem; only the drawing differs.
+                   * See Opening.cased.
+                   */
+                  doors: [
+                    ...(sr.doors ?? []).map((d) =>
+                      scannedOpening(d, sr.walls, newId(), sensorOutline),
+                    ),
+                    ...(sr.openings ?? []).map((o) => ({
+                      ...scannedOpening(o, sr.walls, newId(), sensorOutline),
+                      cased: true,
+                      note: "Opening with no door, detected by scan",
+                    })),
+                  ],
                   windows: (sr.windows ?? []).map((w) =>
                     scannedOpening(w, sr.walls, newId(), sensorOutline),
                   ),
+                  stairs: scannedStairs(sr, newId),
                   // "custom" only when a polygon is actually kept —
                   // a custom-shaped room with no polygon falls through
                   // to a rectangle anyway, but says otherwise on screen.

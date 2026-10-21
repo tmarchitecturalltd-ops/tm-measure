@@ -232,7 +232,45 @@ export interface RoomPlanRoom {
   walls: RoomPlanWall[];
   doors: RoomPlanOpening[];
   windows: RoomPlanOpening[];
+  /**
+   * Cased openings: a doorway with no door in it.
+   *
+   * Reported separately by RoomPlan because it is a different thing
+   * to draw — a gap in a wall with reveals and no leaf and no swing.
+   * Common between a kitchen and a diner, and structurally the most
+   * interesting of the three, since it is often where somebody has
+   * already taken a wall out.
+   */
   openings: RoomPlanOpening[];
+  /**
+   * Staircases, as boxes on the floor.
+   *
+   * Absent on older plugin builds, so treat an empty list and a
+   * missing one the same way.
+   */
+  stairs?: RoomPlanStairs[];
+}
+
+/**
+ * A flight of stairs, as the sensor saw it.
+ *
+ * Position, width and bearing, which is the part nobody can
+ * reconstruct afterwards. Not which way is up: RoomPlan does not
+ * report a direction of travel and the geometry does not imply one,
+ * so the app asks.
+ */
+export interface RoomPlanStairs {
+  id: string;
+  /** Across the treads — the clear width, in metres. */
+  widthM: number;
+  /** How far the run travels horizontally, in metres. */
+  runM: number;
+  /** Centre of the flight, in the same XZ frame as the walls. */
+  midpoint: { x: number; z: number };
+  /** Bearing of the run in degrees clockwise from +X. */
+  headingDeg: number;
+  /** False when RoomPlan was only medium-confident it is a staircase. */
+  confident: boolean;
 }
 
 export interface RoomPlanWall {

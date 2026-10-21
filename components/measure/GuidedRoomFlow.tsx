@@ -1083,12 +1083,26 @@ export default function GuidedRoomFlow({
                     the screen, carrying the two counts that otherwise
                     disappear into a list. */}
                 <div className="mt-4 flex overflow-hidden rounded-xl">
+                  {/* Hung doors and cased openings share one list but
+                      not one label. Calling a doorway with no door in
+                      it a door would have the customer looking round
+                      the room counting doors and finding one short,
+                      which is the opposite of what a confidence
+                      number on a result screen is for. */}
                   <div className="flex-1 bg-primary px-4 py-3 text-on-primary">
                     <p className="font-headline text-2xl leading-none">
-                      {room.doors.length}
+                      {room.doors.filter((d) => !d.cased).length}
+                      {room.doors.some((d) => d.cased) && (
+                        <span className="text-base">
+                          {" "}
+                          + {room.doors.filter((d) => d.cased).length}
+                        </span>
+                      )}
                     </p>
                     <p className="mt-1 text-xs uppercase tracking-[0.2em] text-on-primary/80">
-                      Doors
+                      {room.doors.some((d) => d.cased)
+                        ? "Doors + openings"
+                        : "Doors"}
                     </p>
                   </div>
                   <div className="flex-1 bg-primary/85 px-4 py-3 text-on-primary">

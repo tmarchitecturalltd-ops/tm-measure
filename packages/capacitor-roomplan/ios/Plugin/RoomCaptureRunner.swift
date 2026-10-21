@@ -618,6 +618,7 @@ enum CaptureSerializer {
             "doors": doorDicts,
             "windows": windowDicts,
             "openings": openingDicts,
+            "stairs": stairsDicts(captured.objects),
         ]
         if !polygonDicts.isEmpty {
             roomDict["floorPolygonM"] = polygonDicts
@@ -631,6 +632,59 @@ enum CaptureSerializer {
     }
 
     // MARK: - Per-surface helpers
+
+    /**
+     * The staircases RoomPlan found.
+     *
+     * `CapturedRoom.objects` was never read. RoomPlan has been
+     * classifying stairs all along — it is one of its object
+     * categories — and the app threw the whole list away, so a
+     * LiDAR survey of a house with a staircase in it produced a
+     * drawing with no staircase, and the only way to get one was to
+     * add it by hand on the floor plan afterwards.
+     *
+     * A staircase is one of the largest objects in a house and one
+     * of the few that genuinely constrains a design, so this was a
+     * conspicuous thing to be discarding.
+     *
+     * What comes back is a box: a centre, a size and a heading. That
+     * is enough to draw the run in the right place at the right
+     * width, which is the part nobody can reconstruct later. What it
+     * is not is a direction of travel — RoomPlan does not say which
+     * end is the top, and neither does the geometry. The app asks.
+     *
+     * Low-confidence detections are dropped. A false staircase is
+     * worse than a missing one here: a missing staircase is
+     * something the customer can see is missing, while an invented
+     * one in the middle of a bedroom reads as the survey being
+     * nonsense.
+     */
+    private static func stairsDicts(
+        _ objects: [CapturedRoom.Object]
+    ) -> [[String: Any]] {
+        objects.compactMap { o in
+            guard o.category == .stairs else { return nil }
+            guard o.confidence != .low else { return nil }
+
+            let mid = midpointXZ(o.transform)
+            let dir = localXAxisXZ(o.transform)
+            // dimensions.x is the box's own width axis, which for a
+            // flight is across the treads — the clear width somebody
+            // would measure. .z is how far the run travels.
+            let widthM = Double(o.dimensions.x)
+            let runM = Double(o.dimensions.z)
+            let headingDeg = atan2(dir.1, dir.0) * 180 / .pi
+
+            return [
+                "id": o.identifier.uuidString,
+                "widthM": widthM,
+                "runM": runM,
+                "midpoint": ["x": mid.0, "z": mid.1],
+                "headingDeg": headingDeg,
+                "confident": o.confidence == .high,
+            ]
+        }
+    }
 
     private static func wallToDict(_ w: CapturedRoom.Surface) -> [String: Any] {
         let length = Double(w.dimensions.x)
@@ -978,6 +1032,7 @@ enum CaptureSerializer {
                 "doors": doorDicts,
                 "windows": windowDicts,
                 "openings": openingDicts,
+                "stairs": stairsDicts(room.objects),
             ])
         }
 

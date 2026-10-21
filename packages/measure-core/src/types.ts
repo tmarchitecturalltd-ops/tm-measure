@@ -38,6 +38,21 @@ export type Opening = {
    * have, or an eyeballed 1.85 gets built as though it were surveyed.
    */
   positionApprox?: boolean;
+  /**
+   * A doorway with no door in it.
+   *
+   * Carried on the door rather than as a third list, because
+   * everything about placing it is identical — a wall, a distance
+   * along that wall, a width — and only the drawing differs: reveals
+   * and a gap, no leaf and no swing arc.
+   *
+   * RoomPlan reports these separately and the app discarded them, so
+   * a cased opening between a kitchen and a diner reached the
+   * draughtsman as solid wall. That is the worst direction for this
+   * particular error to go in, because a missing opening is
+   * invisible on the drawing while a missing door is obvious.
+   */
+  cased?: boolean;
 };
 
 /** Cross-platform photo reference (web: blob URI; native: file/content URI). */

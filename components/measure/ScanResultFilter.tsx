@@ -213,7 +213,14 @@ export default function ScanResultFilter({ rooms, onConfirm, onBack }: Props) {
                   {looksLikeMergedCapture({
                     widthM: w,
                     lengthM: l,
-                    doorCount: r.doors?.length ?? 0,
+                    // Hung doors only. A cased opening lives in the
+                    // same list now, and counting them here would
+                    // push ordinary open-plan rooms over the "this
+                    // looks like more than one room" line -- a
+                    // kitchen-diner has one doorway and no door in
+                    // it, which is exactly the case this test is
+                    // trying not to catch.
+                    doorCount: (r.doors ?? []).filter((d) => !d.cased).length,
                     windowCount: r.windows?.length ?? 0,
                   }) && (
                     <span className="mt-1 block text-sm text-primary">

@@ -1584,6 +1584,67 @@ test("a door swings into its room, with a leaf that has thickness", () => {
   assert.match(dxf, /\n0\nARC\n/, "a door has a swing arc");
 });
 
+test("a cased opening is a gap in the wall, not a door", () => {
+  /*
+   * RoomPlan reports a doorway with no door in it separately from a
+   * door, and the app dropped that list entirely -- so an opening
+   * between a kitchen and a diner reached the draughtsman as solid
+   * wall. The worst direction for the error: a missing door is
+   * obvious on a drawing, a missing opening is invisible.
+   *
+   * What it should be is the wall stopping, square reveals, and
+   * nothing hung in the gap.
+   */
+  const room = {
+    ...planRoom("c", "Kitchen", 4, 3),
+    doors: [
+      { id: "o1", widthM: "1.80", wallIndex: 0, positionM: "2.0", cased: true },
+    ],
+  } as unknown as RoomDraft;
+  const entry = { room, anchor: { x: 0, z: 0 }, rotationDeg: 0 as const };
+  const dxf = buildDetailedPlanDxf([entry]);
+
+  assert.equal(
+    planLines(dxf).filter((l) => l.layer === "TM-DOORS").length,
+    0,
+    "nothing is hung in a cased opening",
+  );
+  assert.ok(
+    !/\n0\nARC\n/.test(dxf),
+    "and nothing swings in it either",
+  );
+
+  /*
+   * But the wall really is broken, which is the whole point. The
+   * jambs are drawn across the wall thickness at both reveals, so
+   * each one is a short wall-layer line roughly the wall's depth.
+   */
+  const walls = planLines(dxf).filter((l) => l.layer === "TM-WALLS");
+  const jambs = walls.filter((l) => {
+    const d = Math.hypot(l.a.x - l.b.x, l.a.z - l.b.z);
+    return d > 0.05 && d < 0.4;
+  });
+  assert.ok(
+    jambs.length >= 2,
+    `the opening needs a reveal at each end, found ${jambs.length}`,
+  );
+
+  // And a door on the same wall still gets its leaf, so the flag is
+  // doing the choosing rather than the opening simply being lost.
+  const withDoor = {
+    ...planRoom("c2", "Kitchen", 4, 3),
+    doors: [{ id: "d1", widthM: "0.76", wallIndex: 0, positionM: "2.0" }],
+  } as unknown as RoomDraft;
+  const dxf2 = buildDetailedPlanDxf([
+    { room: withDoor, anchor: { x: 0, z: 0 }, rotationDeg: 0 as const },
+  ]);
+  assert.equal(
+    planLines(dxf2).filter((l) => l.layer === "TM-DOORS").length,
+    4,
+    "a hung door is unaffected",
+  );
+});
+
 test("the swing arc opens on the room side of the wall", () => {
   /*
    * The arc's own angles are the easiest thing in this file to get
