@@ -32,6 +32,7 @@ import type {
 } from "@tm-designs/measure-core";
 import {
   outlineThumbnail,
+  outlineProblem,
   roomFootprint,
   validateRoom,
 } from "@tm-designs/measure-core";
@@ -1113,10 +1114,37 @@ export default function GuidedRoomFlow({
             );
           })()}
 
-          <p className="text-sm text-on-surface-variant">
-            Nothing to type. The scan measured all of this. Have a quick
-            look and carry on.
-          </p>
+          {/* Say so when the shape is obviously not a room.
+              This screen used to open with "Nothing to type, have a
+              quick look and carry on" over a drawing that was
+              visibly wrong -- two spikes and a wall running the
+              whole width of the room, from a trace where one corner
+              was behind a bed and could not be tapped. Being
+              reassuring about a bad result is worse than saying
+              nothing, because the person reading it has no reason
+              to doubt the sensor and every reason to doubt
+              themselves. See outlineProblem. */}
+          {(() => {
+            const problem = outlineProblem(room.floorPolygonM);
+            if (!problem) {
+              return (
+                <p className="text-sm text-on-surface-variant">
+                  Nothing to type. The scan measured all of this. Have a
+                  quick look and carry on.
+                </p>
+              );
+            }
+            return (
+              <div className="rounded-xl border border-primary/40 bg-primary/5 p-3">
+                <p className="font-headline text-base text-on-surface">
+                  This shape doesn&apos;t look like a room
+                </p>
+                <p className="mt-1 text-sm text-on-surface-variant">
+                  {problem}
+                </p>
+              </div>
+            );
+          })()}
 
           {/* The room, at a glance, set large.
               Everything on this screen was 16px in a bordered table —

@@ -42,6 +42,7 @@ import {
   squareUpOutline,
   placeOpeningOnOutline,
   axisAlignOutline,
+  outlineProblem,
 } from "./src/scan.ts";
 import type { RoomDraft } from "./src/types.ts";
 import {
@@ -1937,6 +1938,64 @@ test("a nearly-square room is squared up; an angled one is left alone", () => {
     splayed,
     "a genuinely angled wall must survive untouched",
   );
+});
+
+test("a trace with an untappable corner is flagged, a real room is not", () => {
+  /*
+   * The hotel room, as it actually came back: six corners, walls of
+   * 4.68, 2.91, 1.40, 1.95, 2.39 and 6.91 m. The room is a plain
+   * L-shape about 4.7 m across. The 6.91 m wall is the outline
+   * closing straight across it, because the corner with the bed in
+   * could not be tapped at all.
+   *
+   * The screen said "Nothing to type. The scan measured all of
+   * this. Have a quick look and carry on."
+   */
+  const wedge = [
+    { x: 0.0, z: 1.52 },
+    { x: 1.63, z: 1.08 },
+    { x: 7.2, z: 0.82 },
+    { x: 3.55, z: 2.88 },
+    { x: 1.95, z: 2.95 },
+    { x: 1.42, z: 3.42 },
+  ];
+  const problem = outlineProblem(wedge);
+  assert.ok(problem, "a shape with a spike in it must be flagged");
+  assert.match(
+    problem!,
+    /trac/i,
+    "and the advice must be to trace it again",
+  );
+
+  // The L-shape it was supposed to be, traced properly: no warning.
+  const realL = [
+    { x: 0, z: 0 },
+    { x: 4.68, z: 0 },
+    { x: 4.68, z: 2.91 },
+    { x: 2.73, z: 2.91 },
+    { x: 2.73, z: 1.4 },
+    { x: 0, z: 1.4 },
+  ];
+  assert.equal(
+    outlineProblem(realL),
+    null,
+    "a genuine L-shaped room must pass without comment",
+  );
+
+  // So must a bay, whose corners are 135 degrees.
+  const bay = [
+    { x: 0, z: 0 },
+    { x: 4, z: 0 },
+    { x: 4.5, z: 0.5 },
+    { x: 5.3, z: 0.5 },
+    { x: 5.8, z: 0 },
+    { x: 9, z: 0 },
+    { x: 9, z: 4 },
+    { x: 0, z: 4 },
+  ];
+  assert.equal(outlineProblem(bay), null, "a bay is a room, not a fault");
+
+  assert.equal(outlineProblem(undefined), null);
 });
 
 test("an opening is placed on the outline, not on RoomPlan's wall", () => {

@@ -561,6 +561,12 @@ final class ARFloorTraceRunner: NSObject {
     private let minCornerSine: Float = 0.5  // about 30 degrees
 
     /**
+     * How near a tap has to land, on screen, to claim a corner whose
+     * floor cannot be seen. About a thumb's width at 3x.
+     */
+    private let maxCornerTapDistancePx: CGFloat = 120
+
+    /**
      * Move a tapped point onto the intersection of two walls.
      *
      * The measurement problem this exists to solve: three traces of
@@ -585,13 +591,16 @@ final class ARFloorTraceRunner: NSObject {
      *
      * Returns the snapped point, or nil to keep the tap.
      */
-    private func snapToCorner(_ p: SCNVector3) -> SCNVector3? {
-        guard wallLines.count >= 2 else { return nil }
-
-        let tap = SIMD2<Float>(p.x, p.z)
+    /**
+     * Every place two detected walls cross, on the floor.
+     *
+     * The room's corners, as the sensor understands them, with no
+     * reference to where anyone has tapped.
+     */
+    private func cornerCandidates() -> [SIMD2<Float>] {
+        guard wallLines.count >= 2 else { return [] }
         let walls = Array(wallLines.values)
-        var best: SIMD2<Float>?
-        var bestDist = snapRadiusM
+        var out: [SIMD2<Float>] = []
 
         for i in 0..<walls.count {
             for j in (i + 1)..<walls.count {
@@ -617,16 +626,158 @@ final class ARFloorTraceRunner: NSObject {
                 let overrunB = abs(alongB) - b.half
                 guard overrunA < 1.0, overrunB < 1.0 else { continue }
 
-                let d = simd_length(x - tap)
-                if d < bestDist {
-                    bestDist = d
-                    best = x
-                }
+                out.append(x)
+            }
+        }
+        return out
+    }
+
+    private func snapToCorner(_ p: SCNVector3) -> SCNVector3? {
+        let tap = SIMD2<Float>(p.x, p.z)
+        var best: SIMD2<Float>?
+        var bestDist = snapRadiusM
+
+        for x in cornerCandidates() {
+            let d = simd_length(x - tap)
+            if d < bestDist {
+                bestDist = d
+                best = x
             }
         }
 
         guard let corner = best else { return nil }
         return SCNVector3(corner.x, p.y, corner.y)
+    }
+
+    /**
+     * The corner being pointed at, when the floor under it cannot
+     * be seen at all.
+     *
+     * The case this is for, reported from a hotel room: a bed
+     * pushed into the corner. The floor there is not merely hidden,
+     * it has never been mapped, so there is nothing to extend
+     * underneath and every raycast comes back at mattress height.
+     * The app then refused the tap — "sweep the phone over some
+     * clear floor nearby" — and kept refusing, because no amount of
+     * sweeping reveals floor that is under a bed. The corner was
+     * untappable, and the trace went on without it, which is how a
+     * six-corner room came back with a 6.91 m wall closing it.
+     *
+     * But the corner itself is in plain sight. Both walls run up
+     * the picture above the headboard, and ARKit has already fitted
+     * them. Only the floor is missing, and the floor height is a
+     * number we already know.
+     *
+     * So this ignores depth entirely. Every wall crossing is
+     * projected onto the screen and compared with the tap in
+     * pixels, which is the one comparison that still works when
+     * nothing along the ray is at the right distance. Pointing at
+     * the corner is enough; what is piled in front of it does not
+     * matter.
+     *
+     * Deliberately not used when the floor *is* visible — a reading
+     * off the measured floor is better than one off two wall fits,
+     * and this would quietly override it.
+     */
+    private func cornerAtScreenPoint(_ location: CGPoint) -> SCNVector3? {
+        guard let scene = sceneView, let floor = floorY else { return nil }
+
+        var best: SCNVector3?
+        var bestPx = maxCornerTapDistancePx
+
+        for c in cornerCandidates() {
+            let world = SCNVector3(c.x, floor, c.y)
+            let p = scene.projectPoint(world)
+            // z outside 0...1 is behind the camera: the corner
+            // behind you is not the one you are pointing at.
+            guard p.z > 0, p.z < 1 else { continue }
+            let dx = CGFloat(p.x) - location.x
+            let dy = CGFloat(p.y) - location.y
+            let px = (dx * dx + dy * dy).squareRoot()
+            if px < bestPx {
+                bestPx = px
+                best = world
+            }
+        }
+        return best
+    }
+
+    /**
+     * Record a floor corner, wherever it came from.
+     *
+     * Shared by the two routes to a corner — a reading off the
+     * mapped floor, and a wall crossing picked out of the picture
+     * when there is no floor to read. Everything from here on is
+     * the same either way, and the duplicate checks in particular
+     * have to see both or a corner placed by one route could be
+     * repeated by the other.
+     */
+    private func placeFloorCorner(_ p: SCNVector3, fromWalls: Bool) {
+        /*
+         * Refuse a corner on top of the last one.
+         *
+         * Two things produce a duplicate. A double tap, and — more
+         * often — someone closing the loop by tapping the first
+         * corner again at the end, which is the intuitive thing to
+         * do and which nothing on screen discourages. Either way it
+         * puts a zero-length wall in the drawing, and a zero-length
+         * wall is a thing a draughtsman has to stop and ask about.
+         *
+         * The outline closes itself, so tapping back at the start
+         * means finished. Said out loud, because otherwise the tap
+         * simply appears not to have registered.
+         */
+        if let last = points.last, distance(last, p) < 0.15 {
+            setStatus("That's the same corner — tap the next one along")
+            return
+        }
+        if points.count >= 3, let first = points.first, distance(first, p) < 0.4 {
+            setStatus("Back at the start — the room closes itself, so press Done")
+            return
+        }
+
+        points.append(p)
+        if fromWalls { snappedTaps += 1 }
+        dropMarker(at: p)
+        refreshCount()
+
+        /*
+         * Three messages, and which one you get is the point.
+         *
+         * Repeating the furniture reminder rather than saying it
+         * once: that mistake is made on the fourth corner as easily
+         * as the first, and by then any opening instruction is long
+         * gone.
+         *
+         * The completion message is the one that earns its place.
+         * Without it, the only way to know you had been all the way
+         * round was to remember where you started — and the thing
+         * people did instead was tap the first corner again to see
+         * if something happened.
+         */
+        let n = points.count
+        if fromWalls {
+            // Worth saying once per corner. Somebody who has just
+            // been told twice that the floor cannot be found needs
+            // to know the tap landed anyway, and why — otherwise
+            // the sensible response is to move the bed.
+            setStatus(
+                "Got it from the walls, through the furniture. Corner \(n) of \(expectedCorners)."
+            )
+        } else if n >= expectedCorners {
+            setStatus(
+                "That's all \(expectedCorners) corners — press Done. "
+                    + "Found another one? Tap it, the count will follow."
+            )
+        } else if n >= 2 {
+            setStatus(
+                "Corner \(n) of \(expectedCorners). Next one round — aim where the walls meet the floor."
+            )
+        } else {
+            setStatus(
+                "Good. Next corner, going round the same way — aim where the walls meet the floor, not the furniture."
+            )
+        }
     }
 
     // MARK: - Tapping
@@ -782,6 +933,19 @@ final class ARFloorTraceRunner: NSObject {
             usedTarget = lowest?.1 ?? "mapped"
         }
 
+        /*
+         * Nothing along the ray. Before giving up, ask the walls.
+         *
+         * See cornerAtScreenPoint: a corner with a bed in it has no
+         * floor to hit, and that is not a reason to refuse the tap.
+         */
+        if found == nil, mode == .floor,
+            let fromWalls = cornerAtScreenPoint(location)
+        {
+            placeFloorCorner(fromWalls, fromWalls: true)
+            return
+        }
+
         guard let hit = found else {
             setStatus("Can't see the floor there — point a little further into the room")
             return
@@ -810,19 +974,33 @@ final class ARFloorTraceRunner: NSObject {
              * to let ARKit see some open floor first.
              */
             if let floor = floorY, p.y - floor > 0.35 {
-                setStatus(
-                    "Can't find the floor there yet — sweep the phone over some "
-                        + "clear floor nearby, then tap the corner again"
-                )
+                /*
+                 * Everything along the ray is furniture. Ask the
+                 * walls before refusing.
+                 *
+                 * This is the bed-in-the-corner case and it used to
+                 * be a dead end: no sweeping reveals floor that is
+                 * underneath a bed, so the message asking for some
+                 * was advice that could not be taken. The corner
+                 * overhead is visible the whole time.
+                 */
+                if let fromWalls = cornerAtScreenPoint(location) {
+                    placeFloorCorner(fromWalls, fromWalls: true)
+                } else {
+                    setStatus(
+                        "Can't find the floor there yet — sweep the phone over some "
+                            + "clear floor nearby, then tap the corner again"
+                    )
+                }
                 return
             }
 
             /*
              * Hand the corner over to the walls.
              *
-             * Done before the duplicate and back-at-start checks
-             * below, so those compare the points that will actually
-             * be drawn. Two taps a few centimetres apart that both
+             * Done before the duplicate and back-at-start checks,
+             * so those compare the points that will actually be
+             * drawn. Two taps a few centimetres apart that both
              * snap to the same corner are a duplicate, and should be
              * caught as one.
              */
@@ -830,63 +1008,7 @@ final class ARFloorTraceRunner: NSObject {
                 p = snapped
                 snappedTaps += 1
             }
-
-            /*
-             * Refuse a corner on top of the last one.
-             *
-             * Two things produce a duplicate. A double tap, and —
-             * more often — someone closing the loop by tapping the
-             * first corner again at the end, which is the intuitive
-             * thing to do and which nothing on screen discourages.
-             * Either way it puts a zero-length wall in the drawing,
-             * and a zero-length wall is a thing a draughtsman has to
-             * stop and ask about.
-             *
-             * The outline closes itself, so tapping back at the start
-             * means finished. Said out loud, because otherwise the
-             * tap simply appears not to have registered.
-             */
-            if let last = points.last, distance(last, p) < 0.15 {
-                setStatus("That's the same corner — tap the next one along")
-                return
-            }
-            if points.count >= 3, let first = points.first, distance(first, p) < 0.4 {
-                setStatus("Back at the start — the room closes itself, so press Done")
-                return
-            }
-
-            points.append(p)
-            dropMarker(at: p)
-            refreshCount()
-            /*
-             * Three messages, and which one you get is the point.
-             *
-             * Repeating the furniture reminder rather than saying it
-             * once: that mistake is made on the fourth corner as
-             * easily as the first, and by then any opening
-             * instruction is long gone.
-             *
-             * The completion message is the one that earns its
-             * place. Without it, the only way to know you had been
-             * all the way round was to remember where you started —
-             * and the thing people did instead was tap the first
-             * corner again to see if something happened.
-             */
-            let n = points.count
-            if n >= expectedCorners {
-                setStatus(
-                    "That's all \(expectedCorners) corners — press Done. "
-                        + "Found another one? Tap it, the count will follow."
-                )
-            } else if n >= 2 {
-                setStatus(
-                    "Corner \(n) of \(expectedCorners). Next one round — aim where the walls meet the floor."
-                )
-            } else {
-                setStatus(
-                    "Good. Next corner, going round the same way — aim where the walls meet the floor, not the furniture."
-                )
-            }
+            placeFloorCorner(p, fromWalls: false)
             return
         }
 

@@ -547,6 +547,120 @@ export function squareUpOutline(
  * Returns null when there is no outline to place against, leaving
  * the caller to fall back to whatever the sensor said.
  */
+/**
+ * The sharpest corner in an outline, in degrees.
+ *
+ * Rooms do not have sharp corners. Almost every corner in a house
+ * is 90 or 270; a bay brings 135, a splayed wall maybe 110. Nothing
+ * a builder makes comes to a point.
+ *
+ * So a 15 degree corner is not a room, it is a mistake — and it is
+ * the specific mistake that happens when one corner of a trace
+ * lands somewhere the others did not expect. A hotel room with a
+ * bed in one corner came back with two spikes and a 6.91 m wall
+ * closing a room whose longest real wall is 4.7 m, because the
+ * blocked corner could not be tapped and the outline closed across
+ * the gap instead.
+ */
+export function sharpestCornerDeg(
+  polygon: { x: number; z: number }[],
+): number {
+  const n = polygon.length;
+  if (n < 3) return 180;
+
+  let sharpest = 180;
+  for (let i = 0; i < n; i++) {
+    const a = polygon[(i + n - 1) % n];
+    const b = polygon[i];
+    const c = polygon[(i + 1) % n];
+    const v1 = { x: a.x - b.x, z: a.z - b.z };
+    const v2 = { x: c.x - b.x, z: c.z - b.z };
+    const m1 = Math.hypot(v1.x, v1.z);
+    const m2 = Math.hypot(v2.x, v2.z);
+    if (m1 < 1e-6 || m2 < 1e-6) continue;
+    const cos = Math.min(
+      1,
+      Math.max(-1, (v1.x * v2.x + v1.z * v2.z) / (m1 * m2)),
+    );
+    const deg = (Math.acos(cos) * 180) / Math.PI;
+    if (deg < sharpest) sharpest = deg;
+  }
+  return Number(sharpest.toFixed(1));
+}
+
+/**
+ * Below this, a corner is a mistake rather than a room.
+ *
+ * Set well clear of anything a building has. Square corners
+ * measure 90 here, and so do reflex ones, because the angle is
+ * taken without a sign. A bay gives 135, a splayed wall 110. The
+ * shapes that come back from a trace with a corner missing are
+ * down at 15 to 30, so there is a wide empty band in between and
+ * no need to put the line near either edge of it.
+ */
+export const SPIKE_CORNER_DEG = 40;
+
+/**
+ * Something is wrong with this outline, in words, or null.
+ *
+ * Written to be read by a homeowner standing in the room, because
+ * that is the only place and time it can still be fixed. The review
+ * screen used to say "Nothing to type. The scan measured all of
+ * this. Have a quick look and carry on." over a drawing that was
+ * visibly not the room — which is the app being confidently wrong,
+ * and worse than saying nothing.
+ *
+ * Deliberately a warning rather than a block. The customer is the
+ * one who can see the room; if they say the shape is right, it is
+ * right, and plenty of odd-shaped rooms exist.
+ */
+export function outlineProblem(
+  polygon: { x: number; z: number }[] | undefined,
+): string | null {
+  if (!polygon || polygon.length < 3) return null;
+
+  const sharp = sharpestCornerDeg(polygon);
+  if (sharp < SPIKE_CORNER_DEG) {
+    return (
+      "One corner of this shape comes to a sharp point, which rooms " +
+      "don't usually do. A corner that couldn't be tapped — behind a " +
+      "bed or a sofa — does exactly this. Worth tracing again."
+    );
+  }
+
+  /*
+   * A wall longer than the room it is in.
+   *
+   * The giveaway when a corner is missing altogether: the outline
+   * closes straight across the room, so the closing wall is longer
+   * than anything that could fit along an edge of it.
+   */
+  const xs = polygon.map((p) => p.x);
+  const zs = polygon.map((p) => p.z);
+  const diagonal = Math.hypot(
+    Math.max(...xs) - Math.min(...xs),
+    Math.max(...zs) - Math.min(...zs),
+  );
+  const n = polygon.length;
+  let longest = 0;
+  for (let i = 0; i < n; i++) {
+    const q = polygon[(i + 1) % n];
+    longest = Math.max(
+      longest,
+      Math.hypot(q.x - polygon[i].x, q.z - polygon[i].z),
+    );
+  }
+  if (diagonal > 0.1 && longest > diagonal * 0.98) {
+    return (
+      "One wall runs the full width of this shape, which usually " +
+      "means a corner was missed and the outline closed across the " +
+      "room. Worth tracing again."
+    );
+  }
+
+  return null;
+}
+
 export function placeOpeningOnOutline(
   centreM: { x: number; z: number },
   polygon: { x: number; z: number }[] | undefined,
