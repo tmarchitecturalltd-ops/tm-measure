@@ -63,6 +63,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   GRID_STEP_M,
   autoLayoutRooms,
+  layoutFromDoorways,
+  snapToNearestDoorway,
   floorExtents,
   floorLabel,
   floorsInUse,
@@ -72,6 +74,7 @@ import {
   snapToGrid,
   type RoomDraft,
   type RoomPlacement,
+  type RoomConnection,
   type RoomRotationDeg,
   type RoomStairs,
 } from "@tm-designs/measure-core";
@@ -138,6 +141,15 @@ export type FloorPlanEditorProps = {
   placements: Record<string, RoomPlacement>;
   onPlacementChange: (roomId: string, placement: RoomPlacement) => void;
   /**
+   * Which rooms join which, and through which doorway.
+   *
+   * Read-only here, and only by Auto-layout: a connection that
+   * names a door on both sides is enough to put two scanned rooms
+   * together exactly, which is the difference between a plan and a
+   * row of rectangles. See layoutFromDoorways.
+   */
+  connections?: RoomConnection[];
+  /**
    * Write back to a room itself — fixtures and stairs live on the room,
    * not on its placement, because they stay with the room if it is
    * moved to another floor or re-placed.
@@ -187,6 +199,7 @@ function defaultPlacement(floor: number = 0): RoomPlacement {
 export default function FloorPlanEditor({
   rooms,
   placements,
+  connections,
   onPlacementChange,
   onRoomChange,
   onMeasureCeiling,
@@ -1388,17 +1401,67 @@ export default function FloorPlanEditor({
     return true;
   };
 
-  const onRoomPointerUp = useCallback((e: ReactPointerEvent) => {
-    const st = dragRef.current;
-    if (!st || st.pointerId !== e.pointerId) return;
-    dragRef.current = null;
-    settleView();
-    try {
-      (e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
-    } catch {
-      /* already released — fine */
-    }
-  }, []);
+  const onRoomPointerUp = useCallback(
+    (e: ReactPointerEvent) => {
+      const st = dragRef.current;
+      if (!st || st.pointerId !== e.pointerId) return;
+      dragRef.current = null;
+      settleView();
+      try {
+        (e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
+      } catch {
+        /* already released — fine */
+      }
+
+      /*
+       * Dropped next to a doorway: take them to be the same one.
+       *
+       * A fingertip on a phone places a room to within a few
+       * centimetres, and those centimetres are exactly the accuracy
+       * that scanning the room was for. Both scans measured this
+       * doorway, so once the customer has shown which two doors are
+       * the same by putting them together, the rooms can be fitted
+       * to the millimetre.
+       *
+       * The drag still says which rooms join -- this only stops the
+       * app rounding off what it said. See snapToNearestDoorway,
+       * which refuses anything that would visibly move the room.
+       */
+      const moving = rooms.find((r) => r.id === st.roomId);
+      const here = placementFor(st.roomId);
+      if (!moving || !here.positionM) return;
+
+      const others = rooms
+        .filter((r) => r.id !== moving.id)
+        .map((r) => ({ room: r, placement: placementFor(r.id) }))
+        .filter(
+          (o) =>
+            o.placement.positionM && o.placement.floor === here.floor,
+        )
+        .map((o) => ({
+          room: o.room,
+          placement: {
+            positionM: o.placement.positionM!,
+            rotationDeg: o.placement.rotationDeg,
+          },
+        }));
+      if (others.length === 0) return;
+
+      const snapped = snapToNearestDoorway(
+        moving,
+        { positionM: here.positionM, rotationDeg: here.rotationDeg },
+        others,
+      );
+      if (snapped) {
+        onPlacementChange(moving.id, {
+          ...here,
+          positionM: snapped.positionM,
+          rotationDeg: snapped.rotationDeg,
+        });
+      }
+    },
+    [rooms, placementFor, onPlacementChange],
+  );
 
   const rotateRoom = useCallback(
     (roomId: string) => {
@@ -1467,14 +1530,45 @@ export default function FloorPlanEditor({
     setCurrentFloor(next);
   }, [usedFloors]);
 
+  /**
+   * Arrange the floor: doorways first, then pack the rest.
+   *
+   * Auto-layout used to do one thing -- deal the rooms out left to
+   * right in a row with a half-metre gap. Honest, because nothing
+   * knew where they really went, and useless as a plan: every room
+   * then had to be dragged into place by hand, on a phone, which
+   * throws away the accuracy that made scanning worth doing.
+   *
+   * Where the customer has said which doorway joins two rooms,
+   * there is nothing to guess: both scans measured that doorway, so
+   * the rooms can be put together exactly. See layoutFromDoorways.
+   *
+   * Packing stays, for whatever is left over. A room nobody has
+   * connected yet still has to go somewhere, and a row along the
+   * top is a better somewhere than a pile at the origin.
+   */
   const applyAutoLayout = useCallback(() => {
-    const seed = autoLayoutRooms(
-      rooms.filter((r) => placementFor(r.id).floor === currentFloor),
+    const onFloor = rooms.filter(
+      (r) => placementFor(r.id).floor === currentFloor,
     );
-    for (const [id, placement] of seed.entries()) {
-      onPlacementChange(id, placement);
+
+    const joined = layoutFromDoorways(onFloor, connections ?? []);
+    for (const [id, placement] of joined.entries()) {
+      onPlacementChange(id, {
+        ...placementFor(id),
+        positionM: placement.positionM,
+        rotationDeg: placement.rotationDeg,
+      });
     }
-  }, [rooms, placementFor, currentFloor, onPlacementChange]);
+
+    const leftOver = onFloor.filter((r) => !joined.has(r.id));
+    if (leftOver.length) {
+      const seed = autoLayoutRooms(leftOver);
+      for (const [id, placement] of seed.entries()) {
+        onPlacementChange(id, placement);
+      }
+    }
+  }, [rooms, placementFor, currentFloor, onPlacementChange, connections]);
 
   /**
    * Lay the floor out automatically the first time it has rooms but no

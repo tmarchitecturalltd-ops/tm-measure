@@ -5,6 +5,7 @@ export * from "./validation";
 export * from "./scan";
 export * from "./perspective";
 export * from "./connectivity";
+export * from "./joinRooms";
 export * from "./floorplan";
 export * from "./dxf";
 export * from "./dxfPlan";

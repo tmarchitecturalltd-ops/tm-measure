@@ -55,6 +55,27 @@ export type RoomConnection = {
   wallAIndex?: number;
   roomBId?: string;
   wallBIndex?: number;
+  /**
+   * The two doors that are the same doorway, one in each room.
+   *
+   * This is what turns a list of rooms into a floor plan. Each room
+   * is scanned in its own frame with no idea where it sits relative
+   * to anything else, so the survey arrives as a pile of accurate
+   * shapes in no particular arrangement and somebody has to drag
+   * them into place by eye.
+   *
+   * A doorway is the one thing two rooms genuinely share. Naming
+   * the same doorway from both sides pins them together exactly:
+   * the shared wall fixes the rotation and the shared door centre
+   * fixes the position, and both numbers were measured by the
+   * sensor rather than judged by hand. See layoutFromDoorways.
+   *
+   * Optional, because a connection recorded as "the kitchen and the
+   * hall are joined" is still worth having even when nobody has
+   * said which door.
+   */
+  doorAId?: string;
+  doorBId?: string;
   kind: ConnectionKind;
   /** Stair shape, only meaningful when kind === "stairs". */
   stairsShape?: StairsShape;

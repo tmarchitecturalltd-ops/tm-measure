@@ -29,7 +29,7 @@ import {
 import { roomBoundingBox, roomFootprint } from "./src/floorplan.ts";
 import { buildFloorPlanDxf, roomCornersM } from "./src/dxf.ts";
 import { buildWalls, buildDetailedPlanDxf, roomOutlineM } from "./src/dxfPlan.ts";
-import { fixtureFootprintM } from "./src/types.ts";
+import { fixtureFootprintM, rotatePointM } from "./src/types.ts";
 import { validateRoom } from "./src/validation.ts";
 import {
   scanPolygonIsUsable,
@@ -2334,5 +2334,231 @@ test("squaring up keeps an L-shape an L-shape", () => {
     polygonSelfIntersects(out),
     false,
     "and squaring must not fold it over itself",
+  );
+});
+
+/* ── joining rooms by their shared doorway ────────────────────────── */
+
+import {
+  layoutFromDoorways,
+  unmatchedDoorways,
+  snapToNearestDoorway,
+} from "./src/joinRooms.ts";
+
+/** A plain rectangular room with one door on a named wall. */
+function doorRoom(
+  id: string,
+  w: number,
+  l: number,
+  wallIndex: number,
+  alongM: number,
+  doorId: string,
+): RoomDraft {
+  return {
+    id,
+    name: id,
+    walls: [
+      { id: `${id}w0`, label: "Wall 1", lengthM: String(w) },
+      { id: `${id}w1`, label: "Wall 2", lengthM: String(l) },
+      { id: `${id}w2`, label: "Wall 3", lengthM: String(w) },
+      { id: `${id}w3`, label: "Wall 4", lengthM: String(l) },
+    ],
+    floorPolygonM: [
+      { x: 0, z: 0 },
+      { x: w, z: 0 },
+      { x: w, z: l },
+      { x: 0, z: l },
+    ],
+    doors: [
+      { id: doorId, widthM: "0.80", note: "", wallIndex, positionM: String(alongM) },
+    ],
+    windows: [],
+    photos: [],
+    ceilingHeightM: "2.40",
+    notes: "",
+    irregularNotes: "",
+    shape: "custom",
+  } as unknown as RoomDraft;
+}
+
+/** World position of a room-local point, given a placement. */
+function toWorld(
+  p: { x: number; z: number },
+  placement: { positionM: { x: number; z: number }; rotationDeg: number },
+) {
+  const r = rotatePointM(p, placement.rotationDeg);
+  return { x: placement.positionM.x + r.x, z: placement.positionM.z + r.z };
+}
+
+test("two rooms meet exactly at the doorway they share", () => {
+  /*
+   * The whole point of the feature. Each room is scanned in its own
+   * frame, so neither knows where the other is; naming one doorway
+   * from both sides should be enough to put them together with no
+   * dragging and nothing judged by eye.
+   *
+   * Room A is 4 x 3 with a door on its bottom wall (index 2),
+   * 1.5 m along. Room B is 3 x 2.5 with a door on its top wall
+   * (index 0), 1.0 m along. They are the same doorway.
+   */
+  const a = doorRoom("a", 4, 3, 2, 1.5, "da");
+  const b = doorRoom("b", 3, 2.5, 0, 1.0, "db");
+
+  const placements = layoutFromDoorways(
+    [a, b],
+    [
+      {
+        id: "c1",
+        roomAId: "a",
+        roomBId: "b",
+        doorAId: "da",
+        doorBId: "db",
+        kind: "door",
+      },
+    ],
+  );
+
+  assert.equal(placements.size, 2, "both rooms get placed");
+  const pa = placements.get("a")!;
+  const pb = placements.get("b")!;
+
+  // Room A's door, in the world. Wall 2 runs from (4,3) to (0,3),
+  // so 1.5 m along it is (2.5, 3).
+  const doorA = toWorld({ x: 2.5, z: 3 }, pa);
+  // Room B's door. Wall 0 runs from (0,0) to (3,0), so 1 m along
+  // it is (1, 0).
+  const doorB = toWorld({ x: 1, z: 0 }, pb);
+
+  assert.ok(
+    Math.hypot(doorA.x - doorB.x, doorA.z - doorB.z) < 0.005,
+    `the doorway must be one place, not two: ${JSON.stringify(doorA)} vs ${JSON.stringify(doorB)}`,
+  );
+
+  /*
+   * And the rooms must be on opposite sides of that wall rather
+   * than overlaid on each other, which is the failure a sign error
+   * in the rotation produces and which a door-to-door check alone
+   * would not catch.
+   */
+  const centreA = toWorld({ x: 2, z: 1.5 }, pa);
+  const centreB = toWorld({ x: 1.5, z: 1.25 }, pb);
+  assert.ok(
+    Math.hypot(centreA.x - centreB.x, centreA.z - centreB.z) > 2,
+    "the rooms must not be sitting on top of each other",
+  );
+});
+
+test("joining leaves the customer's own arrangement alone", () => {
+  const a = doorRoom("a", 4, 3, 2, 1.5, "da");
+  const b = doorRoom("b", 3, 2.5, 0, 1.0, "db");
+  const conns = [
+    { id: "c1", roomAId: "a", roomBId: "b", doorAId: "da", doorBId: "db", kind: "door" as const },
+  ];
+
+  // A is already where the customer put it, at an angle.
+  const placed = layoutFromDoorways([a, b], conns, {
+    a: { positionM: { x: 10, z: -4 }, rotationDeg: 90 },
+  });
+
+  assert.equal(placed.has("a"), false, "a placed room is not moved");
+  const pb = placed.get("b");
+  assert.ok(pb, "and the room joined to it still gets placed");
+
+  const doorA = toWorld(
+    { x: 2.5, z: 3 },
+    { positionM: { x: 10, z: -4 }, rotationDeg: 90 },
+  );
+  const doorB = toWorld({ x: 1, z: 0 }, pb!);
+  assert.ok(
+    Math.hypot(doorA.x - doorB.x, doorA.z - doorB.z) < 0.005,
+    "and it lands on the doorway of the room that did not move",
+  );
+});
+
+test("a doorway nobody has matched up is still on the list", () => {
+  const a = doorRoom("a", 4, 3, 2, 1.5, "da");
+  const b = doorRoom("b", 3, 2.5, 0, 1.0, "db");
+
+  assert.equal(unmatchedDoorways([a, b], []).length, 2, "both, to start");
+
+  const after = unmatchedDoorways(
+    [a, b],
+    [{ id: "c1", roomAId: "a", roomBId: "b", doorAId: "da", doorBId: "db", kind: "door" }],
+  );
+  assert.equal(after.length, 0, "and neither, once they are paired");
+
+  // Nothing to go on is not a reason to invent a layout.
+  assert.equal(
+    layoutFromDoorways([a, b], []).size,
+    0,
+    "no named doorways, no placements",
+  );
+});
+
+test("dropping a room by a doorway snaps it exactly onto it", () => {
+  /*
+   * The drag says which rooms join; this stops the app rounding off
+   * what it said. Room B is dropped roughly against room A's door
+   * -- out by 18 cm and 6 degrees, which is a good fingertip on a
+   * phone -- and should come to rest exactly on it.
+   */
+  const a = doorRoom("a", 4, 3, 2, 1.5, "da");
+  const b = doorRoom("b", 3, 2.5, 0, 1.0, "db");
+
+  const aPlace = { positionM: { x: 0, z: 0 }, rotationDeg: 0 };
+  /*
+   * A's shared wall is its bottom, running right to left. B's is
+   * its top, running left to right. Those are already opposite, so
+   * B belongs at rotation 0 and its anchor at (2.5, 3) minus its
+   * door's local (1, 0) -- that is (1.5, 3).
+   *
+   * Dropped 18 cm and 6 degrees off that, which is a good
+   * fingertip on a phone.
+   */
+  const dropped = { positionM: { x: 1.62, z: 3.14 }, rotationDeg: 6 };
+
+  const snapped = snapToNearestDoorway(b, dropped, [
+    { room: a, placement: aPlace },
+  ]);
+  assert.ok(snapped, "a room dropped on a doorway must snap to it");
+
+  const doorA = toWorld({ x: 2.5, z: 3 }, aPlace);
+  const doorB = toWorld({ x: 1, z: 0 }, snapped!);
+  assert.ok(
+    Math.hypot(doorA.x - doorB.x, doorA.z - doorB.z) < 0.005,
+    "the two doors become one place",
+  );
+
+  // And it is a tidy-up, not a teleport.
+  let turn = ((snapped!.rotationDeg - dropped.rotationDeg) % 360 + 360) % 360;
+  if (turn > 180) turn -= 360;
+  assert.ok(Math.abs(turn) <= 25, `turned ${turn} degrees, too far`);
+});
+
+test("a room dropped nowhere near a doorway is left where it was put", () => {
+  const a = doorRoom("a", 4, 3, 2, 1.5, "da");
+  const b = doorRoom("b", 3, 2.5, 0, 1.0, "db");
+
+  // Across the room, well outside the snap radius.
+  assert.equal(
+    snapToNearestDoorway(
+      b,
+      { positionM: { x: 9, z: 9 }, rotationDeg: 180 },
+      [{ room: a, placement: { positionM: { x: 0, z: 0 }, rotationDeg: 0 } }],
+    ),
+    null,
+    "nothing near enough, nothing moved",
+  );
+
+  // Close enough, but facing the wrong way: snapping would spin the
+  // room through 90 degrees, which is deciding rather than tidying.
+  assert.equal(
+    snapToNearestDoorway(
+      b,
+      { positionM: { x: 0.5, z: 3 }, rotationDeg: 90 },
+      [{ room: a, placement: { positionM: { x: 0, z: 0 }, rotationDeg: 0 } }],
+    ),
+    null,
+    "a snap must not visibly spin the room",
   );
 });
