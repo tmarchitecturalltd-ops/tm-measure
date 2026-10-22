@@ -294,13 +294,22 @@ function scannedOpening(
 }
 
 /**
- * Staircases the sensor found, as the app stores them.
+ * Staircases the sensor found. NOT CURRENTLY USED -- see below.
  *
- * RoomPlan has been classifying stairs all along -- it is one of its
- * object categories -- and nothing ever read `CapturedRoom.objects`,
- * so a LiDAR survey of a house with a staircase in it produced a
- * drawing with no staircase and the only route to one was adding it
- * by hand on the floor plan afterwards.
+ * Turned off at Harry's request after the first look at it, and the
+ * call is his to make: a staircase is the one thing on a drawing
+ * that a draughtsman will size from directly, and a flight the
+ * sensor got slightly wrong is worse than a flight somebody drew on
+ * the plan themselves, because nothing about it says it was
+ * guessed. Both calls here are commented rather than deleted, and
+ * the plugin still reports stairs, so turning it back on is
+ * restoring two lines.
+ *
+ * What it was for, when it was on: RoomPlan has been classifying
+ * stairs all along -- it is one of its object categories -- and
+ * nothing ever read `CapturedRoom.objects`, so a LiDAR survey of a
+ * house with a staircase in it produced a drawing with no
+ * staircase.
  *
  * Positioned by `worldM`, not against a wall. A staircase genuinely
  * is a free object in the house far more often than it is a thing
@@ -949,7 +958,7 @@ export default function MeasureIntakeForm() {
         windows: (sr.windows ?? []).map((w) =>
           scannedOpening(w, sr.walls, newId(), sr.floorPolygonM),
         ),
-        stairs: scannedStairs(sr, newId),
+        // No stairs from the sensor. See scannedStairs.
         irregularNotes: "",
         notes: stamp,
         photos: [],
@@ -1179,7 +1188,7 @@ export default function MeasureIntakeForm() {
                   windows: (sr.windows ?? []).map((w) =>
                     scannedOpening(w, sr.walls, newId(), sensorOutline),
                   ),
-                  stairs: scannedStairs(sr, newId),
+                  // No stairs from the sensor. See scannedStairs.
                   // "custom" only when a polygon is actually kept —
                   // a custom-shaped room with no polygon falls through
                   // to a rectangle anyway, but says otherwise on screen.

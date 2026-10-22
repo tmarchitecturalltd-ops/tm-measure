@@ -778,12 +778,27 @@ export default function FloorPlanEditor({
       const room = rooms.find((r) => r.id === roomId);
       if (!room) return;
       const size = roomFootprint(room);
-      const segs: [{ x: number; z: number }, { x: number; z: number }][] = [
-        [{ x: 0, z: 0 }, { x: size.widthM, z: 0 }],
-        [{ x: size.widthM, z: 0 }, { x: size.widthM, z: size.lengthM }],
-        [{ x: size.widthM, z: size.lengthM }, { x: 0, z: size.lengthM }],
-        [{ x: 0, z: size.lengthM }, { x: 0, z: 0 }],
-      ];
+      /*
+       * Snap to the walls the opening is drawn on.
+       *
+       * These were the four sides of the bounding rectangle, which
+       * for a scanned room is not where its walls are -- so dragging
+       * a window onto a bay cheek wrote an index for a rectangle
+       * side, and the marker then reappeared somewhere else
+       * entirely. The drawing code reads the outline, so the drag
+       * has to read the same thing or the two disagree every time
+       * anybody touches one.
+       */
+      const outline = room.floorPolygonM;
+      const segs: [{ x: number; z: number }, { x: number; z: number }][] =
+        outline && outline.length >= 3
+          ? outline.map((a, i) => [a, outline[(i + 1) % outline.length]])
+          : [
+              [{ x: 0, z: 0 }, { x: size.widthM, z: 0 }],
+              [{ x: size.widthM, z: 0 }, { x: size.widthM, z: size.lengthM }],
+              [{ x: size.widthM, z: size.lengthM }, { x: 0, z: size.lengthM }],
+              [{ x: 0, z: size.lengthM }, { x: 0, z: 0 }],
+            ];
       let best = { index: 0, dist: Infinity, along: 0 };
       segs.forEach(([a, b], i) => {
         const vx = b.x - a.x;
@@ -857,13 +872,19 @@ export default function FloorPlanEditor({
       const room = rooms.find((r) => r.id === roomId);
       if (!room) return;
       const size = roomFootprint(room);
-      // Rectangle walls in local coords: 0 top, 1 right, 2 bottom, 3 left.
-      const segs: [{ x: number; z: number }, { x: number; z: number }][] = [
-        [{ x: 0, z: 0 }, { x: size.widthM, z: 0 }],
-        [{ x: size.widthM, z: 0 }, { x: size.widthM, z: size.lengthM }],
-        [{ x: size.widthM, z: size.lengthM }, { x: 0, z: size.lengthM }],
-        [{ x: 0, z: size.lengthM }, { x: 0, z: 0 }],
-      ];
+      // The room's real walls where it has them, the bounding
+      // rectangle where it does not. Same reasoning as slideOpening
+      // above: a flight has to land on a wall that is drawn.
+      const outline = room.floorPolygonM;
+      const segs: [{ x: number; z: number }, { x: number; z: number }][] =
+        outline && outline.length >= 3
+          ? outline.map((a, i) => [a, outline[(i + 1) % outline.length]])
+          : [
+              [{ x: 0, z: 0 }, { x: size.widthM, z: 0 }],
+              [{ x: size.widthM, z: 0 }, { x: size.widthM, z: size.lengthM }],
+              [{ x: size.widthM, z: size.lengthM }, { x: 0, z: size.lengthM }],
+              [{ x: 0, z: size.lengthM }, { x: 0, z: 0 }],
+            ];
       let best = { index: 0, dist: Infinity, along: 0 };
       segs.forEach(([a, b], i) => {
         const vx = b.x - a.x;
@@ -2384,11 +2405,28 @@ export default function FloorPlanEditor({
                   {size.widthM.toFixed(2)} × {size.lengthM.toFixed(2)} m
                 </text>
 
-                {/* Door / window tick marks. We map each opening to
-                    its parent wall (0 = top, 1 = right, 2 = bottom,
-                    3 = left in the rectangle's local frame) and draw a
-                    short coloured segment at the offset along that
-                    wall. Doors are gold-on-cream, windows are slate. */}
+                {/* Door / window tick marks, on the wall they are
+                    actually in.
+
+                    This used to resolve wallIndex % 4 against the
+                    four sides of the room's bounding rectangle. For
+                    a typed survey that is the room. For a scanned
+                    one it is not: the outline has as many walls as
+                    the sensor found -- eight in a kitchen with a bay
+                    -- and the modulo wrapped wall 4 onto the top,
+                    wall 5 onto the right, and so on, so the markers
+                    landed on corners and on the wrong sides of the
+                    room while the outline beside them was correct.
+
+                    Reported as the dots not matching up to the room.
+
+                    The outline's own edges are what the opening
+                    indices were measured against -- see
+                    placeOpeningOnOutline -- so they are what the
+                    markers are drawn on. The rectangle stays as the
+                    fallback for a room that has no outline.
+
+                    Doors are gold-on-cream, windows are slate. */}
                 {[
                   ...(r.doors || []).map((d) => ({ ...d, kind: "door" as const })),
                   ...(r.windows || []).map((wn) => ({ ...wn, kind: "window" as const })),
@@ -2399,7 +2437,19 @@ export default function FloorPlanEditor({
                   const offset = parseFloat(op.positionM ?? "") ;
                   // Resolve wall start/end points in the local frame.
                   let x1 = 0, y1 = 0, x2 = 0, y2 = 0;
-                  if (wallIndex % 4 === 0) {
+                  const outline = r.floorPolygonM;
+                  if (outline && outline.length >= 3) {
+                    const n = outline.length;
+                    // Clamped rather than wrapped. An index past the
+                    // end means the outline changed under an opening
+                    // that was placed against the old one, and the
+                    // last wall is a better guess than whichever one
+                    // the modulo would have picked.
+                    const i = Math.min(Math.max(wallIndex, 0), n - 1);
+                    const a = outline[i];
+                    const b = outline[(i + 1) % n];
+                    x1 = a.x; y1 = a.z; x2 = b.x; y2 = b.z;
+                  } else if (wallIndex % 4 === 0) {
                     // Top wall — runs left to right at y=0
                     x1 = 0; y1 = 0; x2 = w; y2 = 0;
                   } else if (wallIndex % 4 === 1) {
