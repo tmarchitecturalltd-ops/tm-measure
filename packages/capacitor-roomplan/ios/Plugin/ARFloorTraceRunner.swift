@@ -383,40 +383,30 @@ final class ARFloorTraceRunner: NSObject {
          * answered before you can see the room; here it can be
          * adjusted at the moment you notice the alcove.
          */
+        /*
+         * An empty strip where the corner stepper used to be.
+         *
+         * The stepper asked how many corners the room had, with a
+         * minus and a plus, before anybody had tapped one. Three
+         * things wrong with it. It is a question asked before you
+         * can see the answer. Almost nobody touched it, so it sat
+         * at four and an L-shaped room counted "5 of 4", "6 of 4" --
+         * the app appearing to disagree with the room. And it was
+         * solving a problem that had already been solved elsewhere:
+         * the trace knows when you arrive back at the first corner
+         * and says so, which is a real signal rather than a number
+         * typed in advance.
+         *
+         * So the count just counts, and this row survives only to
+         * position the Door / Window / Opening picker in the same
+         * place.
+         */
         let cornerRow = UIStackView()
         cornerRow.translatesAutoresizingMaskIntoConstraints = false
         cornerRow.axis = .horizontal
         cornerRow.alignment = .center
-        cornerRow.spacing = 14
-        cornerRow.isHidden = mode == .height
-
-        let fewer = UIButton(type: .system)
-        fewer.setTitle("−", for: .normal)
-        fewer.titleLabel?.font = .systemFont(ofSize: 26, weight: .medium)
-        fewer.setTitleColor(.white, for: .normal)
-        fewer.addTarget(self, action: #selector(fewerCorners), for: .touchUpInside)
-        fewer.widthAnchor.constraint(equalToConstant: 44).isActive = true
-        fewer.heightAnchor.constraint(equalToConstant: 44).isActive = true
-
-        let cornerLabel = UILabel()
-        cornerLabel.textColor = .white
-        cornerLabel.font = .systemFont(ofSize: 15, weight: .semibold)
-        cornerLabel.textAlignment = .center
-        cornerLabel.shadowColor = .black
-        cornerLabel.shadowOffset = CGSize(width: 0, height: 1)
-        cornerCountLabel = cornerLabel
-
-        let more = UIButton(type: .system)
-        more.setTitle("+", for: .normal)
-        more.titleLabel?.font = .systemFont(ofSize: 26, weight: .medium)
-        more.setTitleColor(.white, for: .normal)
-        more.addTarget(self, action: #selector(moreCorners), for: .touchUpInside)
-        more.widthAnchor.constraint(equalToConstant: 44).isActive = true
-        more.heightAnchor.constraint(equalToConstant: 44).isActive = true
-
-        cornerRow.addArrangedSubview(fewer)
-        cornerRow.addArrangedSubview(cornerLabel)
-        cornerRow.addArrangedSubview(more)
+        cornerRow.isHidden = true
+        cornerRow.heightAnchor.constraint(equalToConstant: 40).isActive = true
         vc.view.addSubview(cornerRow)
         cornerStepper = cornerRow
 
@@ -589,8 +579,7 @@ final class ARFloorTraceRunner: NSObject {
      * is the single most valuable thing a survey can record — being
      * told "no" at that moment would lose it.
      */
-    private var expectedCorners = 4
-    private var cornerCountLabel: UILabel?
+
 
     private func setStatus(_ text: String) {
         DispatchQueue.main.async { [weak self] in
@@ -616,12 +605,6 @@ final class ARFloorTraceRunner: NSObject {
                 self.doneButton?.alpha = ready ? 1 : 0.4
                 return
             }
-            // "Corners: 4" before you start, "3 of 4" once you have.
-            self.cornerCountLabel?.text =
-                n == 0
-                    ? "Corners: \(self.expectedCorners)"
-                    : "\(n) of \(self.expectedCorners)"
-
             if n == 0 {
                 self.countLabel?.text = nil
             } else if n == 1 {
@@ -639,16 +622,18 @@ final class ARFloorTraceRunner: NSObject {
              * called out once it matches what was asked for.
              *
              * Three points is the fewest that enclose anything, so
-             * that is when the button becomes usable. But "usable"
-             * and "finished" are different, and the gap between them
-             * is where people tapped the first corner a second time
-             * looking for a signal that they had gone all the way
-             * round. On the last expected corner the button says so.
+             * that is when the button becomes usable.
+             *
+             * It used to also say "Next ✓" on reaching the number
+             * set on the stepper. That tick is gone with the
+             * stepper: a target typed in before the room was looked
+             * at was never evidence of having finished, and the
+             * trace has a real one -- arriving back at the first
+             * corner, which it detects and says out loud.
              */
             let usable = n >= 3
             self.doneButton?.isEnabled = usable
             self.doneButton?.alpha = usable ? 1 : 0.4
-            let complete = n >= self.expectedCorners
             /*
              * "Next", not "Done", because it no longer finishes.
              *
@@ -658,7 +643,7 @@ final class ARFloorTraceRunner: NSObject {
              * back on its word at the exact moment somebody thinks
              * they have finished.
              */
-            self.doneButton?.setTitle(complete ? "Next ✓" : "Next", for: .normal)
+            self.doneButton?.setTitle("Next", for: .normal)
         }
     }
 
@@ -945,16 +930,16 @@ final class ARFloorTraceRunner: NSObject {
             // to know the tap landed anyway, and why — otherwise
             // the sensible response is to move the bed.
             setStatus(
-                "Got it from the walls, through the furniture. Corner \(n) of \(expectedCorners)."
+                "Got it from the walls, through the furniture. That's \(n) corners."
             )
-        } else if n >= expectedCorners {
+        } else if n >= 3 {
             setStatus(
-                "That's all \(expectedCorners) corners. Press Done. "
-                    + "Found another one? Tap it, the count will follow."
+                "\(n) corners. Keep going round, and press Next when you get "
+                    + "back to the one you started on."
             )
         } else if n >= 2 {
             setStatus(
-                "Corner \(n) of \(expectedCorners). Next one round. Aim where the walls meet the floor."
+                "\(n) corners. Next one round. Aim where the walls meet the floor."
             )
         } else {
             setStatus(
@@ -1415,16 +1400,6 @@ final class ARFloorTraceRunner: NSObject {
      * Never below the number already placed — the label would then
      * be counting down past zero.
      */
-    @objc private func fewerCorners() {
-        expectedCorners = max(3, max(points.count, expectedCorners - 1))
-        refreshCount()
-    }
-
-    @objc private func moreCorners() {
-        expectedCorners = min(12, expectedCorners + 1)
-        refreshCount()
-    }
-
     @objc private func undoPoint() {
         /*
          * Undo means the last thing you did, which is a different
