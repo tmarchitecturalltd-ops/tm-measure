@@ -307,7 +307,7 @@ final class ARFloorTraceRunner: NSObject {
         // no end in sight is why people tap at a camera feed that is
         // not ready yet.
         setStatus(
-            "\(title)\n\nGetting ready — hold the phone up and move it slowly "
+            "\(title)\n\nGetting ready. Hold the phone up and move it slowly "
                 + "around the room. This takes a few seconds."
         )
     }
@@ -555,7 +555,7 @@ final class ARFloorTraceRunner: NSObject {
                 self.setStatus(
                     self.mode == .height
                         ? "Ready. Tap where the wall meets the floor."
-                        : "Ready. Tap each corner once, going round — aim where two walls "
+                        : "Ready. Tap each corner once, going round. Aim where two walls "
                             + "meet the floor, not the furniture in front of it. Don't tap "
                             + "the first corner again at the end; the room closes itself."
                 )
@@ -909,11 +909,11 @@ final class ARFloorTraceRunner: NSObject {
          * simply appears not to have registered.
          */
         if let last = points.last, distance(last, p) < 0.15 {
-            setStatus("That's the same corner — tap the next one along")
+            setStatus("That's the same corner. Tap the next one along")
             return
         }
         if points.count >= 3, let first = points.first, distance(first, p) < 0.4 {
-            setStatus("Back at the start — the room closes itself, so press Done")
+            setStatus("Back at the start. The room closes itself, so press Done")
             return
         }
 
@@ -947,16 +947,16 @@ final class ARFloorTraceRunner: NSObject {
             )
         } else if n >= expectedCorners {
             setStatus(
-                "That's all \(expectedCorners) corners — press Done. "
+                "That's all \(expectedCorners) corners. Press Done. "
                     + "Found another one? Tap it, the count will follow."
             )
         } else if n >= 2 {
             setStatus(
-                "Corner \(n) of \(expectedCorners). Next one round — aim where the walls meet the floor."
+                "Corner \(n) of \(expectedCorners). Next one round. Aim where the walls meet the floor."
             )
         } else {
             setStatus(
-                "Good. Next corner, going round the same way — aim where the walls meet the floor, not the furniture."
+                "Good. Next corner, going round the same way. Aim where the walls meet the floor, not the furniture."
             )
         }
     }
@@ -1024,7 +1024,7 @@ final class ARFloorTraceRunner: NSObject {
          * and landed on the one opposite.
          */
         if w < 0.15 {
-            setStatus("That's the same corner — tap the other side of the opening")
+            setStatus("That's the same corner. Tap the other side of the opening")
             return
         }
         if w > 3.0 {
@@ -1041,7 +1041,7 @@ final class ARFloorTraceRunner: NSObject {
         dropMarker(at: p, colour: .systemBlue)
         drawSpan(from: first, to: p)
         setStatus(
-            "\(openingKind.rawValue.capitalized) — \(String(format: "%.2f", w)) m. "
+            "\(openingKind.rawValue.capitalized), \(String(format: "%.2f", w)) m. "
                 + "Mark another, or press Done."
         )
         refreshOpeningCount()
@@ -1172,7 +1172,7 @@ final class ARFloorTraceRunner: NSObject {
          * more seconds, which is all ARKit is asking for.
          */
         guard case .normal = currentTracking else {
-            setStatus("Not ready yet — keep moving the phone slowly until this message clears")
+            setStatus("Not ready yet. Keep moving the phone slowly until this message clears")
             return
         }
         // Floor mode needs a floor to measure against. Height mode
@@ -1180,12 +1180,12 @@ final class ARFloorTraceRunner: NSObject {
         // about that needs ARKit to have decided which surface is the
         // ground.
         if mode == .floor, floorY == nil {
-            setStatus("Still looking for the floor — point at it and move slowly")
+            setStatus("Still looking for the floor. Point at it and move slowly")
             return
         }
         if mode == .floor, floorAreaM2 < minFloorAreaM2 {
             setStatus(
-                "Nearly ready — walk the room slowly with the phone pointed at "
+                "Nearly ready. Walk the room slowly with the phone pointed at "
                     + "the floor. The more it sees, the more accurate the result."
             )
             return
@@ -1314,7 +1314,7 @@ final class ARFloorTraceRunner: NSObject {
         }
 
         guard let hit = found else {
-            setStatus("Can't see the floor there — point a little further into the room")
+            setStatus("Can't see the floor there. Point a little further into the room")
             return
         }
         if usedTarget == "estimated" { estimatedTaps += 1 }
@@ -1359,7 +1359,7 @@ final class ARFloorTraceRunner: NSObject {
                     placeFloorCorner(onPlane, fromWalls: false)
                 } else {
                     setStatus(
-                        "Can't find the floor there yet — sweep the phone over some "
+                        "Can't find the floor there yet. Sweep the phone over some "
                             + "clear floor nearby, then tap the corner again"
                     )
                 }
@@ -1433,7 +1433,7 @@ final class ARFloorTraceRunner: NSObject {
             if pendingCorner != nil {
                 pendingCorner = nil
                 removeLastMarker()
-                setStatus("Start that one again — tap one bottom corner")
+                setStatus("Start that one again. Tap one bottom corner")
             } else if !openings.isEmpty {
                 openings.removeLast()
                 // Three nodes to a finished opening: both corners
@@ -1519,9 +1519,21 @@ final class ARFloorTraceRunner: NSObject {
         markingOpenings = true
         cornerStepper?.isHidden = true
         kindPicker?.isHidden = false
+        /*
+         * Name the control and name the taps.
+         *
+         * The first version of this said "tap one bottom corner of
+         * an opening, then the other", which assumes the customer
+         * has already noticed the Door / Window / Opening picker
+         * that has just appeared where the corner stepper was, and
+         * understood that it labels everything they are about to
+         * tap. Nothing said so. Getting six windows in as doors and
+         * finding out afterwards means marking them all again.
+         */
         setStatus(
-            "Now the doors and windows. Tap one bottom corner of an opening, "
-                + "then the other — we'll measure the width. Press Done when there are none left."
+            "Now the doors and windows. Choose Door, Window or Opening below, "
+                + "then tap its two bottom corners and we'll measure the width. "
+                + "Press Done when there are none left."
         )
         refreshOpeningCount()
     }
@@ -1790,21 +1802,21 @@ extension ARFloorTraceRunner: ARSessionDelegate {
 
         switch camera.trackingState {
         case .limited(.initializing):
-            setStatus("Getting ready — keep moving the phone slowly. A few more seconds.")
+            setStatus("Getting ready. Keep moving the phone slowly. A few more seconds.")
         case .limited(.excessiveMotion):
-            setStatus("Too fast — move the phone more slowly")
+            setStatus("Too fast. Move the phone more slowly")
         case .limited(.insufficientFeatures):
             setStatus(
                 "Not enough detail to track. Turn a light on, or point at a "
                     + "patterned surface for a moment."
             )
         case .limited(.relocalizing):
-            setStatus("Lost the room for a second — hold still while it finds it again")
+            setStatus("Lost the room for a second. Hold still while it finds it again")
         case .notAvailable:
             setStatus("Tracking unavailable")
         case .normal:
             if floorY == nil && mode == .floor {
-                setStatus("Nearly — point the phone down at the floor and move slowly")
+                setStatus("Nearly. Point the phone down at the floor and move slowly")
             }
         default:
             break
@@ -1957,7 +1969,7 @@ extension ARFloorTraceRunner: ARSCNViewDelegate {
             if firstFloor {
                 floorAreaM2 = Double(size.w * size.h)
                 setStatus(
-                    "Floor found — keep sweeping it slowly for a moment so the "
+                    "Floor found. Keep sweeping it slowly for a moment so the "
                         + "measurements are accurate"
                 )
             }

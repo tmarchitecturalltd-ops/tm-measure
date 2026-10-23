@@ -353,9 +353,9 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
         switch instruction {
         case .moveCloseToWall:  text = "Move a little closer to the wall"
         case .moveAwayFromWall: text = "Step back from the wall"
-        case .slowDown:         text = "Slow down — move the phone more gently"
-        case .turnOnLight:      text = "It's a bit dark — turn a light on"
-        case .lowTexture:       text = "Point at something with more detail — a plain wall is hard to read"
+        case .slowDown:         text = "Slow down. Move the phone more gently"
+        case .turnOnLight:      text = "It's a bit dark. Turn a light on"
+        case .lowTexture:       text = "Point at something with more detail. A plain wall is hard to read"
         case .normal:           text = nil
         @unknown default:       text = nil
         }
