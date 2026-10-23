@@ -1436,6 +1436,57 @@ export default function MeasureIntakeForm() {
         // the shift used to be done by hand -- which is exactly why
         // it now lives in there instead.
         const local = axisAlignOutline(pts).polygon;
+
+        /*
+         * Doors and windows, dropped onto the outline they were
+         * marked against.
+         *
+         * Each arrives as the two bottom corners the customer
+         * tapped, in the same frame as the corners of the room,
+         * because both were measured in one session. So the width
+         * is the distance between them and the wall and the offset
+         * come out of projecting their midpoint onto the outline --
+         * the same arithmetic the LiDAR path uses, deliberately,
+         * rather than a second implementation that could drift
+         * away from it.
+         *
+         * Projected against `pts`, before the outline is turned
+         * square to the page: an edge index and a distance along
+         * that edge survive rotation, and the openings are in the
+         * untidied frame.
+         */
+        const tracedOpenings = (result?.openings ?? []).map((o) => {
+          const widthM = Math.hypot(o.bM.x - o.aM.x, o.bM.z - o.aM.z);
+          const centre = {
+            x: (o.aM.x + o.bM.x) / 2,
+            z: (o.aM.z + o.bM.z) / 2,
+          };
+          const placed = placeOpeningOnOutline(centre, pts);
+          return {
+            kind: o.kind,
+            opening: {
+              id: newId(),
+              widthM: widthM.toFixed(2),
+              note:
+                o.kind === "opening"
+                  ? "Opening with no door, measured on the wall"
+                  : "Measured on the wall",
+              ...(placed
+                ? {
+                    wallIndex: placed.wallIndex,
+                    positionM: placed.positionM.toFixed(2),
+                  }
+                : {}),
+              ...(o.kind === "opening" ? { cased: true } : {}),
+            } satisfies Opening & { cased?: boolean },
+          };
+        });
+        const tracedDoors = tracedOpenings
+          .filter((t) => t.kind !== "window")
+          .map((t) => t.opening);
+        const tracedWindows = tracedOpenings
+          .filter((t) => t.kind === "window")
+          .map((t) => t.opening);
         setRooms((prev) =>
           prev.map((r) =>
             r.id !== roomId
@@ -1454,6 +1505,14 @@ export default function MeasureIntakeForm() {
                   floorPolygonM: local,
                   measuredByScan: true,
                   scanCornerCount: pts.length,
+                  // Marked openings replace whatever was there, the
+                  // same way the outline does: a re-trace is a
+                  // re-survey of the room, not an addition to it.
+                  // Left alone when none were marked, so somebody
+                  // who typed their windows in and then re-traced
+                  // the floor does not lose them.
+                  ...(tracedDoors.length ? { doors: tracedDoors } : {}),
+                  ...(tracedWindows.length ? { windows: tracedWindows } : {}),
                   /*
                    * Say how the trace went, in the notes.
                    *

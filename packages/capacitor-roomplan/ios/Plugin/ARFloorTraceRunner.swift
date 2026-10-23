@@ -118,6 +118,57 @@ final class ARFloorTraceRunner: NSObject {
     /// Floor-plane taps, in ARKit world metres. y is dropped on the way out.
     private var points: [SCNVector3] = []
 
+    /**
+     * Marking the doors and windows, after the floor is traced.
+     *
+     * A phone without LiDAR has no depth mesh, and RoomPlan's
+     * classifier is the thing that recognises an opening, so
+     * nothing on this path can find a window by itself. It returned
+     * corners and a ceiling height and that was all -- which is
+     * most iPhones, since every non-Pro model is on this path.
+     *
+     * Detecting them from the camera was the obvious idea and the
+     * wrong one. Vision will happily find bright rectangles on a
+     * wall, and so will a mirror, a television, a picture and a
+     * pair of curtains; a window that is not there, on a drawing
+     * somebody prices glazing from, is worse than one that is
+     * missing.
+     *
+     * So the customer points and the sensor measures. Two taps per
+     * opening -- one bottom corner, then the other -- and the width
+     * is the distance between them, which ARKit knows to the
+     * centimetre. The position along the wall comes out of the same
+     * two points. Nothing is typed and nothing is estimated; the
+     * only thing being asked of the person is which rectangle on
+     * the wall is a window, which they can see and the sensor
+     * cannot.
+     *
+     * Done in the same session as the floor trace, deliberately.
+     * Stopping and restarting would give the openings their own
+     * world origin and leave them to be matched to the outline by
+     * guesswork -- the same mistake that was dropping internal
+     * walls out of whole-property scans.
+     */
+    enum OpeningKind: String {
+        case door
+        case window
+        case opening
+    }
+
+    /// A finished opening: both bottom corners, in world metres.
+    private struct MarkedOpening {
+        let kind: OpeningKind
+        let a: SCNVector3
+        let b: SCNVector3
+    }
+
+    private var openings: [MarkedOpening] = []
+    /// The first corner of the opening being marked, if one is part-done.
+    private var pendingCorner: SCNVector3?
+    private var openingKind: OpeningKind = .window
+    /// True once the floor is finished and we are marking openings.
+    private var markingOpenings = false
+
     /// Highest horizontal plane seen above the camera, if any.
     private var ceilingY: Float?
     /// Lowest horizontal plane seen — taken to be the floor.
@@ -183,6 +234,10 @@ final class ARFloorTraceRunner: NSObject {
     private var readySpinner: UIActivityIndicatorView?
     private var statusLabel: UILabel?
     private var countLabel: UILabel?
+    /// The corner stepper, hidden once the floor is done.
+    private var cornerStepper: UIStackView?
+    /// Door / window / opening, shown in its place.
+    private var kindPicker: UISegmentedControl?
     private var doneButton: UIButton?
 
     init(
@@ -359,6 +414,42 @@ final class ARFloorTraceRunner: NSObject {
         cornerRow.addArrangedSubview(cornerLabel)
         cornerRow.addArrangedSubview(more)
         vc.view.addSubview(cornerRow)
+        cornerStepper = cornerRow
+
+        /*
+         * Door, window or opening — the one thing the sensor cannot
+         * work out for itself.
+         *
+         * Takes the stepper's place once the floor is traced, so
+         * the two never compete for the same strip of screen. A
+         * segmented control rather than three buttons because the
+         * current choice has to be visible at a glance: every tap
+         * for the next minute is labelled by it, and realising
+         * afterwards that six windows went in as doors means doing
+         * them all again.
+         *
+         * Window first and selected, because most rooms have more
+         * windows than doors.
+         */
+        let kinds = UISegmentedControl(items: ["Door", "Window", "Opening"])
+        kinds.translatesAutoresizingMaskIntoConstraints = false
+        kinds.selectedSegmentIndex = 1
+        kinds.selectedSegmentTintColor = UIColor(
+            red: 0.722, green: 0.588, blue: 0.314, alpha: 1
+        )
+        kinds.backgroundColor = UIColor(white: 0, alpha: 0.5)
+        kinds.setTitleTextAttributes([.foregroundColor: UIColor.white], for: .normal)
+        kinds.setTitleTextAttributes([.foregroundColor: UIColor.black], for: .selected)
+        kinds.addTarget(self, action: #selector(kindChanged(_:)), for: .valueChanged)
+        kinds.isHidden = true
+        vc.view.addSubview(kinds)
+        kindPicker = kinds
+        NSLayoutConstraint.activate([
+            kinds.centerXAnchor.constraint(equalTo: cornerRow.centerXAnchor),
+            kinds.centerYAnchor.constraint(equalTo: cornerRow.centerYAnchor),
+            kinds.widthAnchor.constraint(equalToConstant: 280),
+            kinds.heightAnchor.constraint(equalToConstant: 40),
+        ])
 
         let undo = UIButton(type: .system)
         undo.translatesAutoresizingMaskIntoConstraints = false
@@ -554,7 +645,16 @@ final class ARFloorTraceRunner: NSObject {
             self.doneButton?.isEnabled = usable
             self.doneButton?.alpha = usable ? 1 : 0.4
             let complete = n >= self.expectedCorners
-            self.doneButton?.setTitle(complete ? "Done ✓" : "Done", for: .normal)
+            /*
+             * "Next", not "Done", because it no longer finishes.
+             *
+             * This button now hands the floor trace over to marking
+             * the doors and windows, and a button that says Done
+             * and then shows you another screen is the app going
+             * back on its word at the exact moment somebody thinks
+             * they have finished.
+             */
+            self.doneButton?.setTitle(complete ? "Next ✓" : "Next", for: .normal)
         }
     }
 
@@ -859,10 +959,119 @@ final class ARFloorTraceRunner: NSObject {
         }
     }
 
+    // MARK: - Marking openings
+
+    /**
+     * A tap while marking doors and windows.
+     *
+     * Raycast against the walls rather than the floor: a window
+     * sill is a metre up a vertical plane, and the floor-seeking
+     * ladder that serves the corner trace would drag it down to
+     * ground level.
+     *
+     * `.existingPlaneGeometry` first, so a tap only lands where
+     * ARKit has actually fitted wall. The looser targets would
+     * always return something -- an infinite plane extends a wall
+     * across the whole room -- and a window measured against a
+     * guess is a number with nothing behind it.
+     */
+    private func handleOpeningTap(_ location: CGPoint) {
+        guard let scene = sceneView else { return }
+
+        var hit: ARRaycastResult?
+        for target in [
+            ARRaycastQuery.Target.existingPlaneGeometry,
+            .existingPlaneInfinite,
+        ] {
+            guard
+                let q = scene.raycastQuery(
+                    from: location,
+                    allowing: target,
+                    alignment: .vertical
+                )
+            else { continue }
+            if let first = scene.session.raycast(q).first {
+                hit = first
+                break
+            }
+        }
+
+        guard let found = hit else {
+            setStatus(
+                "Point at the wall around the opening for a moment, then tap its corner"
+            )
+            return
+        }
+
+        let t = found.worldTransform.columns.3
+        let p = SCNVector3(t.x, t.y, t.z)
+
+        guard let first = pendingCorner else {
+            pendingCorner = p
+            dropMarker(at: p, colour: .systemBlue)
+            setStatus("Now the other bottom corner of the same \(openingKind.rawValue)")
+            refreshOpeningCount()
+            return
+        }
+
+        let w = distance(first, p)
+        /*
+         * Both taps on the same spot is a double tap, not an
+         * opening. Three metres is wider than any domestic door or
+         * window and usually means the second tap missed the wall
+         * and landed on the one opposite.
+         */
+        if w < 0.15 {
+            setStatus("That's the same corner — tap the other side of the opening")
+            return
+        }
+        if w > 3.0 {
+            setStatus(
+                "That's \(String(format: "%.1f", w)) m apart, which is wider than an opening. Undo and try again"
+            )
+            return
+        }
+
+        openings.append(MarkedOpening(kind: openingKind, a: first, b: p))
+        pendingCorner = nil
+        dropMarker(at: p, colour: .systemBlue)
+        setStatus(
+            "\(openingKind.rawValue.capitalized) — \(String(format: "%.2f", w)) m. "
+                + "Mark another, or press Done."
+        )
+        refreshOpeningCount()
+    }
+
+    private func refreshOpeningCount() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let n = self.openings.count
+            let half = self.pendingCorner != nil
+            self.countLabel?.text = half
+                ? "\(n) marked · tap the other corner"
+                : "\(n) marked"
+            // Done is always available here: a room with no windows
+            // is a real answer, and this step is an addition to a
+            // trace that has already succeeded.
+            self.doneButton?.setTitle("Done", for: .normal)
+            self.doneButton?.isEnabled = true
+            self.doneButton?.alpha = 1
+        }
+    }
+
     // MARK: - Tapping
 
     @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
         guard let scene = sceneView else { return }
+
+        // Marking doors and windows is a different question against
+        // different surfaces, so it gets its own handler rather than
+        // another branch inside the corner logic. See
+        // handleOpeningTap.
+        if markingOpenings {
+            handleOpeningTap(gesture.location(in: scene))
+            return
+        }
 
         /*
          * Nothing is recorded until ARKit is actually ready.
@@ -1138,20 +1347,88 @@ final class ARFloorTraceRunner: NSObject {
     }
 
     @objc private func undoPoint() {
+        /*
+         * Undo means the last thing you did, which is a different
+         * thing in each phase -- and in the openings phase, a
+         * half-marked opening and a finished one are different
+         * again. Getting this wrong is how an undo button becomes
+         * the control nobody trusts.
+         */
+        if markingOpenings {
+            if pendingCorner != nil {
+                pendingCorner = nil
+                removeLastMarker()
+                setStatus("Start that one again — tap one bottom corner")
+            } else if !openings.isEmpty {
+                openings.removeLast()
+                removeLastMarker()
+                removeLastMarker()
+                setStatus("Removed. Tap one bottom corner of an opening")
+            }
+            refreshOpeningCount()
+            return
+        }
+
         guard !points.isEmpty else { return }
         points.removeLast()
+        removeLastMarker()
+        refreshCount()
+    }
+
+    private func removeLastMarker() {
         sceneView?.scene.rootNode.childNodes
             .filter { $0.name == "tm-marker" }
             .last?
             .removeFromParentNode()
-        refreshCount()
     }
 
-    private func dropMarker(at p: SCNVector3) {
-        let sphere = SCNSphere(radius: 0.04)
-        sphere.firstMaterial?.diffuse.contents = UIColor(
+    /**
+     * Switch the screen over to marking doors and windows.
+     *
+     * The corner stepper goes: it counts corners and there are no
+     * more corners to count. A kind picker takes its place, because
+     * a door, a window and a cased opening are drawn differently
+     * and only the person in the room knows which is which.
+     */
+    private func beginMarkingOpenings() {
+        markingOpenings = true
+        cornerStepper?.isHidden = true
+        kindPicker?.isHidden = false
+        setStatus(
+            "Now the doors and windows. Tap one bottom corner of an opening, "
+                + "then the other — we'll measure the width. Press Done when there are none left."
+        )
+        refreshOpeningCount()
+    }
+
+    @objc private func kindChanged(_ sender: UISegmentedControl) {
+        switch sender.selectedSegmentIndex {
+        case 0: openingKind = .door
+        case 1: openingKind = .window
+        default: openingKind = .opening
+        }
+        // A kind change part-way through an opening would label it
+        // as something the first tap was not placed for.
+        if pendingCorner != nil {
+            pendingCorner = nil
+            removeLastMarker()
+            refreshOpeningCount()
+        }
+        setStatus("Tap one bottom corner of a \(openingKind.rawValue)")
+    }
+
+    private func dropMarker(
+        at p: SCNVector3,
+        colour: UIColor = UIColor(
             red: 0.722, green: 0.588, blue: 0.314, alpha: 1
         )
+    ) {
+        // Smaller for openings: a corner marker is dropped on open
+        // floor where a 4 cm ball reads clearly, while a window
+        // corner sits against the reveal it is marking and a ball
+        // that size covers the thing being measured.
+        let sphere = SCNSphere(radius: markingOpenings ? 0.025 : 0.04)
+        sphere.firstMaterial?.diffuse.contents = colour
         let node = SCNNode(geometry: sphere)
         node.name = "tm-marker"
         node.position = p
@@ -1196,7 +1473,27 @@ final class ARFloorTraceRunner: NSObject {
         settle(.failure(TraceError.cancelled))
     }
 
+    /**
+     * Done, which means one of two things.
+     *
+     * On a floor trace it now hands over to marking the doors and
+     * windows rather than ending the session. Same session on
+     * purpose: the openings are measured in the frame the outline
+     * was measured in, so they need no matching up afterwards.
+     * Stopping and starting again would give them their own origin
+     * and leave them to be fitted to the room by guesswork, which
+     * is the mistake that was quietly dropping internal walls out
+     * of whole-property scans.
+     *
+     * Pressing it a second time, in the openings phase, finishes
+     * for real.
+     */
     @objc private func finish() {
+        if mode == .floor, !markingOpenings, points.count >= 3 {
+            beginMarkingOpenings()
+            return
+        }
+
         guard points.count >= 2 else {
             settle(.failure(TraceError.noPoints))
             return
@@ -1263,6 +1560,33 @@ final class ARFloorTraceRunner: NSObject {
             "estimatedPoints": estimatedTaps,
             "snappedPoints": snappedTaps,
         ]
+
+        /*
+         * The doors and windows, as the two corners each was marked
+         * by.
+         *
+         * Corners rather than a width and an offset, because the
+         * app already knows how to drop a point onto the room's
+         * outline and work out which wall it is in and how far
+         * along -- it does exactly that for the LiDAR path. Sending
+         * the raw points keeps one piece of that arithmetic in one
+         * place, and it keeps this end honest: these are two things
+         * that were measured, not a derived figure dressed up as
+         * one.
+         *
+         * Same frame as pointsM, because they were marked in the
+         * same session.
+         */
+        if !openings.isEmpty {
+            payload["openings"] = openings.map { o in
+                [
+                    "kind": o.kind.rawValue,
+                    "aM": ["x": Double(o.a.x), "z": Double(o.a.z)],
+                    "bM": ["x": Double(o.b.x), "z": Double(o.b.z)],
+                    "sillM": Double(min(o.a.y, o.b.y) - (floorY ?? min(o.a.y, o.b.y))),
+                ]
+            }
+        }
 
         /*
          * The last thing they saw, to sit behind the numbers.
