@@ -1,3 +1,4 @@
+import ARKit
 import Foundation
 import UIKit
 import simd
@@ -69,6 +70,39 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
     private let unit: String
     private let completion: (Result<[String: Any], Error>) -> Void
 
+    /**
+     * One ARSession for the whole property. This is the fix for the
+     * internal walls going missing after the third room.
+     *
+     * Each room used to get a fresh RoomCaptureView built with
+     * `RoomCaptureView(frame:)`, which makes its own ARSession, and
+     * the room was finished with a plain `stop()`, which pauses it.
+     * So every room was surveyed in a world of its own, starting
+     * wherever the customer happened to be standing and facing.
+     *
+     * StructureBuilder is then being asked to do something it was
+     * never meant to do. It merges rooms that already share a
+     * coordinate system; given rooms that do not, it falls back to
+     * matching them up by shape. Two rooms it can usually place.
+     * Three or four and the guesses compound, walls that are really
+     * the same wall land in two different places, and the merge
+     * resolves that by dropping them -- which is exactly the
+     * reported symptom: the internal walls stop appearing once
+     * there are a few rooms, while each room on its own is fine.
+     *
+     * Holding one ARSession across every capture, and stopping each
+     * room with `pauseARSession: false`, means ARKit tracks
+     * continuously as the customer walks from room to room. Every
+     * room then lands in one frame, already in its true position,
+     * and the merge has nothing left to guess.
+     *
+     * The cost is that walking between rooms now matters: lose
+     * tracking on the way and the next room is adrift. That is the
+     * right trade -- it is the same walk either way, and this way
+     * it counts for something.
+     */
+    private let sharedARSession = ARSession()
+
     /// One processed room per completed capture.
     ///
     /// StructureBuilder takes `[CapturedRoom]`. An earlier version of
@@ -116,7 +150,8 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
         }
         let modal = HouseCaptureModalViewController(
             delegate: self,
-            title: "Room \(roomNumber)"
+            title: "Room \(roomNumber)",
+            arSession: sharedARSession
         )
         modal.modalPresentationStyle = .fullScreen
         self.modalVC = modal
@@ -207,6 +242,17 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
     private func finish(_ result: Result<[String: Any], Error>) {
         guard !hasCompleted else { return }
         hasCompleted = true
+        /*
+         * The one place the AR session is allowed to stop.
+         *
+         * Every room now ends with `pauseARSession: false` so
+         * tracking carries on through the walk to the next room,
+         * which means nothing else switches the camera off. Left
+         * running past the end of the survey it would hold the
+         * camera and keep draining the battery behind a screen the
+         * customer has already left.
+         */
+        sharedARSession.pause()
         let closure = completion
         dismissModal { closure(result) }
     }
@@ -359,6 +405,8 @@ private class HouseCaptureModalViewController: UIViewController {
 
     private weak var delegateRunner: HouseCaptureRunner?
     private let titleText: String
+    /// Shared across every room of the property. See sharedARSession.
+    private let arSession: ARSession
     private var captureView: RoomCaptureView?
     private var doneButton: UIButton?
     private var cancelButton: UIButton?
@@ -366,10 +414,13 @@ private class HouseCaptureModalViewController: UIViewController {
     private var coachingLabel: UILabel?
     private var hasStartedSession = false
     private var isFinishing = false
+    /// Recovery timer for a Done press that never comes back.
+    private var stuckWork: DispatchWorkItem?
 
-    init(delegate: HouseCaptureRunner, title: String) {
+    init(delegate: HouseCaptureRunner, title: String, arSession: ARSession) {
         self.delegateRunner = delegate
         self.titleText = title
+        self.arSession = arSession
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -379,7 +430,10 @@ private class HouseCaptureModalViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .black
 
-        let cv = RoomCaptureView(frame: view.bounds)
+        // Built on the property's own ARSession rather than letting
+        // the view make one, so this room shares a coordinate system
+        // with the rooms before it. See sharedARSession.
+        let cv = RoomCaptureView(frame: view.bounds, arSession: arSession)
         cv.translatesAutoresizingMaskIntoConstraints = false
         cv.delegate = delegateRunner
         view.addSubview(cv)
@@ -507,6 +561,15 @@ private class HouseCaptureModalViewController: UIViewController {
         captureView?.captureSession.run(configuration: RoomCaptureSession.Configuration())
     }
 
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        // The room came back, so the "this is taking too long"
+        // recovery is no longer wanted. Left scheduled it would fire
+        // against a screen that has already gone.
+        stuckWork?.cancel()
+        stuckWork = nil
+    }
+
 
     /**
      * A coaching message, centred, for three seconds.
@@ -551,16 +614,62 @@ private class HouseCaptureModalViewController: UIViewController {
         cancelButton?.isEnabled = false
         cancelButton?.alpha = 0.5
         statusLabel?.text = "Working out the measurements…"
+
+        /*
+         * A way out if the result never arrives.
+         *
+         * Done disables both buttons and sets the label to an
+         * ellipsis, on the understanding that Apple's processing
+         * will come back through didPresent in a second or two.
+         * When it does not -- a capture it cannot process, an error
+         * swallowed upstream -- the screen is left with a camera
+         * view, a Done button showing "…" that does nothing, and a
+         * Cancel button that has been switched off. There is no
+         * route out of that except force-quitting the app, which
+         * loses the whole survey.
+         *
+         * Fifteen seconds is far longer than processing a room
+         * takes and short enough that nobody has decided the app
+         * has crashed. Cancel comes back rather than Done, because
+         * at this point the honest offer is to keep the rooms
+         * already captured rather than to retry something that has
+         * not answered.
+         */
+        stuckWork?.cancel()
+        let stuck = DispatchWorkItem { [weak self] in
+            guard let self, self.isFinishing else { return }
+            self.statusLabel?.text =
+                "That room is taking longer than it should. Keep the rooms you have, or try this one again."
+            self.doneButton?.setTitle("Done", for: .normal)
+            self.doneButton?.isEnabled = true
+            self.doneButton?.alpha = 1
+            self.cancelButton?.isEnabled = true
+            self.cancelButton?.alpha = 1
+            self.isFinishing = false
+        }
+        stuckWork = stuck
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: stuck)
+
         // Stopping hands the scan to Apple's processing; the room comes
         // back in didPresent, which is where it joins the plan.
-        captureView?.captureSession.stop()
+        //
+        // pauseARSession: false is the whole point. The default tears
+        // the AR session down, and the next room then starts its own
+        // world from wherever the customer is standing -- which is
+        // what left StructureBuilder guessing how the rooms fit
+        // together. Keeping it running means tracking carries on
+        // through the walk to the next room.
+        captureView?.captureSession.stop(pauseARSession: false)
     }
 
     @objc private func cancelTapped() {
         // Ignored once Done has been pressed — the result is already on
         // its way and cancelling now would discard a completed room.
         guard !isFinishing else { return }
-        captureView?.captureSession.stop()
+        // Also left running: cancelling one room does not end the
+        // survey, and the rooms already captured still need the
+        // frame they were captured in.
+        captureView?.captureSession.stop(pauseARSession: false)
         delegateRunner?.userCancelled()
     }
 }
