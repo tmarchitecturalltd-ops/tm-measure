@@ -249,6 +249,24 @@ export interface RoomPlanRoom {
    * missing one the same way.
    */
   stairs?: RoomPlanStairs[];
+  /**
+   * Ids of the doorways the customer walked through, in order.
+   *
+   * This is how one room gets joined to the next without anybody
+   * being asked a question. Each room is scanned in its own
+   * coordinate system and has no idea where the others are, but
+   * the doorway they walked out of this room by is the same
+   * doorway they walk into the next room through -- and naming one
+   * doorway from both sides is enough to fit two rooms together
+   * exactly. See layoutFromDoorways in measure-core.
+   *
+   * Ids are from this room's own `doors` array, and only doorways
+   * that survived into the finished capture appear: RoomPlan drops
+   * and merges detections as its fit improves.
+   *
+   * Absent on older plugin builds.
+   */
+  doorwaysPassed?: string[];
 }
 
 /**

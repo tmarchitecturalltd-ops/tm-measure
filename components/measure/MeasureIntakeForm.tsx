@@ -44,6 +44,7 @@ import {
   type Opening,
   type ProjectDraft,
   type RoomConnectionDraft,
+  type RoomConnection,
   type RoomAudio,
   type RoomDraft,
   type RoomPhoto,
@@ -511,6 +512,28 @@ export default function MeasureIntakeForm() {
   const [rooms, setRooms] = useState<RoomDraft[]>([emptyRoom()]);
   // Room-to-room adjacency. Captured as form drafts; normalised at submit.
   const [connections, setConnections] = useState<RoomConnectionDraft[]>([]);
+  /**
+   * Which doorway joins which two rooms, noticed rather than asked.
+   *
+   * The scanner watches where the customer walks: the doorway they
+   * leave one room by is the doorway they enter the next one
+   * through, and naming one doorway from both sides is enough to
+   * fit two scanned rooms together exactly. See layoutFromDoorways,
+   * and doorwaysPassed on the plugin side.
+   *
+   * Separate from `connections`, which is the architect-facing
+   * adjacency list. These are geometry.
+   */
+  const [doorLinks, setDoorLinks] = useState<RoomConnection[]>([]);
+  /**
+   * The doorway the last scan finished at, waiting for the next
+   * scan to arrive through the other side of it.
+   *
+   * A ref rather than state: nothing renders from it, and it has to
+   * be readable by the scan that lands next without waiting for a
+   * re-render to deliver it.
+   */
+  const lastExitRef = useRef<{ roomId: string; doorId: string } | null>(null);
   /**
    * Floor-plan placements keyed by roomId. Kept in the form (not inside
    * each RoomDraft) so the FloorPlanEditor can edit positions without
@@ -1151,6 +1174,83 @@ export default function MeasureIntakeForm() {
               .polygon
           : undefined;
 
+        /*
+         * Doors and cased openings in one list, keeping a note of
+         * which sensor doorway each one came from.
+         *
+         * RoomPlan reports a doorway with no door in it separately,
+         * and the app used to drop that list on the floor -- so an
+         * opening between a kitchen and a diner reached the
+         * draughtsman as solid wall, which is the worst way round
+         * for this error to go: a missing door is obvious on a
+         * drawing and a missing opening is invisible. They travel
+         * with the doors because placing them is the same problem;
+         * only the drawing differs. See Opening.cased.
+         *
+         * The sensor's own id is kept alongside because
+         * `doorwaysPassed` is written in those ids, and the app
+         * renumbers every opening as it takes it in.
+         */
+        const fromSensor: { sensorId: string; door: Opening }[] = [
+          ...(sr.doors ?? []).map((d) => ({
+            sensorId: d.id,
+            door: scannedOpening(d, sr.walls, newId(), sensorOutline),
+          })),
+          ...(sr.openings ?? []).map((o) => ({
+            sensorId: o.id,
+            door: {
+              ...scannedOpening(o, sr.walls, newId(), sensorOutline),
+              cased: true,
+              note: "Opening with no door, detected by scan",
+            },
+          })),
+        ];
+        const scannedDoors = fromSensor.map((f) => f.door);
+        const appDoorFor = (sensorId: string) =>
+          fromSensor.find((f) => f.sensorId === sensorId)?.door.id;
+
+        /*
+         * Join this room to the last one, through the doorway they
+         * share.
+         *
+         * The customer demonstrates which doorway that is simply by
+         * walking through it, which the scanner now notices -- so
+         * the last doorway of the previous scan and the first
+         * doorway of this one are the same doorway, and the rooms
+         * can be fitted together exactly with nothing asked and
+         * nothing dragged. See layoutFromDoorways.
+         *
+         * Everything here is a guard against pairing the wrong two
+         * things, because a wrong join is worse than no join: it
+         * puts a room confidently in the wrong place, where an
+         * absent one simply waits to be dragged.
+         */
+        const passed = sr.doorwaysPassed ?? [];
+        const entryDoorId = passed.length ? appDoorFor(passed[0]) : undefined;
+        const exitDoorId = passed.length
+          ? appDoorFor(passed[passed.length - 1])
+          : undefined;
+
+        const previous = lastExitRef.current;
+        if (previous && entryDoorId && previous.roomId !== roomId) {
+          setDoorLinks((prev) => [
+            ...prev.filter(
+              (c) => c.roomAId !== previous.roomId || c.roomBId !== roomId,
+            ),
+            {
+              id: newId(),
+              roomAId: previous.roomId,
+              doorAId: previous.doorId,
+              roomBId: roomId,
+              doorBId: entryDoorId,
+              kind: "door",
+            },
+          ]);
+        }
+        lastExitRef.current = exitDoorId
+          ? { roomId, doorId: exitDoorId }
+          : null;
+
         setRooms((prev) =>
           prev.map((r) =>
             r.id !== roomId
@@ -1175,16 +1275,7 @@ export default function MeasureIntakeForm() {
                    * is the same problem; only the drawing differs.
                    * See Opening.cased.
                    */
-                  doors: [
-                    ...(sr.doors ?? []).map((d) =>
-                      scannedOpening(d, sr.walls, newId(), sensorOutline),
-                    ),
-                    ...(sr.openings ?? []).map((o) => ({
-                      ...scannedOpening(o, sr.walls, newId(), sensorOutline),
-                      cased: true,
-                      note: "Opening with no door, detected by scan",
-                    })),
-                  ],
+                  doors: scannedDoors,
                   windows: (sr.windows ?? []).map((w) =>
                     scannedOpening(w, sr.walls, newId(), sensorOutline),
                   ),
@@ -5819,6 +5910,7 @@ export default function MeasureIntakeForm() {
               <FloorPlanEditor
                 rooms={rooms}
                 placements={placements}
+                connections={doorLinks}
                 onPlacementChange={updatePlacement}
                 onRoomChange={setRoom}
                 /* Camera height measurement, when the phone can do

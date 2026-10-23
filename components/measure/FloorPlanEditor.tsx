@@ -1607,11 +1607,41 @@ export default function FloorPlanEditor({
     }
     laidOut.current.add(currentFloor);
     onSeeded?.();
-    const seed = autoLayoutRooms(onFloor);
+    /*
+     * Joined where the doorways say so, packed where they do not.
+     *
+     * This is the first thing the customer sees of their plan, and
+     * for a scanned survey it can now be the actual plan rather
+     * than a row of rectangles to be dragged into one. The scanner
+     * noticed which doorway they walked through between rooms, so
+     * the arrangement is measured rather than guessed.
+     *
+     * Still only on a floor with nothing placed on it. Nothing here
+     * may move a room the customer has already put somewhere --
+     * that rule is the whole reason the other auto-placement effect
+     * was taken out.
+     */
+    const joined = layoutFromDoorways(onFloor, connections ?? []);
+    for (const [id, placement] of joined.entries()) {
+      onPlacementChange(id, {
+        ...placementFor(id),
+        positionM: placement.positionM,
+        rotationDeg: placement.rotationDeg,
+      });
+    }
+    const seed = autoLayoutRooms(onFloor.filter((r) => !joined.has(r.id)));
     for (const [id, placement] of seed.entries()) {
       onPlacementChange(id, placement);
     }
-  }, [rooms, placementFor, currentFloor, onPlacementChange, seeded, onSeeded]);
+  }, [
+    rooms,
+    placementFor,
+    currentFloor,
+    onPlacementChange,
+    seeded,
+    onSeeded,
+    connections,
+  ]);
 
   /*
    * Rooms added later are NOT placed automatically any more.

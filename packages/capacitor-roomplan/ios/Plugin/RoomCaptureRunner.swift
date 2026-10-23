@@ -123,6 +123,11 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionDe
     // Called by the modal's Cancel button.
     func userCancelled() {
         isCancelling = true
+        // A timer holding a closure that captures self keeps the
+        // runner alive for as long as it is scheduled, so a
+        // cancelled scan would leave one ticking over an ARSession
+        // that is on its way out.
+        stopDoorwayWatch()
         dismiss(payload: .failure(RoomPlanError.cancelled))
     }
 
@@ -250,6 +255,111 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionDe
      * `.normal` clears the message rather than showing "carry on",
      * which would be a permanent nag saying nothing.
      */
+    /**
+     * Keep the live door list, so the doorway watcher has something
+     * to compare the camera against.
+     *
+     * RoomPlan republishes the whole room on every update, which is
+     * cheap enough to just take wholesale: a door's position moves
+     * as the fit improves, and holding a stale copy would have the
+     * prompt firing a foot from where the doorway turned out to be.
+     */
+    func captureSession(
+        _ session: RoomCaptureSession,
+        didUpdate room: CapturedRoom
+    ) {
+        liveDoors = room.doors.map { d in
+            let mid = CaptureSerializer.midpointXZForDoorway(d.transform)
+            return (
+                id: d.identifier.uuidString,
+                x: mid.0,
+                z: mid.1,
+                widthM: Double(d.dimensions.x)
+            )
+        }
+    }
+
+    /**
+     * Which doorways the customer walked through, in order.
+     *
+     * This is what joins one room to the next.
+     *
+     * A room-by-room scan gives each room its own coordinate system
+     * and no idea where the others are, so the survey arrives as a
+     * pile of accurate shapes that somebody then drags into
+     * arrangement by hand. The doorway solver can fit two rooms
+     * together exactly once it knows that this door and that door
+     * are the same door -- and the customer demonstrates exactly
+     * that, every time, by walking out of one room and into the
+     * next through it. Nobody has to be asked; they only have to be
+     * noticed.
+     *
+     * So the last doorway of one scan and the first doorway of the
+     * next are the same doorway, and the app pairs them without a
+     * question being asked.
+     *
+     * Note what is deliberately NOT done here: the customer is not
+     * told to carry on scanning into the next room. In room-by-room
+     * mode that produces one merged capture of two rooms rather
+     * than two connected rooms -- the failure the post-scan filter
+     * already has to warn about. The prompt asks them to point
+     * through the doorway, which captures the door properly, and
+     * then to come back and press Done.
+     */
+    private var liveDoors: [(id: String, x: Double, z: Double, widthM: Double)] = []
+    private var doorwaysPassed: [String] = []
+    private var doorwayTimer: Timer?
+
+    /// How near the camera has to be to a doorway to count as in it.
+    private let doorwayNearM: Double = 0.9
+
+    func startDoorwayWatch(session: RoomCaptureSession) {
+        doorwayTimer?.invalidate()
+        // Five times a second. A doorway is about a metre across and
+        // nobody walks through one faster than a metre a second, so
+        // this cannot miss one, and it is far cheaper than becoming
+        // the ARSession delegate -- which RoomPlan is using.
+        doorwayTimer = Timer.scheduledTimer(
+            withTimeInterval: 0.2,
+            repeats: true
+        ) { [weak self, weak session] _ in
+            guard let self, let session else { return }
+            guard let frame = session.arSession.currentFrame else { return }
+            let t = frame.camera.transform.columns.3
+            self.noteCamera(x: Double(t.x), z: Double(t.z))
+        }
+    }
+
+    func stopDoorwayWatch() {
+        doorwayTimer?.invalidate()
+        doorwayTimer = nil
+    }
+
+    private func noteCamera(x: Double, z: Double) {
+        guard let near = liveDoors.min(by: { a, b in
+            let da = (a.x - x) * (a.x - x) + (a.z - z) * (a.z - z)
+            let db = (b.x - x) * (b.x - x) + (b.z - z) * (b.z - z)
+            return da < db
+        }) else { return }
+
+        let d = ((near.x - x) * (near.x - x) + (near.z - z) * (near.z - z))
+            .squareRoot()
+        guard d < doorwayNearM else { return }
+
+        // Standing in the same doorway for a while is one pass, not
+        // five a second. Leaving it and coming back is two, which is
+        // right -- people do go back for a room they missed.
+        if doorwaysPassed.last == near.id { return }
+        doorwaysPassed.append(near.id)
+
+        DispatchQueue.main.async { [weak self] in
+            self?.modalVC?.showCoaching(
+                "In the doorway - point through it for a moment so we can see "
+                    + "where it leads, then carry on round this room"
+            )
+        }
+    }
+
     func captureSession(
         _ session: RoomCaptureSession,
         didProvide instruction: RoomCaptureSession.Instruction
@@ -293,8 +403,24 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionDe
             dismiss(payload: .failure(RoomPlanError.captureFailed(error.localizedDescription)))
             return
         }
+        stopDoorwayWatch()
         let elapsed = Date().timeIntervalSince(startedAt)
-        let payload = CaptureSerializer.serialize(captured: processedResult, durationS: elapsed)
+        var payload = CaptureSerializer.serialize(
+            captured: processedResult,
+            durationS: elapsed
+        )
+        /*
+         * The doorways walked through, in order, so the app can
+         * pair the one this scan left by with the one the next scan
+         * arrives through. See noteCamera.
+         *
+         * Filtered to doorways that survived into the finished
+         * room: RoomPlan drops and merges detections as its fit
+         * improves, and an id that no longer exists would pair a
+         * room to a door that is not on the drawing.
+         */
+        let kept = Set(processedResult.doors.map { $0.identifier.uuidString })
+        payload["doorwaysPassed"] = doorwaysPassed.filter { kept.contains($0) }
         dismiss(payload: .success(payload))
     }
 }
@@ -516,6 +642,11 @@ private class CaptureModalViewController: UIViewController {
         captureView?.captureSession.delegate = delegateRunner
         let cfg = RoomCaptureSession.Configuration()
         captureView?.captureSession.run(configuration: cfg)
+        // Watch for the customer standing in a doorway, which is how
+        // one room gets joined to the next. See noteCamera.
+        if let session = captureView?.captureSession {
+            delegateRunner?.startDoorwayWatch(session: session)
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -839,6 +970,13 @@ enum CaptureSerializer {
     /// Pulls the translation column out of a 4x4 transform, keeping XZ.
     private static func midpointXZ(_ m: simd_float4x4) -> (Double, Double) {
         return (Double(m.columns.3.x), Double(m.columns.3.z))
+    }
+
+    /// Same thing, reachable from the runner's doorway watcher.
+    /// Separate only because midpointXZ is private to the
+    /// serializer and deliberately stays that way.
+    static func midpointXZForDoorway(_ m: simd_float4x4) -> (Double, Double) {
+        return midpointXZ(m)
     }
 
     /// The local +X axis of a RoomPlan Surface (expressed in world
