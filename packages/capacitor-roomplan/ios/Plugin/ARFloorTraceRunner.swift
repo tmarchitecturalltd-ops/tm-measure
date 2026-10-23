@@ -163,6 +163,8 @@ final class ARFloorTraceRunner: NSObject {
     }
 
     private var openings: [MarkedOpening] = []
+    /// Width of the opening just finished, kept on screen after it.
+    private var lastWidthM: Float?
     /// The first corner of the opening being marked, if one is part-done.
     private var pendingCorner: SCNVector3?
     private var openingKind: OpeningKind = .window
@@ -1033,12 +1035,62 @@ final class ARFloorTraceRunner: NSObject {
         }
 
         openings.append(MarkedOpening(kind: openingKind, a: first, b: p))
+        lastWidthM = w
+        liveWidthM = nil
         pendingCorner = nil
         dropMarker(at: p, colour: .systemBlue)
+        drawSpan(from: first, to: p)
         setStatus(
             "\(openingKind.rawValue.capitalized) — \(String(format: "%.2f", w)) m. "
                 + "Mark another, or press Done."
         )
+        refreshOpeningCount()
+    }
+
+    /**
+     * The width, live, while the second corner is still to come.
+     *
+     * Without this the only measurement you ever see is the one
+     * printed after the opening is already recorded, which is the
+     * wrong order: by then the choice has been made and the only
+     * thing left is to notice it was wrong and undo it. Showing
+     * the figure as the crosshair moves turns the tap into
+     * something you can aim, and makes the number checkable
+     * against a tape by anybody who doubts it.
+     *
+     * Measured to the crosshair rather than to wherever a finger
+     * happens to be: there is nothing on screen tracking the
+     * finger, and a number that referred to an invisible point
+     * would be worse than none.
+     */
+    private var liveWidthM: Float?
+
+    func renderer(_ renderer: SCNSceneRenderer, updateAtTime time: TimeInterval) {
+        guard markingOpenings, let scene = sceneView else { return }
+        guard let first = pendingCorner else {
+            if liveWidthM != nil {
+                liveWidthM = nil
+                refreshOpeningCount()
+            }
+            return
+        }
+
+        let centre = CGPoint(x: scene.bounds.midX, y: scene.bounds.midY)
+        guard
+            let q = scene.raycastQuery(
+                from: centre,
+                allowing: .existingPlaneGeometry,
+                alignment: .vertical
+            ),
+            let hit = scene.session.raycast(q).first
+        else { return }
+
+        let t = hit.worldTransform.columns.3
+        let w = distance(first, SCNVector3(t.x, t.y, t.z))
+        // A centimetre of change is the smallest worth redrawing for;
+        // below that this is a label flickering sixty times a second.
+        if let last = liveWidthM, abs(last - w) < 0.01 { return }
+        liveWidthM = w
         refreshOpeningCount()
     }
 
@@ -1047,9 +1099,32 @@ final class ARFloorTraceRunner: NSObject {
             guard let self else { return }
             let n = self.openings.count
             let half = self.pendingCorner != nil
-            self.countLabel?.text = half
-                ? "\(n) marked · tap the other corner"
-                : "\(n) marked"
+
+            /*
+             * The measurement stays on screen.
+             *
+             * The width used to be announced in the status strip,
+             * which clears itself after three seconds -- so the one
+             * number the customer might want to check against a
+             * tape was gone before they could reach for one. The
+             * count line holds it instead, and that line does not
+             * fade.
+             */
+            if half {
+                if let w = self.liveWidthM {
+                    self.countLabel?.text = String(
+                        format: "%.2f m · tap the other corner", w
+                    )
+                } else {
+                    self.countLabel?.text = "tap the other corner"
+                }
+            } else if let last = self.lastWidthM {
+                self.countLabel?.text = String(
+                    format: "%d marked · last %.2f m", n, last
+                )
+            } else {
+                self.countLabel?.text = "\(n) marked"
+            }
             // Done is always available here: a room with no windows
             // is a real answer, and this step is an addition to a
             // trace that has already succeeded.
@@ -1361,8 +1436,12 @@ final class ARFloorTraceRunner: NSObject {
                 setStatus("Start that one again — tap one bottom corner")
             } else if !openings.isEmpty {
                 openings.removeLast()
+                // Three nodes to a finished opening: both corners
+                // and the bar between them.
                 removeLastMarker()
                 removeLastMarker()
+                removeLastMarker()
+                lastWidthM = nil
                 setStatus("Removed. Tap one bottom corner of an opening")
             }
             refreshOpeningCount()
@@ -1373,6 +1452,52 @@ final class ARFloorTraceRunner: NSObject {
         points.removeLast()
         removeLastMarker()
         refreshCount()
+    }
+
+    /**
+     * The measured span, drawn across the opening.
+     *
+     * Two dots and a number elsewhere on the screen are two
+     * separate facts the customer has to join up for themselves.
+     * A bar lying across the window says what was measured and
+     * where, and makes a mis-tap obvious at a glance -- a span that
+     * stops short of the reveal, or runs past it onto the wall, is
+     * something anybody can see without reading anything.
+     *
+     * Carries the marker name so Undo takes it away with the
+     * corners it belongs to.
+     */
+    private func drawSpan(from a: SCNVector3, to b: SCNVector3) {
+        let dx = b.x - a.x
+        let dy = b.y - a.y
+        let dz = b.z - a.z
+        let length = (dx * dx + dy * dy + dz * dz).squareRoot()
+        guard length > 0.01 else { return }
+
+        let bar = SCNCylinder(radius: 0.012, height: CGFloat(length))
+        bar.firstMaterial?.diffuse.contents = UIColor.systemBlue
+        let node = SCNNode(geometry: bar)
+        node.name = "tm-marker"
+        node.position = SCNVector3((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2)
+        // A cylinder stands up its own y axis, so it has to be laid
+        // along the span: rotate y onto the direction between the
+        // two corners.
+        let dir = SCNVector3(dx / length, dy / length, dz / length)
+        let up = SCNVector3(0, 1, 0)
+        let axis = SCNVector3(
+            up.y * dir.z - up.z * dir.y,
+            up.z * dir.x - up.x * dir.z,
+            up.x * dir.y - up.y * dir.x
+        )
+        let axisLen = (axis.x * axis.x + axis.y * axis.y + axis.z * axis.z)
+            .squareRoot()
+        if axisLen > 1e-6 {
+            let angle = acos(max(-1, min(1, dir.y)))
+            node.rotation = SCNVector4(
+                axis.x / axisLen, axis.y / axisLen, axis.z / axisLen, angle
+            )
+        }
+        sceneView?.scene.rootNode.addChildNode(node)
     }
 
     private func removeLastMarker() {
