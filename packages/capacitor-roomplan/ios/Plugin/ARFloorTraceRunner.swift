@@ -170,6 +170,8 @@ final class ARFloorTraceRunner: NSObject {
     private var openingKind: OpeningKind = .window
     /// True once the floor is finished and we are marking openings.
     private var markingOpenings = false
+    /// Done has been pressed once with nothing marked. See finish().
+    private var confirmedNoOpenings = false
 
     /// Highest horizontal plane seen above the camera, if any.
     private var ceilingY: Float?
@@ -1000,7 +1002,7 @@ final class ARFloorTraceRunner: NSObject {
 
         guard let found = hit else {
             setStatus(
-                "Point at the wall around the opening for a moment, then tap its corner"
+                "Point at the wall around the opening for a moment, then tap again"
             )
             return
         }
@@ -1011,7 +1013,9 @@ final class ARFloorTraceRunner: NSObject {
         guard let first = pendingCorner else {
             pendingCorner = p
             dropMarker(at: p, colour: .systemBlue)
-            setStatus("Now the other bottom corner of the same \(openingKind.rawValue)")
+            setStatus(
+                "Now the other side of the same \(openingKind.rawValue), down at the bottom"
+            )
             refreshOpeningCount()
             return
         }
@@ -1024,7 +1028,7 @@ final class ARFloorTraceRunner: NSObject {
          * and landed on the one opposite.
          */
         if w < 0.15 {
-            setStatus("That's the same corner. Tap the other side of the opening")
+            setStatus("That's the same side. Tap the other side of the opening")
             return
         }
         if w > 3.0 {
@@ -1113,10 +1117,10 @@ final class ARFloorTraceRunner: NSObject {
             if half {
                 if let w = self.liveWidthM {
                     self.countLabel?.text = String(
-                        format: "%.2f m · tap the other corner", w
+                        format: "%.2f m · tap the other side", w
                     )
                 } else {
-                    self.countLabel?.text = "tap the other corner"
+                    self.countLabel?.text = "tap the other side"
                 }
             } else if let last = self.lastWidthM {
                 self.countLabel?.text = String(
@@ -1433,7 +1437,7 @@ final class ARFloorTraceRunner: NSObject {
             if pendingCorner != nil {
                 pendingCorner = nil
                 removeLastMarker()
-                setStatus("Start that one again. Tap one bottom corner")
+                setStatus("Start that one again. Tap the bottom of one side")
             } else if !openings.isEmpty {
                 openings.removeLast()
                 // Three nodes to a finished opening: both corners
@@ -1442,7 +1446,7 @@ final class ARFloorTraceRunner: NSObject {
                 removeLastMarker()
                 removeLastMarker()
                 lastWidthM = nil
-                setStatus("Removed. Tap one bottom corner of an opening")
+                setStatus("Removed. Tap the bottom of one side of an opening")
             }
             refreshOpeningCount()
             return
@@ -1532,7 +1536,7 @@ final class ARFloorTraceRunner: NSObject {
          */
         setStatus(
             "Now the doors and windows. Choose Door, Window or Opening below, "
-                + "then tap its two bottom corners and we'll measure the width. "
+                + "then tap the bottom of each side, where the opening meets the wall. "
                 + "Press Done when there are none left."
         )
         refreshOpeningCount()
@@ -1551,7 +1555,7 @@ final class ARFloorTraceRunner: NSObject {
             removeLastMarker()
             refreshOpeningCount()
         }
-        setStatus("Tap one bottom corner of a \(openingKind.rawValue)")
+        setStatus("Tap the bottom of one side of a \(openingKind.rawValue)")
     }
 
     private func dropMarker(
@@ -1628,6 +1632,32 @@ final class ARFloorTraceRunner: NSObject {
     @objc private func finish() {
         if mode == .floor, !markingOpenings, points.count >= 3 {
             beginMarkingOpenings()
+            return
+        }
+
+        /*
+         * Ask once before finishing with nothing marked.
+         *
+         * Corners had a target to work towards: the stepper said
+         * four and the count said three of four, so you could see
+         * you were not finished. Openings cannot have that, because
+         * nothing knows how many windows a room has. The only
+         * signal left is the customer's own memory of the room they
+         * are standing in, and the commonest way to get this wrong
+         * is to press Done out of habit immediately after the
+         * corners, having read the new screen as a confirmation of
+         * the old one.
+         *
+         * So the empty case asks, once, and then takes the answer.
+         * A room with no windows is real and must not become a
+         * dead end: an internal hall or a cloakroom is exactly that.
+         */
+        if markingOpenings, openings.isEmpty, !confirmedNoOpenings {
+            confirmedNoOpenings = true
+            setStatus(
+                "No doors or windows marked yet. Press Done again if this room "
+                    + "really has none, or mark them now."
+            )
             return
         }
 
