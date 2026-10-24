@@ -1061,13 +1061,13 @@ final class ARFloorTraceRunner: NSObject {
         }
 
         if let want = pendingWallId, let got = anchorId, want != got {
-            setStatus("Different wall. Both sides are in one wall")
+            setStatus("Different wall. Both edges are in the same wall")
             return
         }
 
         let w = distance(first, p)
         if w < 0.15 {
-            setStatus("Too close. " + openingPrompt())
+            setStatus("Too close to the first one. " + openingPrompt())
             return
         }
         /*
@@ -1192,10 +1192,10 @@ final class ARFloorTraceRunner: NSObject {
             if half {
                 if let w = self.liveWidthM {
                     self.countLabel?.text = String(
-                        format: "%.2f m · tap 2 of 2", w
+                        format: "%.2f m · now the right edge", w
                     )
                 } else {
-                    self.countLabel?.text = "tap 2 of 2"
+                    self.countLabel?.text = "now the right edge"
                 }
             } else if let last = self.lastWidthM {
                 self.countLabel?.text = String(
@@ -1616,7 +1616,22 @@ final class ARFloorTraceRunner: NSObject {
             .filter { $0.name == "tm-marker" }
             .forEach { $0.removeFromParentNode() }
 
-        setStatus(openingPrompt())
+        /*
+         * Said once, at the start, because it answers a question
+         * people actually ask: do I have to go round and do the
+         * other side of the door too?
+         *
+         * No. An opening belongs to the room it is being measured
+         * in, and the same doorway gets marked again from inside
+         * the next room when that room is measured, because that
+         * room's drawing needs its own door. Standing where you
+         * are is the whole job.
+         *
+         * Only here. Every message after this is the short prompt,
+         * because repeating it would be the nagging the shortened
+         * copy exists to avoid.
+         */
+        setStatus("Doors and windows, from this side only. " + openingPrompt())
         refreshOpeningCount()
     }
 
@@ -1657,9 +1672,9 @@ final class ARFloorTraceRunner: NSObject {
          * DoorwayHintView.
          */
         if pendingCorner == nil {
-            return "Tap one side of the \(openingKind.rawValue)"
+            return "Tap the left edge of the \(openingKind.rawValue)"
         }
-        return "Now the other side"
+        return "Now the right edge"
     }
 
     @objc private func kindChanged(_ sender: UISegmentedControl) {
