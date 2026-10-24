@@ -175,10 +175,10 @@ export interface ArFloorTraceResult {
    * window on a drawing somebody prices glazing from is worse
    * than a missing one.
    *
-   * So the customer points and the sensor measures: one bottom
-   * corner, then the other. The width is the distance between
-   * them and the position comes from the same two points, both to
-   * ARKit's own accuracy. Nothing is typed.
+   * So the customer points and the sensor measures: one side,
+   * then the other. The width is the distance between them and
+   * the position comes from the same two points, both to ARKit's
+   * own accuracy. Nothing is typed.
    *
    * In the same frame as `pointsM` -- they are marked in the same
    * session, which is what lets them be dropped straight onto the
@@ -190,19 +190,10 @@ export interface ArFloorTraceResult {
 export interface ArTracedOpening {
   /** Drawn differently: a door swings, an opening is a plain gap. */
   kind: "door" | "window" | "opening";
-  /** One bottom corner, in the same XZ frame as `pointsM`. */
+  /** One side of the opening, in the same XZ frame as `pointsM`. */
   aM: { x: number; z: number };
-  /** The other bottom corner. The gap between them is the width. */
+  /** The other side. The gap between them is the width. */
   bM: { x: number; z: number };
-  /**
-   * Height of the lower corner above the floor, in metres.
-   *
-   * Zero-ish for a door, around 0.9 for a window. Not used by the
-   * floor plan, which is a plan, but it is the one extra number
-   * that comes free from a tap that had to happen anyway, and it
-   * is what an elevation would need.
-   */
-  sillM?: number;
 }
 
 /** Optional knobs for `startScan`. */

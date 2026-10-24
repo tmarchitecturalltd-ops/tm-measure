@@ -1020,7 +1020,8 @@ final class ARFloorTraceRunner: NSObject {
             let found = scene.session.raycast(q).first
         else {
             setStatus(
-                "Sweep the phone across the wall around the opening for a moment, then tap again"
+                "Not on a wall yet. Sweep the phone across the wall around the opening, then "
+                    + openingPrompt()
             )
             return
         }
@@ -1033,23 +1034,30 @@ final class ARFloorTraceRunner: NSObject {
             pendingCorner = p
             pendingWallId = anchorId
             dropMarker(at: p, colour: .systemBlue)
-            setStatus(
-                "Now the other side of the same \(openingKind.rawValue), down at the bottom"
+            // A short vertical bar, so the first tap reads as an
+            // edge of something rather than a dot in space. Half
+            // the confusion here is that a single point does not
+            // look like one side of an opening.
+            drawSpan(
+                from: SCNVector3(p.x, p.y - 0.4, p.z),
+                to: SCNVector3(p.x, p.y + 0.4, p.z)
             )
+            setStatus(openingPrompt())
             refreshOpeningCount()
             return
         }
 
         if let want = pendingWallId, let got = anchorId, want != got {
             setStatus(
-                "That's a different wall. Both sides of an opening are in the same wall, so tap the other side of this one."
+                "That's a different wall. Both sides of an opening are in one wall. "
+                    + openingPrompt()
             )
             return
         }
 
         let w = distance(first, p)
         if w < 0.15 {
-            setStatus("That's the same side. Tap the other side of the opening")
+            setStatus("Too close to the first tap. " + openingPrompt())
             return
         }
         /*
@@ -1067,7 +1075,8 @@ final class ARFloorTraceRunner: NSObject {
         let maxW: Float = openingKind == .door ? 2.0 : 3.5
         if w > maxW {
             setStatus(
-                "That's \(String(format: "%.1f", w)) m apart, too wide for a \(openingKind.rawValue). Tap both sides of the same opening."
+                "That's \(String(format: "%.1f", w)) m apart, too wide for a \(openingKind.rawValue). "
+                    + openingPrompt()
             )
             return
         }
@@ -1174,10 +1183,10 @@ final class ARFloorTraceRunner: NSObject {
             if half {
                 if let w = self.liveWidthM {
                     self.countLabel?.text = String(
-                        format: "%.2f m · tap the other side", w
+                        format: "%.2f m · tap 2 of 2", w
                     )
                 } else {
-                    self.countLabel?.text = "tap the other side"
+                    self.countLabel?.text = "tap 2 of 2"
                 }
             } else if let last = self.lastWidthM {
                 self.countLabel?.text = String(
@@ -1484,17 +1493,20 @@ final class ARFloorTraceRunner: NSObject {
             if pendingCorner != nil {
                 pendingCorner = nil
                 pendingWallId = nil
+                // The dot and the guide bar above it.
                 removeLastMarker()
-                setStatus("Start that one again. Tap the bottom of one side")
+                removeLastMarker()
+                setStatus("Started that one again. " + openingPrompt())
             } else if !openings.isEmpty {
                 openings.removeLast()
-                // Three nodes to a finished opening: both corners
-                // and the bar between them.
+                // Four nodes to a finished opening: the first dot
+                // and its guide, the second dot, and the span.
+                removeLastMarker()
                 removeLastMarker()
                 removeLastMarker()
                 removeLastMarker()
                 lastWidthM = nil
-                setStatus("Removed. Tap the bottom of one side of an opening")
+                setStatus("Removed. " + openingPrompt())
             }
             refreshOpeningCount()
             return
@@ -1574,23 +1586,59 @@ final class ARFloorTraceRunner: NSObject {
         markingOpenings = true
         cornerStepper?.isHidden = true
         kindPicker?.isHidden = false
+
         /*
-         * Name the control and name the taps.
+         * Clear the floor corners off the screen.
          *
-         * The first version of this said "tap one bottom corner of
-         * an opening, then the other", which assumes the customer
-         * has already noticed the Door / Window / Opening picker
-         * that has just appeared where the corner stepper was, and
-         * understood that it labels everything they are about to
-         * tap. Nothing said so. Getting six windows in as doors and
-         * finding out afterwards means marking them all again.
+         * They are gold balls sitting on the floor at the foot of
+         * every wall, which is exactly where the bottom of a
+         * doorway is. Marking a door then puts a blue ball a few
+         * inches from a gold one and the screen has three kinds of
+         * dot on it with nothing saying what any of them mean.
+         *
+         * Reported as not being sure what was going on, from a
+         * photograph with two gold dots at the foot of a door and
+         * one blue dot on it. Their job is finished: they were
+         * feedback for a phase that has ended, and the corners
+         * they marked are recorded.
          */
-        setStatus(
-            "Now the doors and windows. Choose Door, Window or Opening below, "
-                + "then tap the bottom of each side, where the opening meets the wall. "
-                + "Press Done when there are none left."
-        )
+        sceneView?.scene.rootNode.childNodes
+            .filter { $0.name == "tm-marker" }
+            .forEach { $0.removeFromParentNode() }
+
+        setStatus(openingPrompt())
         refreshOpeningCount()
+    }
+
+    /**
+     * What to do next, said the same way every time.
+     *
+     * Every error in this phase used to replace the instruction
+     * with a complaint, and nothing put the instruction back -- so
+     * a customer who tapped twice in the same place was left
+     * looking at "that's the same side" with no restatement of
+     * what the two taps are for. The complaint now carries the
+     * instruction with it.
+     *
+     * "Tap 1 of 2" because that is the part people get wrong. The
+     * count makes it obvious that an opening costs two taps and
+     * which one is outstanding, in a way that a sentence
+     * describing both does not.
+     *
+     * No longer "the bottom corner". The width is the distance
+     * between the two sides and the height they are tapped at
+     * does not come into it, so asking for the bottom was an extra
+     * instruction to get wrong -- and in front of a closed door
+     * the bottom corners are the least visible part of the frame.
+     * Either side, any height, as long as it is the frame and not
+     * the door.
+     */
+    private func openingPrompt() -> String {
+        let kind = openingKind.rawValue
+        if pendingCorner == nil {
+            return "Tap 1 of 2: one side of the \(kind), where the frame meets the wall."
+        }
+        return "Tap 2 of 2: the other side of the same \(kind)."
     }
 
     @objc private func kindChanged(_ sender: UISegmentedControl) {
@@ -1605,9 +1653,10 @@ final class ARFloorTraceRunner: NSObject {
             pendingCorner = nil
             pendingWallId = nil
             removeLastMarker()
+            removeLastMarker()
             refreshOpeningCount()
         }
-        setStatus("Tap the bottom of one side of a \(openingKind.rawValue)")
+        setStatus(openingPrompt())
     }
 
     private func dropMarker(
@@ -1813,7 +1862,6 @@ final class ARFloorTraceRunner: NSObject {
                     "kind": o.kind.rawValue,
                     "aM": ["x": Double(o.a.x), "z": Double(o.a.z)],
                     "bM": ["x": Double(o.b.x), "z": Double(o.b.z)],
-                    "sillM": Double(min(o.a.y, o.b.y) - (floorY ?? min(o.a.y, o.b.y))),
                 ]
             }
         }
