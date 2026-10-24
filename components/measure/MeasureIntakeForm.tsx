@@ -295,42 +295,52 @@ function scannedOpening(
 }
 
 /**
- * Staircases the sensor found. NOT CURRENTLY USED -- see below.
+ * Staircases the sensor found, as proposals.
  *
- * Turned off at Harry's request after the first look at it, and the
- * call is his to make: a staircase is the one thing on a drawing
- * that a draughtsman will size from directly, and a flight the
- * sensor got slightly wrong is worse than a flight somebody drew on
- * the plan themselves, because nothing about it says it was
- * guessed. Both calls here are commented rather than deleted, and
- * the plugin still reports stairs, so turning it back on is
- * restoring two lines.
+ * RoomPlan has been classifying stairs all along -- it is one of
+ * its object categories -- and nothing read `CapturedRoom.objects`,
+ * so a LiDAR survey of a house with a staircase in it produced a
+ * drawing with no staircase.
  *
- * What it was for, when it was on: RoomPlan has been classifying
- * stairs all along -- it is one of its object categories -- and
- * nothing ever read `CapturedRoom.objects`, so a LiDAR survey of a
- * house with a staircase in it produced a drawing with no
- * staircase.
+ * Turned off for a while, and the reason was right: a staircase is
+ * the thing on a drawing a draughtsman sizes from directly, and a
+ * flight the sensor got slightly wrong is worse than one somebody
+ * drew themselves, because nothing about it says it was guessed.
  *
- * Positioned by `worldM`, not against a wall. A staircase genuinely
- * is a free object in the house far more often than it is a thing
- * running along one wall of one room, and the sensor gives a centre
- * and a bearing rather than a wall and an offset, so forcing it onto
- * a wall would be inventing a relationship in order to throw away a
- * measurement.
+ * What was wrong was the choice between all and nothing. The
+ * measurement is the part the sensor is good at -- width, position
+ * and bearing, none of which anybody reproduces by dragging a
+ * rectangle onto a plan. The part it cannot do is vouch for the
+ * thing existing. So it proposes and the customer confirms, on the
+ * review screen, while they are still in the house. See
+ * stairsProposals.
+ *
+ * High confidence only. A medium-confidence detection is a
+ * question not worth asking: most of them are not staircases, and
+ * a list of things to say no to is how people start saying yes to
+ * everything.
+ *
+ * Positioned by `worldM`, not against a wall. A staircase is a
+ * free object in the house far more often than it is a thing
+ * running along one wall of one room, and the sensor gives a
+ * centre and a bearing rather than a wall and an offset, so
+ * forcing it onto a wall would invent a relationship in order to
+ * throw away a measurement.
  *
  * Direction defaults to "up" and is marked approximate, because
- * RoomPlan does not report one and the geometry does not imply one.
- * Up is the better guess: most staircases a homeowner scans are in a
- * hall on the ground floor, where the flight they are looking at
- * goes up. The customer can change it, and the drawing says it was
- * assumed either way.
+ * RoomPlan does not report one and the geometry does not imply
+ * one. Up is the better guess: most staircases a homeowner scans
+ * are in a hall on the ground floor, where the flight they are
+ * looking at goes up. The customer can change it, and the drawing
+ * says it was assumed either way.
  */
 function scannedStairs(
   sr: { stairs?: RoomPlanStairs[]; originM?: { x: number; z: number } },
   newId: () => string,
 ): RoomStairs[] {
-  return (sr.stairs ?? []).map((s) => ({
+  return (sr.stairs ?? [])
+    .filter((s) => s.confident)
+    .map((s) => ({
     id: newId(),
     widthM: s.widthM.toFixed(2),
     direction: "up" as const,
@@ -342,9 +352,7 @@ function scannedStairs(
     },
     headingDeg: Number(s.headingDeg.toFixed(1)),
     positionApprox: true,
-    notes: s.confident
-      ? "Detected by scan"
-      : "Detected by scan, but the sensor was not certain. Worth checking.",
+    notes: "Detected by scan, confirmed by the customer",
   }));
 }
 
@@ -534,6 +542,24 @@ export default function MeasureIntakeForm() {
    * re-render to deliver it.
    */
   const lastExitRef = useRef<{ roomId: string; doorId: string } | null>(null);
+  /**
+   * Staircases the sensor found, waiting to be confirmed.
+   *
+   * Held here rather than written into the room, which is the
+   * whole point. RoomPlan measures a flight better than anybody
+   * dragging one onto a plan -- width, position and bearing, all
+   * from the sensor -- and the objection to using it was never the
+   * measurement. It was that a staircase nobody vouched for would
+   * appear on a drawing a builder prices from, with nothing about
+   * it saying it was the app's idea.
+   *
+   * So the sensor proposes and the customer decides, on the review
+   * screen, while they are still in the house. Accepted, the
+   * geometry is the sensor's. Declined, it never existed.
+   */
+  const [stairsProposals, setStairsProposals] = useState<
+    Record<string, RoomStairs[]>
+  >({});
   /**
    * Floor-plan placements keyed by roomId. Kept in the form (not inside
    * each RoomDraft) so the FloorPlanEditor can edit positions without
@@ -981,7 +1007,8 @@ export default function MeasureIntakeForm() {
         windows: (sr.windows ?? []).map((w) =>
           scannedOpening(w, sr.walls, newId(), sr.floorPolygonM),
         ),
-        // No stairs from the sensor. See scannedStairs.
+        // Stairs are proposed on the review screen, not written
+        // here. See stairsProposals.
         irregularNotes: "",
         notes: stamp,
         photos: [],
@@ -1013,6 +1040,17 @@ export default function MeasureIntakeForm() {
             : undefined,
       } satisfies RoomDraft;
     });
+
+    // Staircases the sensor found, offered on the review screen.
+    // See stairsProposals.
+    const proposals: Record<string, RoomStairs[]> = {};
+    scanned.forEach((sr, i) => {
+      const found = scannedStairs(sr, newId);
+      if (found.length) proposals[built[i].id] = found;
+    });
+    if (Object.keys(proposals).length) {
+      setStairsProposals((prev) => ({ ...prev, ...proposals }));
+    }
 
     let keptCount = 0;
     setRooms((prev) => {
@@ -1272,6 +1310,13 @@ export default function MeasureIntakeForm() {
           ? { roomId, doorId: exitDoorId }
           : null;
 
+        // Offered on the review screen rather than added. See
+        // stairsProposals.
+        const proposed = scannedStairs(sr, newId);
+        setStairsProposals((prev) =>
+          proposed.length ? { ...prev, [roomId]: proposed } : prev,
+        );
+
         setRooms((prev) =>
           prev.map((r) =>
             r.id !== roomId
@@ -1300,7 +1345,8 @@ export default function MeasureIntakeForm() {
                   windows: (sr.windows ?? []).map((w) =>
                     scannedOpening(w, sr.walls, newId(), sensorOutline),
                   ),
-                  // No stairs from the sensor. See scannedStairs.
+                  // Stairs are proposed, not written. See
+                  // stairsProposals and scannedStairs.
                   // "custom" only when a polygon is actually kept —
                   // a custom-shaped room with no polygon falls through
                   // to a rectangle anyway, but says otherwise on screen.
@@ -6632,8 +6678,28 @@ export default function MeasureIntakeForm() {
       {scanReviewIds.length > 0 && (
         <ScanResultFilter
           rooms={rooms.filter((r) => scanReviewIds.includes(r.id))}
+          stairsProposals={stairsProposals}
           onBack={() => setScanReviewIds([])}
-          onConfirm={(keepIds) => {
+          onConfirm={(keepIds, keepStairIds) => {
+            /*
+             * The staircases that survived the question.
+             *
+             * Written into their rooms now, with the sensor's own
+             * width and position, because the customer has just
+             * said they are there. The ones they declined are
+             * dropped and never existed. See stairsProposals.
+             */
+            setRooms((prev) =>
+              prev.map((r) => {
+                const proposed = (stairsProposals[r.id] ?? []).filter((st) =>
+                  keepStairIds.includes(st.id),
+                );
+                if (!proposed.length) return r;
+                return { ...r, stairs: [...(r.stairs ?? []), ...proposed] };
+              }),
+            );
+            setStairsProposals({});
+
             const drop = scanReviewIds.filter((id) => !keepIds.includes(id));
             if (drop.length) {
               setRooms((prev) => prev.filter((r) => !drop.includes(r.id)));

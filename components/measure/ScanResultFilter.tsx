@@ -29,17 +29,48 @@ import {
   looksLikeStrayCapture,
   outlineThumbnail,
   type RoomDraft,
+  type RoomStairs,
 } from "@tm-designs/measure-core";
 import GuidedScreen from "@/components/measure/GuidedScreen";
 
 type Props = {
   rooms: RoomDraft[];
-  /** Keep these, drop the rest. */
-  onConfirm: (keepIds: string[]) => void;
+  /**
+   * Staircases the sensor found, by room id, awaiting a yes or no.
+   *
+   * RoomPlan measures a flight better than anybody dragging one
+   * onto a plan. The objection to using it was never the
+   * measurement: it was that a staircase nobody had vouched for
+   * would appear on a drawing a builder prices from, with nothing
+   * saying it was the app's idea. Asking here settles that while
+   * the customer is still standing in the house.
+   */
+  stairsProposals?: Record<string, RoomStairs[]>;
+  /** Keep these rooms, and these staircases, and drop the rest. */
+  onConfirm: (keepIds: string[], keepStairIds: string[]) => void;
   onBack: () => void;
 };
 
-export default function ScanResultFilter({ rooms, onConfirm, onBack }: Props) {
+export default function ScanResultFilter({
+  rooms,
+  stairsProposals,
+  onConfirm,
+  onBack,
+}: Props) {
+  /*
+   * Staircases start ticked.
+   *
+   * Opposite to stray rooms, which start unticked, and for the
+   * opposite reason. A stray is something the sensor caught by
+   * accident and nobody wants; a staircase it has measured is
+   * something somebody does want, and only low-confidence
+   * detections get this far. The question being asked is "is this
+   * right?", not "would you like one?", so the answer it offers
+   * is the sensor's and the customer overrules it.
+   */
+  const [droppedStairs, setDroppedStairs] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [dropped, setDropped] = useState<Set<string>>(
     () =>
       new Set(
@@ -65,7 +96,15 @@ export default function ScanResultFilter({ rooms, onConfirm, onBack }: Props) {
       menuSections={[]}
       scrollKey="scan-filter"
       onBack={onBack}
-      onNext={() => onConfirm(keeping.map((r) => r.id))}
+      onNext={() =>
+        onConfirm(
+          keeping.map((r) => r.id),
+          Object.values(stairsProposals ?? {})
+            .flat()
+            .filter((st) => !droppedStairs.has(st.id))
+            .map((st) => st.id),
+        )
+      }
       nextLabel={
         keeping.length === rooms.length
           ? "Keep all"
@@ -210,6 +249,55 @@ export default function ScanResultFilter({ rooms, onConfirm, onBack }: Props) {
                       it: they are in the house and can walk it again
                       room by room. Left ticked, because it is a guess
                       and a genuine open-plan extension trips it. */}
+                  {/* The staircase, if the sensor found one here.
+                      Inside the room's row because that is the room
+                      it is in, and a separate list would ask the
+                      customer to work out which. */}
+                  {(stairsProposals?.[r.id] ?? []).map((st) => {
+                    const kept = !droppedStairs.has(st.id);
+                    return (
+                      <span
+                        key={st.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDroppedStairs((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(st.id)) next.delete(st.id);
+                            else next.add(st.id);
+                            return next;
+                          });
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter" && e.key !== " ") return;
+                          e.stopPropagation();
+                          e.preventDefault();
+                          setDroppedStairs((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(st.id)) next.delete(st.id);
+                            else next.add(st.id);
+                            return next;
+                          });
+                        }}
+                        style={{ minHeight: 44 }}
+                        className={`mt-1 flex items-center gap-2 text-sm ${
+                          kept ? "text-primary" : "text-on-surface-variant line-through"
+                        }`}
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: "18px" }}
+                          aria-hidden
+                        >
+                          stairs
+                        </span>
+                        Staircase, {st.widthM} m wide.{" "}
+                        {kept ? "Tap if there isn't one" : "Tap to put it back"}
+                      </span>
+                    );
+                  })}
+
                   {looksLikeMergedCapture({
                     widthM: w,
                     lengthM: l,
