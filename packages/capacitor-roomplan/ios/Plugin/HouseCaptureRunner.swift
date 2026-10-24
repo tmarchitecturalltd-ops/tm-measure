@@ -16,6 +16,10 @@ import RoomPlan
  * each capture starts a fresh world origin wherever the phone happened
  * to be.
  *
+ * NOTE: this used to merge with StructureBuilder. It no longer
+ * does -- see buildAndFinish. The description below is kept
+ * because it explains why the shared session exists.
+ *
  * StructureBuilder (iOS 17+) solves it. Hand it the CapturedRooms from
  * a sequence of captures and it returns a CapturedStructure with every
  * room, wall and opening expressed in one shared frame. That is the
@@ -35,7 +39,7 @@ import RoomPlan
  * the scanning page", which is precisely what a screen with no Done
  * button feels like from the outside.
  *   3. add another         → capture room 2, ... (repeat)
- *   4. finish              → StructureBuilder merges, we serialise
+ *   4. finish              → each room serialised on its own
  *
  * Cancelling the FIRST room aborts. Cancelling a later one keeps the
  * rooms already captured — losing four scanned rooms because someone
@@ -47,6 +51,8 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
     enum HouseError: LocalizedError {
         case cancelled
         case captureFailed(String)
+        /// No longer thrown: nothing merges. Kept so an older build
+        /// of the JS side still recognises the error shape.
         case mergeFailed(String)
         case nothingCaptured
 
@@ -61,8 +67,8 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
         }
     }
 
-    /// iOS 17 for StructureBuilder, plus the same LiDAR requirement as a
-    /// single-room scan.
+    /// iOS 17 for the shared-session capture, plus the same LiDAR
+    /// requirement as a single-room scan.
     static func isSupportedOnThisDevice() -> Bool {
         return RoomCaptureSession.isSupported
     }
@@ -105,11 +111,10 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
 
     /// One processed room per completed capture.
     ///
-    /// StructureBuilder takes `[CapturedRoom]`. An earlier version of
-    /// this file collected `CapturedRoomData` on the assumption that
-    /// merging needed the raw scan, which does not compile and was not
-    /// true: the processed room retains the transforms the merge aligns
-    /// on.
+    /// Each is serialised on its own at the end. An earlier version
+    /// collected `CapturedRoomData` on the assumption that the raw
+    /// scan was needed, which does not compile and was not true:
+    /// the processed room retains the transforms that matter.
     private var capturedRooms: [CapturedRoom] = []
     private var roomNames: [String] = []
     private var startedAt: Date = Date()
@@ -168,16 +173,27 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
             return
         }
         let count = capturedRooms.count
+        /*
+         * Walking to the next room is the join.
+         *
+         * The session keeps running between rooms, so the walk is
+         * what puts the next room in the right place relative to
+         * this one. Said here because it is the one moment the
+         * customer could put the phone down or take a detour, and
+         * the consequence of doing so is invisible until the plan
+         * comes out wrong.
+         */
         let alert = UIAlertController(
             title: "\(count) room\(count == 1 ? "" : "s") scanned",
-            message: "Walk to the next room and scan it, or finish and send this plan.",
+            message: "Keep the phone up and walk through to the next room. "
+                + "That walk is what tells us where the rooms sit.",
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: "Scan another room", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "Next room", style: .default) { [weak self] _ in
             guard let self else { return }
             self.presentCapture(roomNumber: self.capturedRooms.count + 1)
         })
-        alert.addAction(UIAlertAction(title: "Finish", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "That's the lot", style: .default) { [weak self] _ in
             self?.buildAndFinish()
         })
         host.present(alert, animated: true)
@@ -217,26 +233,51 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
         let elapsed = Date().timeIntervalSince(startedAt)
         let names = roomNames
 
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                // beautifyObjects tidies the geometry the way Apple's own
-                // demo does; without it walls come back with small kinks
-                // that show up as jagged lines once drawn at 1:50.
-                let builder = StructureBuilder(options: [.beautifyObjects])
-                let structure = try await builder.capturedStructure(from: rooms)
-                let payload = CaptureSerializer.serializeStructure(
-                    structure: structure,
-                    roomNames: names,
-                    durationS: elapsed
-                )
-                await MainActor.run { self.finish(.success(payload)) }
-            } catch {
-                await MainActor.run {
-                    self.finish(.failure(HouseError.mergeFailed(error.localizedDescription)))
-                }
-            }
+        /*
+         * Keep the rooms as the customer drew them. No merge.
+         *
+         * This handed the captured rooms to StructureBuilder, whose
+         * job is to work out how a set of rooms fit together. With
+         * every room now captured in one shared ARSession it has
+         * nothing left to work out -- the rooms are already in one
+         * coordinate system, in their true positions -- and what it
+         * does instead is re-decide where one room ends and the
+         * next begins. It merges through wide openings and splits
+         * rooms that are not rooms to it. A tester scanned what he
+         * considered two rooms and was handed something else.
+         *
+         * The customer already answered that question, once per
+         * room, by walking out and pressing Done. That answer is
+         * better than a reinterpretation of it: they know which
+         * space is the kitchen and the sensor does not.
+         *
+         * So each room is serialised on its own, through exactly
+         * the same path a single-room scan takes. Their positions
+         * relative to each other survive because originM is the
+         * room's own corner measured in the shared frame, which is
+         * what the app places them by.
+         */
+        var roomDicts: [[String: Any]] = []
+        for (i, room) in rooms.enumerated() {
+            let one = CaptureSerializer.serialize(captured: room, durationS: elapsed)
+            guard var dict = (one["rooms"] as? [[String: Any]])?.first else { continue }
+            dict["name"] = i < names.count ? names[i] : "Room \(i + 1)"
+            roomDicts.append(dict)
         }
+
+        guard !roomDicts.isEmpty else {
+            finish(.failure(HouseError.nothingCaptured))
+            return
+        }
+
+        finish(
+            .success([
+                "rooms": roomDicts,
+                "durationS": elapsed,
+                "complete": true,
+                "merged": true,
+            ])
+        )
     }
 
     private func finish(_ result: Result<[String: Any], Error>) {
@@ -283,6 +324,48 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
      * not repeated -- a prompt that keeps reappearing while somebody
      * is concentrating is worse than one they missed.
      */
+    /**
+     * Say when the room is complete enough to finish.
+     *
+     * Asked for directly: signal when the sensor is confident
+     * enough, then offer to move on or stop. Without it the only
+     * way to judge a scan is to press Done and look at what comes
+     * back, which is the wrong end of the process to find out at.
+     *
+     * The honest measure is what the room has, not a percentage.
+     * A room needs its walls and its floor: four walls and a floor
+     * surface is an ordinary room captured properly, and anything
+     * short of that is a room captured from the doorway. So the
+     * line says what is there, in those terms, and the Done button
+     * comes forward when it is enough.
+     *
+     * Deliberately not a hard gate. A customer who wants to stop
+     * at three walls may have a reason -- an alcove they will
+     * measure another way, a room they only need roughly -- and
+     * being locked in a room by an app is worse than a slightly
+     * thin scan of it.
+     */
+    func captureSession(
+        _ session: RoomCaptureSession,
+        didUpdate room: CapturedRoom
+    ) {
+        let walls = room.walls.count
+        let hasFloor = !room.floors.isEmpty
+        let ready = walls >= 4 && hasFloor
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let vc = self.modalVC else { return }
+            vc.setReadiness(
+                ready: ready,
+                text: ready
+                    ? "\(walls) walls and the floor. Ready to finish this room"
+                    : hasFloor
+                        ? "\(walls) wall\(walls == 1 ? "" : "s") so far. Keep going round"
+                        : "Looking for the floor. Point the phone down and move slowly"
+            )
+        }
+    }
+
     func captureSession(_ session: RoomCaptureSession, didAdd room: CapturedRoom) {
         roomsSeen += 1
 
@@ -411,6 +494,7 @@ private class HouseCaptureModalViewController: UIViewController {
     private var doneButton: UIButton?
     private var cancelButton: UIButton?
     private var statusLabel: UILabel?
+    private var readinessLabel: UILabel?
     private var coachingLabel: UILabel?
     private var hasStartedSession = false
     private var isFinishing = false
@@ -527,6 +611,29 @@ private class HouseCaptureModalViewController: UIViewController {
         ])
         self.statusLabel = status
 
+        // Readiness line, under the status. Separate from the
+        // coaching strip because coaching comes and goes and this
+        // is a running state the customer should be able to glance
+        // at whenever they like.
+        let readiness = UILabel()
+        readiness.translatesAutoresizingMaskIntoConstraints = false
+        readiness.textColor = .white
+        readiness.font = .systemFont(ofSize: 14, weight: .semibold)
+        readiness.textAlignment = .center
+        readiness.numberOfLines = 0
+        readiness.shadowColor = .black
+        readiness.shadowOffset = CGSize(width: 0, height: 1)
+        view.addSubview(readiness)
+        self.readinessLabel = readiness
+        NSLayoutConstraint.activate([
+            readiness.topAnchor.constraint(equalTo: status.bottomAnchor, constant: 6),
+            readiness.leadingAnchor.constraint(
+                greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
+            readiness.trailingAnchor.constraint(
+                lessThanOrEqualTo: view.trailingAnchor, constant: -24),
+            readiness.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+        ])
+
         // Coaching panel — hidden until the sensor has something to say.
         let coaching = UILabel()
         coaching.numberOfLines = 0
@@ -584,6 +691,15 @@ private class HouseCaptureModalViewController: UIViewController {
      */
     private var coachingText: String?
     private var hideWork: DispatchWorkItem?
+
+    /// See captureSession(_:didUpdate:). Done is emphasised rather
+    /// than enabled: it works throughout, because a customer who
+    /// wants to stop early is allowed to.
+    func setReadiness(ready: Bool, text: String) {
+        readinessLabel?.text = text
+        doneButton?.backgroundColor = ready ? .white : UIColor(white: 1, alpha: 0.55)
+        doneButton?.setTitle(ready ? "Done ✓" : "Done", for: .normal)
+    }
 
     func showCoaching(_ text: String?) {
         guard text != coachingText else { return }
