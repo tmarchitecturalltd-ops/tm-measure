@@ -76,7 +76,83 @@ export type PlanRoomInput = {
   room: RoomDraft;
   anchor: Pt;
   rotationDeg: RoomRotationDeg;
+  /**
+   * Which storey the room is on. 0 is the ground floor, negatives
+   * are basements.
+   *
+   * Absent means a single-storey survey, which is most of them.
+   * See spreadFloors for why it matters when it is present.
+   */
+  floor?: number;
 };
+
+/** Gap between one storey's plan and the next, in metres. */
+export const FLOOR_GAP_M = 4;
+
+/**
+ * Lay each storey out beside the last, rather than on top of it.
+ *
+ * Every room carries a position on its own floor, and those
+ * positions are measured from that floor's own origin -- so a
+ * first-floor bedroom directly above the kitchen has roughly the
+ * kitchen's coordinates, which is correct and is exactly the
+ * problem. Drawn without this, a two-storey survey puts both
+ * storeys on the same piece of paper at the same place: walls
+ * through walls, doors through doors, and dimensions stacked on
+ * each other.
+ *
+ * The dangerous part is that it looks like a plan. A drawing that
+ * is obviously broken gets a phone call; one that reads as a
+ * complicated ground floor gets built from.
+ *
+ * So each storey is shifted sideways by the width of everything
+ * to its left, lowest first, and labelled. That is how a set of
+ * plans is presented anyway -- ground, first, second, left to
+ * right across the sheet -- so it is the familiar thing as well as
+ * the correct one. Geometry inside a storey is untouched: this
+ * only moves whole storeys relative to each other.
+ */
+export function spreadFloors(entries: PlanRoomInput[]): {
+  entries: PlanRoomInput[];
+  labels: { floor: number; x: number; z: number }[];
+} {
+  const floors = [...new Set(entries.map((e) => e.floor ?? 0))].sort(
+    (a, b) => a - b,
+  );
+  if (floors.length < 2) return { entries, labels: [] };
+
+  const out: PlanRoomInput[] = [];
+  const labels: { floor: number; x: number; z: number }[] = [];
+  let cursor = 0;
+
+  for (const floor of floors) {
+    const on = entries.filter((e) => (e.floor ?? 0) === floor);
+    const pts = on.flatMap((e) => roomOutlineM(e));
+    if (!pts.length) continue;
+
+    const minX = Math.min(...pts.map((p) => p.x));
+    const maxX = Math.max(...pts.map((p) => p.x));
+    const minZ = Math.min(...pts.map((p) => p.z));
+    const shift = cursor - minX;
+
+    for (const e of on) {
+      out.push({ ...e, anchor: { x: e.anchor.x + shift, z: e.anchor.z } });
+    }
+    labels.push({ floor, x: cursor, z: minZ });
+    cursor += maxX - minX + FLOOR_GAP_M;
+  }
+
+  return { entries: out, labels };
+}
+
+/** "Ground floor", "First floor", "Basement". */
+export function floorName(floor: number): string {
+  if (floor === 0) return "Ground floor";
+  if (floor === -1) return "Basement";
+  if (floor < -1) return `Basement ${-floor}`;
+  const names = ["First", "Second", "Third", "Fourth", "Fifth"];
+  return `${names[floor - 1] ?? `Floor ${floor}`} floor`;
+}
 
 /* ── geometry helpers ─────────────────────────────────────────────── */
 
@@ -616,7 +692,12 @@ export function buildDetailedPlanDxf(
   options: PlanDxfOptions = {},
 ): string {
   const detailed = options.detailed !== false;
-  const placed = entries.filter((e) => e.anchor);
+  // Storeys side by side before anything is measured or drawn, so
+  // every dimension, label and bounding box that follows is
+  // computed against where the rooms actually end up on the sheet.
+  // See spreadFloors.
+  const spread = spreadFloors(entries.filter((e) => e.anchor));
+  const placed = spread.entries;
   const walls = buildWalls(placed);
   const out: string[] = [];
 
@@ -947,6 +1028,30 @@ export function buildDetailedPlanDxf(
       // defeat that. Detailed only.
       for (const f of room.fixtures ?? []) drawFixture(out, entry, f);
     }
+  }
+
+  /*
+   * A title under each storey, when there is more than one.
+   *
+   * Without it the sheet is two plans side by side and nothing
+   * saying which is which, and a draughtsman would have to work
+   * it out from the staircase. Left-aligned at the storey's own
+   * left edge and set below it, which is where a plan title goes.
+   *
+   * On the plain export as well as the detailed one. The plain
+   * drawing is a clean shell to build on, and a shell of two
+   * unlabelled storeys is not clean, it is ambiguous.
+   */
+  for (const label of spread.labels) {
+    out.push(
+      text(
+        LAYER.title,
+        { x: label.x, z: label.z - 1.2 },
+        400,
+        floorName(label.floor),
+        false,
+      ),
+    );
   }
 
   if (detailed) drawTitleBlock(out, placed, options);

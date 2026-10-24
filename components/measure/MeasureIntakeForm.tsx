@@ -3326,6 +3326,9 @@ export default function MeasureIntakeForm() {
           room,
           anchor: { x: p.positionM.x, z: p.positionM.z },
           rotationDeg: p.rotationDeg ?? 0,
+          // Which storey, so the drawing can put them side by side
+          // rather than one on top of the other. See spreadFloors.
+          floor: p.floor ?? 0,
         };
       })
       .filter((e): e is NonNullable<typeof e> => e !== null);

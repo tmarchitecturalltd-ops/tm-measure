@@ -28,7 +28,14 @@ import {
 } from "./src/perspective.ts";
 import { roomBoundingBox, roomFootprint } from "./src/floorplan.ts";
 import { buildFloorPlanDxf, roomCornersM } from "./src/dxf.ts";
-import { buildWalls, buildDetailedPlanDxf, roomOutlineM } from "./src/dxfPlan.ts";
+import {
+  buildWalls,
+  buildDetailedPlanDxf,
+  roomOutlineM,
+  spreadFloors,
+  floorName,
+  FLOOR_GAP_M,
+} from "./src/dxfPlan.ts";
 import { fixtureFootprintM, rotatePointM } from "./src/types.ts";
 import { validateRoom } from "./src/validation.ts";
 import {
@@ -2600,4 +2607,116 @@ test("a room dropped nowhere near a doorway is left where it was put", () => {
     null,
     "a snap must not visibly spin the room",
   );
+});
+
+/* ── storeys on one sheet ─────────────────────────────────────────── */
+
+test("two storeys are drawn side by side, not on top of each other", () => {
+  /*
+   * Every room's position is measured from its own floor's origin,
+   * so a first-floor bedroom above the kitchen carries roughly the
+   * kitchen's coordinates. That is correct, and it is exactly why
+   * a two-storey survey drawn without spreading them puts both on
+   * the same piece of paper in the same place.
+   *
+   * The dangerous part is that it still looks like a plan. An
+   * obviously broken drawing gets a phone call; one that reads as
+   * a complicated ground floor gets built from.
+   */
+  const ground = {
+    ...planRoom("g", "Kitchen", 4, 3),
+  } as unknown as RoomDraft;
+  const first = {
+    ...planRoom("f", "Bedroom", 4, 3),
+  } as unknown as RoomDraft;
+
+  const entries = [
+    { room: ground, anchor: { x: 0, z: 0 }, rotationDeg: 0 as const, floor: 0 },
+    { room: first, anchor: { x: 0, z: 0 }, rotationDeg: 0 as const, floor: 1 },
+  ];
+
+  const spread = spreadFloors(entries);
+  assert.equal(spread.entries.length, 2, "both rooms survive");
+  assert.equal(spread.labels.length, 2, "and both storeys get a title");
+
+  const xOf = (id: string) =>
+    spread.entries.find((e) => e.room.id === id)!.anchor.x;
+  assert.equal(xOf("g"), 0, "the lowest storey stays where it is");
+  assert.ok(
+    xOf("f") >= 4 + FLOOR_GAP_M - 0.001,
+    `the storey above must clear the one below, was at ${xOf("f")}`,
+  );
+
+  // Nothing inside a storey moves relative to the rest of it.
+  const twoUp = spreadFloors([
+    ...entries,
+    {
+      room: { ...planRoom("f2", "Bathroom", 2, 2) } as unknown as RoomDraft,
+      anchor: { x: 5, z: 0 },
+      rotationDeg: 0 as const,
+      floor: 1,
+    },
+  ]);
+  const a = twoUp.entries.find((e) => e.room.id === "f")!.anchor.x;
+  const b = twoUp.entries.find((e) => e.room.id === "f2")!.anchor.x;
+  assert.ok(
+    Math.abs(b - a - 5) < 0.001,
+    "two rooms on one storey keep their spacing",
+  );
+});
+
+test("a single-storey survey is left exactly as it was", () => {
+  /*
+   * Most surveys are one floor, and the drawing they produced
+   * before this existed was right. Spreading must be invisible to
+   * them -- no shift, and no floor titles cluttering a sheet that
+   * only has one plan on it.
+   */
+  const entries = [
+    {
+      room: planRoom("a", "Kitchen", 4, 3) as unknown as RoomDraft,
+      anchor: { x: 2, z: 1 },
+      rotationDeg: 0 as const,
+      floor: 0,
+    },
+    {
+      room: planRoom("b", "Hall", 2, 3) as unknown as RoomDraft,
+      anchor: { x: 7, z: 1 },
+      rotationDeg: 0 as const,
+      floor: 0,
+    },
+  ];
+  const spread = spreadFloors(entries);
+  assert.deepEqual(spread.entries, entries, "untouched");
+  assert.equal(spread.labels.length, 0, "and no storey titles");
+
+  // Same again for entries that never said which floor they are on.
+  const noFloor = entries.map(({ floor, ...rest }) => {
+    void floor;
+    return rest;
+  });
+  assert.deepEqual(spreadFloors(noFloor).entries, noFloor);
+});
+
+test("the drawing names each storey when there is more than one", () => {
+  const dxf = buildDetailedPlanDxf([
+    {
+      room: planRoom("g", "Kitchen", 4, 3) as unknown as RoomDraft,
+      anchor: { x: 0, z: 0 },
+      rotationDeg: 0 as const,
+      floor: 0,
+    },
+    {
+      room: planRoom("f", "Bedroom", 4, 3) as unknown as RoomDraft,
+      anchor: { x: 0, z: 0 },
+      rotationDeg: 0 as const,
+      floor: 1,
+    },
+  ]);
+  assert.match(dxf, /Ground floor/, "the ground floor is named");
+  assert.match(dxf, /First floor/, "and so is the one above it");
+
+  assert.equal(floorName(0), "Ground floor");
+  assert.equal(floorName(1), "First floor");
+  assert.equal(floorName(-1), "Basement");
 });
