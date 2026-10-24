@@ -167,6 +167,8 @@ final class ARFloorTraceRunner: NSObject {
     private var lastWidthM: Float?
     /// The first corner of the opening being marked, if one is part-done.
     private var pendingCorner: SCNVector3?
+    /// The wall that corner landed on. The second has to match.
+    private var pendingWallId: UUID?
     private var openingKind: OpeningKind = .window
     /// True once the floor is finished and we are marking openings.
     private var markingOpenings = false
@@ -205,7 +207,7 @@ final class ARFloorTraceRunner: NSObject {
      * good proxy for "the sensor knows this room" in an ordinary
      * room and a bad one in a cluttered garage, where there is
      * genuinely very little visible floor and there never will be
-     * more -- so the honest reading of thirty seconds of sweeping
+     * more -- so the honest reading of fifteen seconds of sweeping
      * with some floor found is not "keep going", it is "this is as
      * good as this room gets".
      *
@@ -222,30 +224,28 @@ final class ARFloorTraceRunner: NSObject {
      */
     private var sweptLongEnough: Bool {
         guard mode == .floor, let since = floorFoundAt else { return false }
-        return Date().timeIntervalSince(since) > 30
+        return Date().timeIntervalSince(since) > 15
     }
-    /// Enough mapped floor to trust a tap. About what you see
-    /// walking into a small bedroom and turning round.
-    /*
-     * Down from 4.0, because the taps it was protecting are no
-     * longer fragile.
+    /**
+     * Enough mapped floor to trust a tap, in square metres.
      *
-     * Four square metres was set when a tap was only ever a raycast
-     * onto mapped floor, so the gate was the only thing standing
-     * between a thin scrap of plane and a trace built on ARKit's
-     * guesses. A corner now falls back to a wall crossing and then
-     * to the floor plane itself, neither of which needs the floor
-     * mapped at that spot, so most of what the gate was buying is
-     * bought elsewhere.
+     * Has come down twice, and the reasons are different.
      *
-     * What is left is the wait, and the wait is the thing people
-     * complain about: it was reported as taking some time to
-     * calibrate before anything could be tapped. Two and a half
-     * square metres is still a proper look at the floor -- a couple
-     * of seconds of sweeping, not a scrap -- and it is reached
-     * noticeably sooner.
+     * It was 4.0 when a tap was only ever a raycast onto mapped
+     * floor, so this gate was the only thing between a scrap of
+     * plane and a trace built on guesses. Then 2.5, because a
+     * corner gained two fallbacks that need no mapped floor at
+     * that spot: a wall crossing, and the floor plane itself.
+     *
+     * Now 1.5, because the number it was reading was wrong. It
+     * waited on the largest single plane rather than the total,
+     * so in a cluttered room it measured roughly a third of what
+     * was actually mapped, and 2.5 of the old number was far more
+     * floor than it sounded. Against a real total, 1.5 m2 is
+     * about what the phone sees while you turn on the spot, and
+     * it comes up in a few seconds rather than being waited out.
      */
-    private let minFloorAreaM2: Double = 2.5
+    private let minFloorAreaM2: Double = 1.5
 
     /// Worst tracking state seen during the session, not the last one.
     /// A trace that was briefly lost and recovered is still suspect.
@@ -991,45 +991,47 @@ final class ARFloorTraceRunner: NSObject {
      * ladder that serves the corner trace would drag it down to
      * ground level.
      *
-     * `.existingPlaneGeometry` first, so a tap only lands where
-     * ARKit has actually fitted wall. The looser targets would
-     * always return something -- an infinite plane extends a wall
-     * across the whole room -- and a window measured against a
-     * guess is a number with nothing behind it.
+     * Mapped wall only, and both taps on the same wall.
+     *
+     * This had `.existingPlaneInfinite` as a fallback, directly
+     * under a comment explaining why that is wrong. An infinite
+     * plane extends a detected wall across the whole building, so
+     * a tap aimed through a doorway at the far reveal lands on the
+     * near wall's plane carried off into the distance. That is how
+     * a 700 mm doorway was measured as a door 1.70 m wide, with
+     * one marker metres behind the other, and how the door then
+     * attached to the wrong wall: the midpoint of a span like that
+     * is nowhere near the opening it describes.
+     *
+     * So: mapped geometry only, and the second corner has to be on
+     * the same plane anchor as the first. Two taps on two
+     * different walls are not two sides of one opening, whatever
+     * the distance between them happens to come to.
      */
     private func handleOpeningTap(_ location: CGPoint) {
         guard let scene = sceneView else { return }
 
-        var hit: ARRaycastResult?
-        for target in [
-            ARRaycastQuery.Target.existingPlaneGeometry,
-            .existingPlaneInfinite,
-        ] {
-            guard
-                let q = scene.raycastQuery(
-                    from: location,
-                    allowing: target,
-                    alignment: .vertical
-                )
-            else { continue }
-            if let first = scene.session.raycast(q).first {
-                hit = first
-                break
-            }
-        }
-
-        guard let found = hit else {
+        guard
+            let q = scene.raycastQuery(
+                from: location,
+                allowing: .existingPlaneGeometry,
+                alignment: .vertical
+            ),
+            let found = scene.session.raycast(q).first
+        else {
             setStatus(
-                "Point at the wall around the opening for a moment, then tap again"
+                "Sweep the phone across the wall around the opening for a moment, then tap again"
             )
             return
         }
 
         let t = found.worldTransform.columns.3
         let p = SCNVector3(t.x, t.y, t.z)
+        let anchorId = found.anchor?.identifier
 
         guard let first = pendingCorner else {
             pendingCorner = p
+            pendingWallId = anchorId
             dropMarker(at: p, colour: .systemBlue)
             setStatus(
                 "Now the other side of the same \(openingKind.rawValue), down at the bottom"
@@ -1038,20 +1040,34 @@ final class ARFloorTraceRunner: NSObject {
             return
         }
 
+        if let want = pendingWallId, let got = anchorId, want != got {
+            setStatus(
+                "That's a different wall. Both sides of an opening are in the same wall, so tap the other side of this one."
+            )
+            return
+        }
+
         let w = distance(first, p)
-        /*
-         * Both taps on the same spot is a double tap, not an
-         * opening. Three metres is wider than any domestic door or
-         * window and usually means the second tap missed the wall
-         * and landed on the one opposite.
-         */
         if w < 0.15 {
             setStatus("That's the same side. Tap the other side of the opening")
             return
         }
-        if w > 3.0 {
+        /*
+         * What each kind can plausibly be, in metres.
+         *
+         * A single door is 760 to 840 and a pair about 1.5, so 2.0
+         * covers everything short of a shopfront. Windows and cased
+         * openings run wider. The lower bound catches a second tap
+         * that landed just along from the first.
+         *
+         * Stated per kind rather than one 3 m rule for everything,
+         * because the one rule let a 1.70 m "door" through and that
+         * number was the first visible sign anything was wrong.
+         */
+        let maxW: Float = openingKind == .door ? 2.0 : 3.5
+        if w > maxW {
             setStatus(
-                "That's \(String(format: "%.1f", w)) m apart, which is wider than an opening. Undo and try again"
+                "That's \(String(format: "%.1f", w)) m apart, too wide for a \(openingKind.rawValue). Tap both sides of the same opening."
             )
             return
         }
@@ -1060,6 +1076,7 @@ final class ARFloorTraceRunner: NSObject {
         lastWidthM = w
         liveWidthM = nil
         pendingCorner = nil
+        pendingWallId = nil
         dropMarker(at: p, colour: .systemBlue)
         drawSpan(from: first, to: p)
         setStatus(
@@ -1466,6 +1483,7 @@ final class ARFloorTraceRunner: NSObject {
         if markingOpenings {
             if pendingCorner != nil {
                 pendingCorner = nil
+                pendingWallId = nil
                 removeLastMarker()
                 setStatus("Start that one again. Tap the bottom of one side")
             } else if !openings.isEmpty {
@@ -1508,7 +1526,10 @@ final class ARFloorTraceRunner: NSObject {
         let length = (dx * dx + dy * dy + dz * dz).squareRoot()
         guard length > 0.01 else { return }
 
-        let bar = SCNCylinder(radius: 0.012, height: CGFloat(length))
+        // Thin, for the same reason as the markers: this is seen
+        // from a arm's length away and a fat bar hides the reveal
+        // it is supposed to be measuring.
+        let bar = SCNCylinder(radius: 0.005, height: CGFloat(length))
         bar.firstMaterial?.diffuse.contents = UIColor.systemBlue
         let node = SCNNode(geometry: bar)
         node.name = "tm-marker"
@@ -1582,6 +1603,7 @@ final class ARFloorTraceRunner: NSObject {
         // as something the first tap was not placed for.
         if pendingCorner != nil {
             pendingCorner = nil
+            pendingWallId = nil
             removeLastMarker()
             refreshOpeningCount()
         }
@@ -1594,11 +1616,22 @@ final class ARFloorTraceRunner: NSObject {
             red: 0.722, green: 0.588, blue: 0.314, alpha: 1
         )
     ) {
-        // Smaller for openings: a corner marker is dropped on open
-        // floor where a 4 cm ball reads clearly, while a window
-        // corner sits against the reveal it is marking and a ball
-        // that size covers the thing being measured.
-        let sphere = SCNSphere(radius: markingOpenings ? 0.025 : 0.04)
+        /*
+         * Small, for openings.
+         *
+         * These are drawn at a fixed size in the world, so how big
+         * they look depends entirely on how close the phone is. A
+         * floor corner is three or four metres away and a 4 cm
+         * ball reads as a dot. An opening is marked at arm's
+         * length in a corridor, where the same ball fills a third
+         * of the screen, and two of them with a bar between came
+         * back reported as confusing blue shapes with no obvious
+         * meaning.
+         *
+         * 12 mm is a drawing pin at arm's length and still visible
+         * across a room.
+         */
+        let sphere = SCNSphere(radius: markingOpenings ? 0.012 : 0.04)
         sphere.firstMaterial?.diffuse.contents = colour
         let node = SCNNode(geometry: sphere)
         node.name = "tm-marker"
