@@ -1066,8 +1066,33 @@ final class ARFloorTraceRunner: NSObject {
         }
 
         let w = distance(first, p)
-        if w < 0.15 {
-            setStatus("Too close to the first one. " + openingPrompt())
+        /*
+         * Too narrow to be the thing it claims to be.
+         *
+         * This was a flat 0.15 m, which only caught a double tap.
+         * Anything above it was believed, so two taps a hand apart
+         * in the middle of a door produced a 300 mm door and said
+         * nothing -- and a wrong number that looks like a
+         * measurement is worse than a rejected one, because it
+         * reaches the drawing and gets built from.
+         *
+         * That is not a hypothetical. Explaining this step, I used
+         * "two taps on the door face give you the gap between your
+         * thumbs" as the mistake to avoid and it was read back to
+         * me as the instruction. If the sentence can be read that
+         * way then people will do it, and the app should notice.
+         *
+         * A door or a cased opening below 500 mm is not one: the
+         * narrowest domestic door is a 457 mm cupboard and
+         * Building Regs want 750 clear for a doorway. Windows go
+         * smaller, so 250 mm there, which still catches a hand's
+         * width.
+         */
+        let minW: Float = openingKind == .window ? 0.25 : 0.5
+        if w < minW {
+            setStatus(
+                "Only \(String(format: "%.2f", w)) m apart. Tap the two edges, not the middle"
+            )
             return
         }
         /*
@@ -1631,7 +1656,10 @@ final class ARFloorTraceRunner: NSObject {
          * because repeating it would be the nagging the shortened
          * copy exists to avoid.
          */
-        setStatus("Doors and windows, from this side only. " + openingPrompt())
+        setStatus(
+            "Doors and windows. Tap the two edges of each one, not the middle. "
+                + "From this side only."
+        )
         refreshOpeningCount()
     }
 
