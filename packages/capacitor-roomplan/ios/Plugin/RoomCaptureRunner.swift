@@ -789,8 +789,30 @@ enum CaptureSerializer {
         ]
         if !polygonDicts.isEmpty {
             roomDict["floorPolygonM"] = polygonDicts
-            if let o = originDict { roomDict["originM"] = o }
         }
+        /*
+         * The origin goes out whether or not the shape does.
+         *
+         * These were both inside the polygon test, which made a
+         * room's position conditional on its shape being usable.
+         * They are independent facts: where the room is, and what
+         * shape it is. A room whose floor surface RoomPlan could
+         * not resolve still has a perfectly good position, taken
+         * from its wall endpoints -- which is what the comment
+         * above this says, while the code did the opposite.
+         *
+         * Harmless while this serialiser only ever described a
+         * single room, where originM means nothing and the
+         * definitions file says as much. It stopped being harmless
+         * when the chained multi-room scan started coming through
+         * here: originM is now the room's position on the plan, so
+         * withholding it drops the room at the origin on top of
+         * every other room that lost its outline.
+         *
+         * Reported as the DXF not showing the rooms in their
+         * relative positions.
+         */
+        if let o = originDict { roomDict["originM"] = o }
         return [
             "rooms": [roomDict],
             "durationS": durationS,
