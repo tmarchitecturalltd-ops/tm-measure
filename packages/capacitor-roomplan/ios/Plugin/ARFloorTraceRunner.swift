@@ -189,9 +189,41 @@ final class ARFloorTraceRunner: NSObject {
      * See snapToCorner.
      */
     private var wallLines: [UUID: (p: SIMD2<Float>, d: SIMD2<Float>, half: Float)] = [:]
-    /// Largest floor plane mapped so far, in square metres. See
-    /// noteHorizontalPlane: this is what readiness waits on.
+    /// Floor mapped so far, in square metres, summed across every
+    /// plane at floor height. See noteHorizontalPlane: this is what
+    /// readiness waits on.
     private var floorAreaM2: Double = 0
+    /// Area per plane, so an update replaces rather than adds.
+    private var floorPlaneAreas: [UUID: Double] = [:]
+    /// When the floor was first seen, for the escape below.
+    private var floorFoundAt: Date?
+
+    /**
+     * Long enough sweeping that waiting further is not the answer.
+     *
+     * No gate may be impossible to clear. The area threshold is a
+     * good proxy for "the sensor knows this room" in an ordinary
+     * room and a bad one in a cluttered garage, where there is
+     * genuinely very little visible floor and there never will be
+     * more -- so the honest reading of thirty seconds of sweeping
+     * with some floor found is not "keep going", it is "this is as
+     * good as this room gets".
+     *
+     * Reported as five minutes stuck on "a few more seconds", with
+     * no way on but Cancel. The area bug underneath it is fixed
+     * separately; this exists so that the next thing to go wrong
+     * in the same place is a worse measurement rather than no
+     * measurement at all.
+     *
+     * Tapping is still gated on tracking being normal, which is
+     * the condition that actually ruins a trace. And every corner
+     * has three ways to be placed now, the last of which needs no
+     * mapped floor at all.
+     */
+    private var sweptLongEnough: Bool {
+        guard mode == .floor, let since = floorFoundAt else { return false }
+        return Date().timeIntervalSince(since) > 30
+    }
     /// Enough mapped floor to trust a tap. About what you see
     /// walking into a small bedroom and turning round.
     /*
@@ -524,6 +556,7 @@ final class ARFloorTraceRunner: NSObject {
             ready =
                 mode == .height
                 || (floorY != nil && floorAreaM2 >= minFloorAreaM2)
+                || sweptLongEnough
         } else {
             ready = false
         }
@@ -1054,7 +1087,29 @@ final class ARFloorTraceRunner: NSObject {
      */
     private var liveWidthM: Float?
 
+    /// Frames since readiness was last re-checked. See below.
+    private var sinceReadinessCheck = 0
+
     func renderer(_ renderer: SCNSceneRenderer, updateAtTime time: TimeInterval) {
+        /*
+         * Re-check readiness on a clock, not only on plane updates.
+         *
+         * Readiness now has a condition that comes true with the
+         * passage of time rather than with anything the sensor
+         * reports -- see sweptLongEnough -- and in a room where
+         * ARKit has stopped finding new planes nothing else would
+         * ever ask again. The crosshair would stay grey through the
+         * moment it was supposed to turn gold.
+         *
+         * Twice a second is far more often than it can change and
+         * still nothing next to the work of a frame.
+         */
+        sinceReadinessCheck += 1
+        if sinceReadinessCheck >= 30 {
+            sinceReadinessCheck = 0
+            if !markingOpenings { refreshReadiness() }
+        }
+
         guard markingOpenings, let scene = sceneView else { return }
         guard let first = pendingCorner else {
             if liveWidthM != nil {
@@ -1172,7 +1227,7 @@ final class ARFloorTraceRunner: NSObject {
             setStatus("Still looking for the floor. Point at it and move slowly")
             return
         }
-        if mode == .floor, floorAreaM2 < minFloorAreaM2 {
+        if mode == .floor, floorAreaM2 < minFloorAreaM2, !sweptLongEnough {
             setStatus(
                 "Nearly ready. Walk the room slowly with the phone pointed at "
                     + "the floor. The more it sees, the more accurate the result."
@@ -1807,7 +1862,15 @@ extension ARFloorTraceRunner: ARSessionDelegate {
 
         switch camera.trackingState {
         case .limited(.initializing):
-            setStatus("Getting ready. Keep moving the phone slowly. A few more seconds.")
+            // Not "a few more seconds" once it plainly has not been.
+            // Saying so repeatedly while somebody stands in a garage
+            // for five minutes is the app insisting on something
+            // they can see is not true.
+            setStatus(
+                sweptLongEnough
+                    ? "Still settling. This room is a hard one to read. Keep the phone moving slowly, and point it at any clear floor you can find."
+                    : "Getting ready. Keep moving the phone slowly. A few more seconds."
+            )
         case .limited(.excessiveMotion):
             setStatus("Too fast. Move the phone more slowly")
         case .limited(.insufficientFeatures):
@@ -1963,16 +2026,38 @@ extension ARFloorTraceRunner: ARSCNViewDelegate {
          * under the furniture, not so much that a cluttered room
          * can never reach it.
          */
+        /*
+         * All the floor, added up, not the biggest piece of it.
+         *
+         * This took the largest single plane. In an ordinary room
+         * that is nearly the same thing, because the floor comes
+         * back as one plane that grows. In a cluttered one it is
+         * not: ARKit fits the gaps between the clutter as separate
+         * planes, half a square metre each, and the largest of them
+         * never reaches the threshold however long anybody sweeps.
+         *
+         * So the gate could not be cleared at all. Reported from a
+         * garage, stuck five minutes on "a few more seconds" with
+         * no way forward but Cancel, in exactly the kind of room
+         * somebody most wants measured.
+         *
+         * Keyed by anchor so an update replaces that plane's
+         * contribution rather than adding a second copy of it, and
+         * so a plane ARKit merges away stops counting.
+         */
         let size = planeSize(plane)
         if abs(y - (floorY ?? y)) < 0.15 {
-            floorAreaM2 = max(floorAreaM2, Double(size.w * size.h))
+            floorPlaneAreas[plane.identifier] = Double(size.w * size.h)
+            floorAreaM2 = floorPlaneAreas.values.reduce(0, +)
         }
 
         if floorY == nil || y < floorY! {
             let firstFloor = floorY == nil
             floorY = y
             if firstFloor {
-                floorAreaM2 = Double(size.w * size.h)
+                floorFoundAt = Date()
+                floorPlaneAreas = [plane.identifier: Double(size.w * size.h)]
+                floorAreaM2 = floorPlaneAreas.values.reduce(0, +)
                 setStatus(
                     "Floor found. Keep sweeping it slowly for a moment so the "
                         + "measurements are accurate"
