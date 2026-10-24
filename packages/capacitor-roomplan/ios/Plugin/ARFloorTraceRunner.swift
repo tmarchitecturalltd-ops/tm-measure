@@ -169,6 +169,8 @@ final class ARFloorTraceRunner: NSObject {
     private var pendingCorner: SCNVector3?
     /// The wall that corner landed on. The second has to match.
     private var pendingWallId: UUID?
+    /// That wall's outward normal, for the coplanarity check.
+    private var pendingWallNormal: SIMD3<Float>?
     private var openingKind: OpeningKind = .window
     /// True once the floor is finished and we are marking openings.
     private var markingOpenings = false
@@ -483,8 +485,8 @@ final class ARFloorTraceRunner: NSObject {
         NSLayoutConstraint.activate([
             hint.centerXAnchor.constraint(equalTo: kinds.centerXAnchor),
             hint.bottomAnchor.constraint(equalTo: kinds.topAnchor, constant: -14),
-            hint.widthAnchor.constraint(equalToConstant: 132),
-            hint.heightAnchor.constraint(equalToConstant: 66),
+            hint.widthAnchor.constraint(equalToConstant: 150),
+            hint.heightAnchor.constraint(equalToConstant: 74),
         ])
         NSLayoutConstraint.activate([
             kinds.centerXAnchor.constraint(equalTo: cornerRow.centerXAnchor),
@@ -1046,6 +1048,11 @@ final class ARFloorTraceRunner: NSObject {
         guard let first = pendingCorner else {
             pendingCorner = p
             pendingWallId = anchorId
+            pendingWallNormal = SIMD3<Float>(
+                found.worldTransform.columns.1.x,
+                found.worldTransform.columns.1.y,
+                found.worldTransform.columns.1.z
+            )
             dropMarker(at: p, colour: .systemBlue)
             // A short vertical bar, so the first tap reads as an
             // edge of something rather than a dot in space. Half
@@ -1053,16 +1060,41 @@ final class ARFloorTraceRunner: NSObject {
             // look like one side of an opening.
             drawSpan(
                 from: SCNVector3(p.x, p.y - 0.4, p.z),
-                to: SCNVector3(p.x, p.y + 0.4, p.z)
+                to: SCNVector3(p.x, p.y + 0.4, p.z),
+                name: "tm-guide"
             )
             setStatus(openingPrompt())
             refreshOpeningCount()
             return
         }
 
-        if let want = pendingWallId, let got = anchorId, want != got {
-            setStatus("Different wall. Both edges are in the same wall")
-            return
+        /*
+         * Same wall, measured as a plane rather than as an anchor.
+         *
+         * This compared ARPlaneAnchor identifiers, and that was too
+         * strict in exactly the situation it was written for.
+         * ARKit fragments a wall into several anchors wherever
+         * something interrupts it, and a doorway interrupts it:
+         * the jamb on one side and the jamb on the other are
+         * frequently two anchors on one physical wall. So marking
+         * a door correctly, left edge then right edge, was being
+         * refused with "different wall" -- which is the app
+         * contradicting what the customer can plainly see.
+         *
+         * The real question is whether the second tap lies in the
+         * same plane as the first, and that is answered by
+         * geometry: the distance from the first tap's plane,
+         * measured along its normal. Within 250 mm is one wall,
+         * including the reveal depth of a thick one. The wall
+         * opposite in a corridor is a metre away and still
+         * refused, which is the case this guard exists for.
+         */
+        if let n = pendingWallNormal {
+            let delta = SIMD3<Float>(p.x - first.x, p.y - first.y, p.z - first.z)
+            if abs(simd_dot(n, delta)) > 0.25 {
+                setStatus("That's a different wall. Both edges are in one wall")
+                return
+            }
         }
 
         let w = distance(first, p)
@@ -1120,6 +1152,10 @@ final class ARFloorTraceRunner: NSObject {
         liveWidthM = nil
         pendingCorner = nil
         pendingWallId = nil
+        pendingWallNormal = nil
+        // The upright guide has done its job; leaving it turns a
+        // finished opening into an L of blue lines.
+        removeMarker(named: "tm-guide")
         dropMarker(at: p, colour: .systemBlue)
         drawSpan(from: first, to: p)
         setStatus(
@@ -1527,15 +1563,15 @@ final class ARFloorTraceRunner: NSObject {
             if pendingCorner != nil {
                 pendingCorner = nil
                 pendingWallId = nil
-                // The dot and the guide bar above it.
-                removeLastMarker()
+                pendingWallNormal = nil
+                removeMarker(named: "tm-guide")
                 removeLastMarker()
                 setStatus(openingPrompt())
             } else if !openings.isEmpty {
                 openings.removeLast()
-                // Four nodes to a finished opening: the first dot
-                // and its guide, the second dot, and the span.
-                removeLastMarker()
+                // Three nodes to a finished opening: both dots and
+                // the span between them. The upright guide was
+                // taken away when the pair completed.
                 removeLastMarker()
                 removeLastMarker()
                 removeLastMarker()
@@ -1565,7 +1601,11 @@ final class ARFloorTraceRunner: NSObject {
      * Carries the marker name so Undo takes it away with the
      * corners it belongs to.
      */
-    private func drawSpan(from a: SCNVector3, to b: SCNVector3) {
+    private func drawSpan(
+        from a: SCNVector3,
+        to b: SCNVector3,
+        name: String = "tm-marker"
+    ) {
         let dx = b.x - a.x
         let dy = b.y - a.y
         let dz = b.z - a.z
@@ -1578,7 +1618,7 @@ final class ARFloorTraceRunner: NSObject {
         let bar = SCNCylinder(radius: 0.005, height: CGFloat(length))
         bar.firstMaterial?.diffuse.contents = UIColor.systemBlue
         let node = SCNNode(geometry: bar)
-        node.name = "tm-marker"
+        node.name = name
         node.position = SCNVector3((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2)
         // A cylinder stands up its own y axis, so it has to be laid
         // along the span: rotate y onto the direction between the
@@ -1599,6 +1639,12 @@ final class ARFloorTraceRunner: NSObject {
             )
         }
         sceneView?.scene.rootNode.addChildNode(node)
+    }
+
+    private func removeMarker(named: String) {
+        sceneView?.scene.rootNode.childNodes
+            .filter { $0.name == named }
+            .forEach { $0.removeFromParentNode() }
     }
 
     private func removeLastMarker() {
@@ -1637,9 +1683,7 @@ final class ARFloorTraceRunner: NSObject {
          * feedback for a phase that has ended, and the corners
          * they marked are recorded.
          */
-        sceneView?.scene.rootNode.childNodes
-            .filter { $0.name == "tm-marker" }
-            .forEach { $0.removeFromParentNode() }
+        removeMarker(named: "tm-marker")
 
         /*
          * Said once, at the start, because it answers a question
@@ -1716,7 +1760,8 @@ final class ARFloorTraceRunner: NSObject {
         if pendingCorner != nil {
             pendingCorner = nil
             pendingWallId = nil
-            removeLastMarker()
+            pendingWallNormal = nil
+            removeMarker(named: "tm-guide")
             removeLastMarker()
             refreshOpeningCount()
         }
@@ -2244,33 +2289,52 @@ final class DoorwayHintView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = .clear
+        /*
+         * A dark chip behind it, so it reads as a diagram.
+         *
+         * It was bare white lines on the camera feed, drawn over
+         * the actual door, and the first thing reported was not
+         * being sure what it was. That is the right confusion to
+         * have: everything else drawn in white or blue on this
+         * screen is in the room, so a wall-shaped outline floating
+         * on top looks like something the sensor has found rather
+         * than a key to what the buttons underneath do.
+         *
+         * Sitting it on a panel moves it out of the scene and into
+         * the interface, which is where it belongs.
+         */
+        backgroundColor = UIColor(white: 0, alpha: 0.55)
+        layer.cornerRadius = 14
+        layer.cornerCurve = .continuous
         isOpaque = false
         isUserInteractionEnabled = false
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
-    override var intrinsicContentSize: CGSize { CGSize(width: 132, height: 66) }
+    override var intrinsicContentSize: CGSize { CGSize(width: 150, height: 74) }
 
     override func draw(_ rect: CGRect) {
-        let w = rect.width
-        let h = rect.height
+        // Inset, so the drawing does not touch the edge of its own
+        // panel and read as a cropped piece of something larger.
+        let pad: CGFloat = 12
+        let w = rect.width - pad * 2
+        let h = rect.height - pad * 2
         // The opening takes the middle half, leaving a stub of wall
         // each side so it reads as a hole in something rather than
         // as a free-standing rectangle.
-        let openingLeft = w * 0.28
-        let openingRight = w * 0.72
-        let floorY = h * 0.84
-        let headY = h * 0.18
+        let openingLeft = pad + w * 0.28
+        let openingRight = pad + w * 0.72
+        let floorY = pad + h * 0.84
+        let headY = pad + h * 0.18
 
         let wall = UIBezierPath()
-        wall.move(to: CGPoint(x: 0, y: floorY))
+        wall.move(to: CGPoint(x: pad, y: floorY))
         wall.addLine(to: CGPoint(x: openingLeft, y: floorY))
         wall.addLine(to: CGPoint(x: openingLeft, y: headY))
         wall.addLine(to: CGPoint(x: openingRight, y: headY))
         wall.addLine(to: CGPoint(x: openingRight, y: floorY))
-        wall.addLine(to: CGPoint(x: w, y: floorY))
+        wall.addLine(to: CGPoint(x: pad + w, y: floorY))
         UIColor.white.withAlphaComponent(0.9).setStroke()
         wall.lineWidth = 2.5
         wall.lineJoinStyle = .round
