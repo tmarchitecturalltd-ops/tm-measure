@@ -274,6 +274,8 @@ final class ARFloorTraceRunner: NSObject {
     private var cornerStepper: UIStackView?
     /// Door / window / opening, shown in its place.
     private var kindPicker: UISegmentedControl?
+    /// The drawing of where to tap. See DoorwayHintView.
+    private var doorwayHint: DoorwayHintView?
     private var doneButton: UIButton?
 
     init(
@@ -470,6 +472,20 @@ final class ARFloorTraceRunner: NSObject {
         kinds.isHidden = true
         vc.view.addSubview(kinds)
         kindPicker = kinds
+
+        // The drawing of where to tap, directly above the picker
+        // that says what is being tapped. See DoorwayHintView.
+        let hint = DoorwayHintView(frame: .zero)
+        hint.translatesAutoresizingMaskIntoConstraints = false
+        hint.isHidden = true
+        vc.view.addSubview(hint)
+        doorwayHint = hint
+        NSLayoutConstraint.activate([
+            hint.centerXAnchor.constraint(equalTo: kinds.centerXAnchor),
+            hint.bottomAnchor.constraint(equalTo: kinds.topAnchor, constant: -14),
+            hint.widthAnchor.constraint(equalToConstant: 132),
+            hint.heightAnchor.constraint(equalToConstant: 66),
+        ])
         NSLayoutConstraint.activate([
             kinds.centerXAnchor.constraint(equalTo: cornerRow.centerXAnchor),
             kinds.centerYAnchor.constraint(equalTo: cornerRow.centerYAnchor),
@@ -1019,10 +1035,7 @@ final class ARFloorTraceRunner: NSObject {
             ),
             let found = scene.session.raycast(q).first
         else {
-            setStatus(
-                "Not on a wall yet. Sweep the phone across the wall around the opening, then "
-                    + openingPrompt()
-            )
+            setStatus("Not on a wall. Sweep across it, then tap")
             return
         }
 
@@ -1048,16 +1061,13 @@ final class ARFloorTraceRunner: NSObject {
         }
 
         if let want = pendingWallId, let got = anchorId, want != got {
-            setStatus(
-                "That's a different wall. Both sides of an opening are in one wall. "
-                    + openingPrompt()
-            )
+            setStatus("Different wall. Both sides are in one wall")
             return
         }
 
         let w = distance(first, p)
         if w < 0.15 {
-            setStatus("Too close to the first tap. " + openingPrompt())
+            setStatus("Too close. " + openingPrompt())
             return
         }
         /*
@@ -1075,8 +1085,7 @@ final class ARFloorTraceRunner: NSObject {
         let maxW: Float = openingKind == .door ? 2.0 : 3.5
         if w > maxW {
             setStatus(
-                "That's \(String(format: "%.1f", w)) m apart, too wide for a \(openingKind.rawValue). "
-                    + openingPrompt()
+                "\(String(format: "%.1f", w)) m apart, too wide for a \(openingKind.rawValue)"
             )
             return
         }
@@ -1089,8 +1098,7 @@ final class ARFloorTraceRunner: NSObject {
         dropMarker(at: p, colour: .systemBlue)
         drawSpan(from: first, to: p)
         setStatus(
-            "\(openingKind.rawValue.capitalized), \(String(format: "%.2f", w)) m. "
-                + "Mark another, or press Done."
+            "\(openingKind.rawValue.capitalized), \(String(format: "%.2f", w)) m"
         )
         refreshOpeningCount()
     }
@@ -1167,6 +1175,7 @@ final class ARFloorTraceRunner: NSObject {
     private func refreshOpeningCount() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            self.doorwayHint?.step = self.pendingCorner == nil ? 0 : 1
             let n = self.openings.count
             let half = self.pendingCorner != nil
 
@@ -1496,7 +1505,7 @@ final class ARFloorTraceRunner: NSObject {
                 // The dot and the guide bar above it.
                 removeLastMarker()
                 removeLastMarker()
-                setStatus("Started that one again. " + openingPrompt())
+                setStatus(openingPrompt())
             } else if !openings.isEmpty {
                 openings.removeLast()
                 // Four nodes to a finished opening: the first dot
@@ -1586,6 +1595,7 @@ final class ARFloorTraceRunner: NSObject {
         markingOpenings = true
         cornerStepper?.isHidden = true
         kindPicker?.isHidden = false
+        doorwayHint?.isHidden = false
 
         /*
          * Clear the floor corners off the screen.
@@ -1634,11 +1644,22 @@ final class ARFloorTraceRunner: NSObject {
      * the door.
      */
     private func openingPrompt() -> String {
-        let kind = openingKind.rawValue
+        /*
+         * Four words, because the picture below is doing the
+         * explaining now.
+         *
+         * Two rewrites of this sentence did not land -- "I still
+         * don't know where I was meant to click" -- and a third,
+         * longer one was not going to. Somebody holding a phone up
+         * in a corridor is not reading a sentence about frames and
+         * reveals; they are looking for where the dot goes, which
+         * is a thing to show rather than describe. See
+         * DoorwayHintView.
+         */
         if pendingCorner == nil {
-            return "Tap 1 of 2: one side of the \(kind), where the frame meets the wall."
+            return "Tap one side of the \(openingKind.rawValue)"
         }
-        return "Tap 2 of 2: the other side of the same \(kind)."
+        return "Now the other side"
     }
 
     @objc private func kindChanged(_ sender: UISegmentedControl) {
@@ -1767,8 +1788,7 @@ final class ARFloorTraceRunner: NSObject {
         if markingOpenings, openings.isEmpty, !confirmedNoOpenings {
             confirmedNoOpenings = true
             setStatus(
-                "No doors or windows marked yet. Press Done again if this room "
-                    + "really has none, or mark them now."
+                "Nothing marked. Press Done again if this room has none"
             )
             return
         }
@@ -2148,6 +2168,94 @@ extension ARFloorTraceRunner: ARSCNViewDelegate {
         }
         if ceilingY == nil || y > ceilingY! {
             ceilingY = y
+        }
+    }
+}
+
+/**
+ * A picture of where to tap.
+ *
+ * Two rounds of rewording did not fix "I still don't know where I
+ * was meant to click", and at that point more words are not the
+ * answer: the thing being described is a position on a physical
+ * object, and a sentence about frames and reveals is a worse way
+ * to convey that than a drawing of it.
+ *
+ * So: a wall in section, an opening in it, and a dot on each
+ * jamb. The one that is wanted next is filled and the other is an
+ * outline, which answers "which tap am I on" at a glance and in
+ * no language at all.
+ *
+ * Drawn rather than shipped as an asset because it has to match
+ * the markers in the camera view exactly -- same blue, same
+ * roundness -- and a PNG would drift from them the first time
+ * either changed.
+ */
+@available(iOS 13.0, *)
+final class DoorwayHintView: UIView {
+
+    /// 0 for the first tap, 1 for the second.
+    var step: Int = 0 {
+        didSet { if step != oldValue { setNeedsDisplay() } }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+        isOpaque = false
+        isUserInteractionEnabled = false
+    }
+
+    required init?(coder: NSCoder) { fatalError("not used") }
+
+    override var intrinsicContentSize: CGSize { CGSize(width: 132, height: 66) }
+
+    override func draw(_ rect: CGRect) {
+        let w = rect.width
+        let h = rect.height
+        // The opening takes the middle half, leaving a stub of wall
+        // each side so it reads as a hole in something rather than
+        // as a free-standing rectangle.
+        let openingLeft = w * 0.28
+        let openingRight = w * 0.72
+        let floorY = h * 0.84
+        let headY = h * 0.18
+
+        let wall = UIBezierPath()
+        wall.move(to: CGPoint(x: 0, y: floorY))
+        wall.addLine(to: CGPoint(x: openingLeft, y: floorY))
+        wall.addLine(to: CGPoint(x: openingLeft, y: headY))
+        wall.addLine(to: CGPoint(x: openingRight, y: headY))
+        wall.addLine(to: CGPoint(x: openingRight, y: floorY))
+        wall.addLine(to: CGPoint(x: w, y: floorY))
+        UIColor.white.withAlphaComponent(0.9).setStroke()
+        wall.lineWidth = 2.5
+        wall.lineJoinStyle = .round
+        wall.stroke()
+
+        // Dots on the jambs, two thirds of the way up, which is
+        // where a hand naturally goes and is as valid as anywhere
+        // else now that height does not matter.
+        let dotY = headY + (floorY - headY) * 0.55
+        drawDot(at: CGPoint(x: openingLeft, y: dotY), filled: step == 0)
+        drawDot(at: CGPoint(x: openingRight, y: dotY), filled: step == 1)
+    }
+
+    private func drawDot(at p: CGPoint, filled: Bool) {
+        let r: CGFloat = 7
+        let circle = UIBezierPath(
+            ovalIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)
+        )
+        if filled {
+            UIColor.systemBlue.setFill()
+            circle.fill()
+            UIColor.white.setStroke()
+            circle.lineWidth = 2
+            circle.stroke()
+        } else {
+            UIColor.white.withAlphaComponent(0.55).setStroke()
+            circle.lineWidth = 2
+            circle.stroke()
         }
     }
 }
