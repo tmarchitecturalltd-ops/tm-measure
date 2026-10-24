@@ -658,6 +658,58 @@ export function outlineProblem(
     );
   }
 
+  /*
+   * A four-sided room whose opposite walls disagree.
+   *
+   * Reported from a small rectangular basement cupboard that came
+   * back 0.82, 2.44, 0.67 and 1.79: a trapezium, from a room with
+   * four right angles in it. One corner had landed about 600 mm
+   * out.
+   *
+   * Nothing caught it. squareUpOutline behaved correctly and that
+   * is the point -- it squared the three walls that were a degree
+   * or two off and left the fourth at the 38 degrees it was
+   * measured at, because a wall that far off axis is a splay and
+   * flattening real splays is the one thing that function must
+   * never do. The shape it produced is a faithful drawing of four
+   * taps, one of which was wrong.
+   *
+   * So this is a warning rather than a correction. In a
+   * four-cornered room the opposite walls are the same length,
+   * near enough, in every house anybody is likely to survey; when
+   * they are not, the likeliest explanation by far is a corner in
+   * the wrong place, and the person holding the phone is the one
+   * who can tell.
+   *
+   * Both tests have to pass. A fifth is a fifth whether the room
+   * is two metres or ten, so the proportion matters; and 250 mm
+   * of disagreement on a cupboard is a real fault while 250 mm
+   * across a church hall is nothing.
+   */
+  if (n === 4) {
+    const len = (i: number) =>
+      Math.hypot(
+        polygon[(i + 1) % 4].x - polygon[i].x,
+        polygon[(i + 1) % 4].z - polygon[i].z,
+      );
+    for (const [a, b] of [
+      [0, 2],
+      [1, 3],
+    ]) {
+      const la = len(a);
+      const lb = len(b);
+      const gap = Math.abs(la - lb);
+      if (gap > 0.25 && gap / Math.max(la, lb) > 0.2) {
+        return (
+          `Two walls that should match are ${la.toFixed(2)} m and ` +
+          `${lb.toFixed(2)} m. In a four-cornered room they'd be about ` +
+          "the same, so one corner is probably in the wrong place. " +
+          "Worth tracing again."
+        );
+      }
+    }
+  }
+
   return null;
 }
 

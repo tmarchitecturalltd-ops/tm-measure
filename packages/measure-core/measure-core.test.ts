@@ -2056,6 +2056,45 @@ test("a trace with an untappable corner is flagged, a real room is not", () => {
   ];
   assert.equal(outlineProblem(bay), null, "a bay is a room, not a fault");
 
+  /*
+   * The basement cupboard: 0.82, 2.44, 0.67, 1.79 from a room
+   * with four right angles. Opposite walls 650 mm apart, which is
+   * one corner in the wrong place rather than a trapezoidal room.
+   */
+  const trapezium = [
+    { x: 0, z: 0 },
+    { x: 0.82, z: 0 },
+    { x: 0.90, z: 2.44 },
+    { x: 0.15, z: 1.86 },
+  ];
+  const lopsided = outlineProblem(trapezium);
+  assert.ok(lopsided, "opposite walls that disagree must be flagged");
+  assert.match(lopsided!, /corner/i, "and blamed on the corner, not the room");
+
+  // A rectangle, and a room that is genuinely a bit off square,
+  // both pass. The second is the one that matters: a warning on
+  // every slightly wonky room is a warning nobody reads.
+  assert.equal(
+    outlineProblem([
+      { x: 0, z: 0 },
+      { x: 4, z: 0 },
+      { x: 4, z: 3 },
+      { x: 0, z: 3 },
+    ]),
+    null,
+    "a rectangle is fine",
+  );
+  assert.equal(
+    outlineProblem([
+      { x: 0, z: 0 },
+      { x: 4.06, z: 0 },
+      { x: 4.0, z: 3.04 },
+      { x: 0.02, z: 2.98 },
+    ]),
+    null,
+    "and so is a room a few centimetres out",
+  );
+
   assert.equal(outlineProblem(undefined), null);
 });
 
