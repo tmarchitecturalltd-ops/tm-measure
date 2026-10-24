@@ -1014,6 +1014,7 @@ export default function MeasureIntakeForm() {
       } satisfies RoomDraft;
     });
 
+    let keptCount = 0;
     setRooms((prev) => {
       // Drop rooms the customer never filled in — otherwise a scan of
       // six rooms lands alongside the blank starter room and they have
@@ -1021,10 +1022,30 @@ export default function MeasureIntakeForm() {
       const kept = prev.filter(
         (r) => r.name.trim() || r.walls.some((w) => w.lengthM.trim()),
       );
+      keptCount = kept.length;
       return [...kept, ...built];
     });
     setPlacements((prev) => ({ ...prev, ...nextPlacements }));
-    setActiveRoomIndex(0);
+    /*
+     * Open on the first room the scan produced, not on room zero.
+     *
+     * A room that survives the filter above has a name but may
+     * never have been measured -- somebody who typed "Kitchen"
+     * before deciding to scan the whole property instead. Landing
+     * on index 0 then opens the survey on that room, which is the
+     * one room the scan did not fill in, and the flow asks for a
+     * scan of it.
+     *
+     * Reported as: scan the whole property, press Finished, and
+     * the screen says "Room 1 of 2" and will not move on. The room
+     * being complained about was not one of the two that had just
+     * been scanned.
+     *
+     * The leftover is still there and still reachable; it is
+     * simply not what the customer is shown first, because what
+     * they just did was scan the property.
+     */
+    setActiveRoomIndex(keptCount);
 
     /*
      * Land in the guided flow, on the rooms step.

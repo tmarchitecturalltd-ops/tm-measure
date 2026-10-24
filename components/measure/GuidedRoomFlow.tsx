@@ -312,6 +312,23 @@ export default function GuidedRoomFlow({
   const [manualEscape, setManualEscape] = useState(false);
   const mustScan = scanRequired && !scanned && !manualEscape;
 
+  /**
+   * Has anything else in this survey been scanned?
+   *
+   * If so, this room is a leftover rather than the next job: an
+   * empty room from before a whole-property scan, which measured
+   * the whole property and had no reason to fill this one in.
+   *
+   * Reported from the field. Scan the whole property, press
+   * Finished, and the flow opens on "Room 1 of 2" demanding a scan
+   * of a room the customer has just scanned along with everything
+   * else, with no way past it. The escape below only appeared when
+   * a scan had actually failed, which this one had not, so the
+   * Next button simply refused and said to go and scan.
+   */
+  const somethingElseScanned =
+    (allRooms ?? []).some((r) => r.id !== room.id && r.measuredByScan === true);
+
   const steps: StepId[] = useMemo(
     () =>
       /*
@@ -445,7 +462,11 @@ export default function GuidedRoomFlow({
    */
   const blocked = (): string | null => {
     if (step === "scan" && !scanned) {
-      return "Scan the room to carry on. It only takes a minute.";
+      // Not a demand when the property has already been scanned.
+      // See somethingElseScanned.
+      return somethingElseScanned
+        ? "This room hasn't been measured. Scan it, or fill it in by hand below."
+        : "Scan the room to carry on. It only takes a minute.";
     }
     if (step === "name" && !room.name.trim()) {
       return "Give the room a name so we know which one it is.";
@@ -933,11 +954,12 @@ export default function GuidedRoomFlow({
               will not settle. Being stuck in your own hallway with a
               button that does nothing is the failure this app has
               produced more than once. */}
-          {scanFailed && !manualEscape && (
+          {(scanFailed || somethingElseScanned) && !manualEscape && (
             <div className="rounded-xl border border-outline-variant/40 p-4">
               <p className="text-sm text-on-surface-variant">
-                Scanning didn&apos;t work? You can measure this room by hand
-                instead. A tape measure and the four wall lengths.
+                {somethingElseScanned && !scanFailed
+                  ? "Already scanned this one as part of the property? Fill it in by hand, or remove it from the Steps menu."
+                  : "Scanning didn't work? You can measure this room by hand instead. A tape measure and the four wall lengths."}
               </p>
               <button
                 type="button"
