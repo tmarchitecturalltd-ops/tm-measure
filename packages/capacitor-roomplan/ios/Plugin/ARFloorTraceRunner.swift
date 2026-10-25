@@ -2188,30 +2188,55 @@ extension ARFloorTraceRunner: ARSessionDelegate {
             break
         }
 
+        /*
+         * Floor talk belongs to the floor step.
+         *
+         * These messages are about getting the room's outline
+         * traced, and they kept firing while the customer was
+         * marking doors and windows -- so somebody with a door
+         * already measured was being told to point at clear floor
+         * and that the room was hard to read, over the top of the
+         * instruction for the thing they were actually doing.
+         * Reported as being told to focus on the floor when
+         * pressing Done was in fact fine.
+         *
+         * Once the outline is traced the floor is finished with.
+         * What still matters while marking openings is tracking
+         * genuinely failing, because that moves the whole frame,
+         * and those messages stay. Everything else gives way to
+         * the opening prompt.
+         */
         switch camera.trackingState {
         case .limited(.initializing):
-            // Not "a few more seconds" once it plainly has not been.
-            // Saying so repeatedly while somebody stands in a garage
-            // for five minutes is the app insisting on something
-            // they can see is not true.
-            setStatus(
-                sweptLongEnough
-                    ? "Still settling. This room is a hard one to read. Keep the phone moving slowly, and point it at any clear floor you can find."
-                    : "Getting ready. Keep moving the phone slowly. A few more seconds."
-            )
+            if markingOpenings {
+                setStatus(openingPrompt())
+            } else {
+                // Not "a few more seconds" once it plainly has not
+                // been. Saying so repeatedly while somebody stands
+                // in a garage for five minutes is the app insisting
+                // on something they can see is not true.
+                setStatus(
+                    sweptLongEnough
+                        ? "Still settling. This room is a hard one to read. Keep the phone moving slowly, and point it at any clear floor you can find."
+                        : "Getting ready. Keep moving the phone slowly. A few more seconds."
+                )
+            }
         case .limited(.excessiveMotion):
             setStatus("Too fast. Move the phone more slowly")
         case .limited(.insufficientFeatures):
             setStatus(
-                "Not enough detail to track. Turn a light on, or point at a "
-                    + "patterned surface for a moment."
+                markingOpenings
+                    ? "Not enough detail here. More light, or aim at the frame rather than flat paint"
+                    : "Not enough detail to track. Turn a light on, or point at a patterned surface for a moment."
             )
         case .limited(.relocalizing):
             setStatus("Lost the room for a second. Hold still while it finds it again")
         case .notAvailable:
             setStatus("Tracking unavailable")
         case .normal:
-            if floorY == nil && mode == .floor {
+            if markingOpenings {
+                setStatus(openingPrompt())
+            } else if floorY == nil && mode == .floor {
                 setStatus("Nearly. Point the phone down at the floor and move slowly")
             }
         default:
