@@ -284,10 +284,25 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionDe
          * may be exactly what somebody wants, and Done works
          * throughout.
          */
+        /*
+         * `floors` is iOS 17. This runner is iOS 16.
+         *
+         * Guarded the same way the serialiser below already guards
+         * it -- which is the pattern I should have followed the
+         * first time, and did not, so the build failed on exactly
+         * this line. On iOS 16 there is no floor-surface API at
+         * all, so the wall count carries the judgement alone: four
+         * walls is still an ordinary room captured properly, and
+         * the prompt is advice rather than a gate.
+         */
         liveWallCount = room.walls.count
-        liveHasFloor = !room.floors.isEmpty
+        if #available(iOS 17.0, *) {
+            liveHasFloor = !room.floors.isEmpty
+        } else {
+            liveHasFloor = true
+        }
 
-        if !enoughPromptShown, room.walls.count >= 4, !room.floors.isEmpty {
+        if !enoughPromptShown, room.walls.count >= 4, liveHasFloor {
             enoughPromptShown = true
             DispatchQueue.main.async { [weak self] in
                 self?.modalVC?.showCoaching(
