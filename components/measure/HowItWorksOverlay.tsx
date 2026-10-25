@@ -115,7 +115,7 @@ export default function HowItWorksOverlay() {
       aria-modal="true"
       aria-label="How it works"
       className="fixed inset-0 z-[60] flex flex-col"
-      style={{ backgroundColor: "#fcf9f5" }}
+      style={{ backgroundColor: "#cbd0d2" }}
     >
       <div
         className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-6"

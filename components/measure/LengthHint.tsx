@@ -69,7 +69,7 @@ export default function LengthHint({
     // person to work out what we're objecting to.
     const asCm = m / 100;
     return (
-      <p className="mt-1 text-sm font-semibold text-[#8a6f2f]">
+      <p className="mt-1 text-sm font-semibold text-primary">
         {m} metres is about {feet}, which is very large for {what}.
         {asCm >= min && asCm <= max
           ? ` Did you mean ${asCm} metres (${metresToFeetInches(asCm)})? If you measured in centimetres, divide by 100.`
@@ -81,7 +81,7 @@ export default function LengthHint({
 
   if (m < min) {
     return (
-      <p className="mt-1 text-sm font-semibold text-[#8a6f2f]">
+      <p className="mt-1 text-sm font-semibold text-primary">
         {m} metres is about {feet}, which is very small for {what}. Worth a
         second look. But you can carry on either way.
       </p>

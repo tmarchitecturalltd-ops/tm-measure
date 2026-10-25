@@ -6946,7 +6946,7 @@ export default function MeasureIntakeForm() {
               <button
                 type="button"
                 onClick={takeUndo}
-                className="rounded-full bg-[#e7c177] px-5 py-2 text-base font-bold text-[#181e22]"
+                className="rounded-full bg-primary px-5 py-2 text-base font-bold text-on-primary"
               >
                 Undo
               </button>

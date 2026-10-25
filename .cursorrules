@@ -1,0 +1,10 @@
+# AI rules for this workspace
+
+See AGENTS.md. It is the single source of truth for agent rules here and
+is included by CLAUDE.md.
+
+For any UI work, read docs/design-system/DESIGN_SYSTEM.md first.
+
+This file is a pointer on purpose: duplicating the rules across
+.cursorrules, .windsurfrules and AGENTS.md guarantees they drift apart,
+and a stale rule is worse than no rule.
