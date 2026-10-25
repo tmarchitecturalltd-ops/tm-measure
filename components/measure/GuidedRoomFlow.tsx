@@ -344,6 +344,26 @@ export default function GuidedRoomFlow({
        * is which room each flight starts in. The data still hangs off a
        * room, because that is what the plan needs to draw against.
        */
+      /*
+       * Three shapes of survey, and only one of them involves
+       * typing a measurement.
+       *
+       * The product promise is that the phone measures the room, so
+       * a typed length is not a convenience -- it is a different and
+       * worse answer wearing the same clothes. A drawing built from
+       * somebody's estimate of a wall is indistinguishable, once it
+       * reaches CAD, from one the sensor measured to the centimetre.
+       *
+       * So: a device that can measure never offers the keyboard. It
+       * scans, then reviews what was measured.
+       *
+       * The last branch is for a device that genuinely cannot
+       * measure -- a desktop browser, or a phone whose camera or
+       * sensors are unavailable. Without it that visitor has no
+       * route through the survey at all, which is the dead end this
+       * flow has been bitten by more than once. It is a fallback for
+       * an incapable device, not a choice offered to a capable one.
+       */
       mustScan
         ? ["name", "scan"]
         : scanned
@@ -946,21 +966,24 @@ export default function GuidedRoomFlow({
               : "Two parts, both tapping. First the corners of the room: aim where the walls meet the floor, not at the furniture. Then the doors and windows, two taps each. It takes a minute or two."}
           </p>
 
-          {/* The way out.
-              Only after a scan has actually failed or been cancelled —
-              not offered up front, because given the choice people take
-              the familiar option and type a worse number than the phone
-              would have measured. But a room that will not scan has to
-              have a route through it: too dark, too large, a sensor that
-              will not settle. Being stuck in your own hallway with a
-              button that does nothing is the failure this app has
-              produced more than once. */}
+          {/* The last resort, and framed as one.
+              The phone measures better than a tape and far better
+              than an estimate, so typing is not an alternative route
+              through this step -- it is a worse answer that the
+              drawing cannot tell apart from a good one. It is offered
+              only after a scan has actually failed, and it now says
+              plainly that measuring again is the better move.
+              It is not removed, because a room that will not scan
+              still has to have a way through: too dark, too large, a
+              sensor that will not settle. Being stuck in your own
+              hallway with a button that does nothing is the failure
+              this app has produced more than once. */}
           {(scanFailed || somethingElseScanned) && !manualEscape && (
             <div className="rounded-xl border border-outline-variant/40 p-4">
               <p className="text-sm text-on-surface-variant">
                 {somethingElseScanned && !scanFailed
-                  ? "Already scanned this one as part of the property? Fill it in by hand, or remove it from the Steps menu."
-                  : "Scanning didn't work? You can measure this room by hand instead. A tape measure and the four wall lengths."}
+                  ? "Already scanned this one as part of the property? Remove it from the Steps menu, or type the sizes if you have them."
+                  : "Try scanning once more if you can \u2014 the phone measures this better than a tape does. If the room won't scan at all, you can type the sizes instead."}
               </p>
               <button
                 type="button"
@@ -970,7 +993,7 @@ export default function GuidedRoomFlow({
                 }}
                 className="mt-3 rounded-full border border-primary px-5 py-2 text-sm font-bold uppercase tracking-widest text-primary"
               >
-                Enter the sizes by hand
+                Type the sizes instead
               </button>
             </div>
           )}
@@ -1259,19 +1282,24 @@ export default function GuidedRoomFlow({
             />
           )}
 
-          {/* An escape hatch, not an invitation.
-              The sensor is more reliable than a person typing, so the
-              default is to accept it. But a scan can get a room wrong,
-              and a customer who can see it is wrong and has no way to
-              say so will either submit something they know is false or
-              give up. */}
-          <button
-            type="button"
-            onClick={onExitGuided}
-            className="w-full justify-start rounded-xl border border-outline-variant/40 px-5 py-3 text-left text-sm font-semibold text-on-surface-variant"
-          >
-            Something looks wrong. Let me edit it
-          </button>
+          {/* Wrong measurement, measured again.
+              This used to drop the customer into the typed form, on
+              the reasoning that somebody who can see a scan is wrong
+              needs a way to say so. The way to say so is to measure
+              it again: the sensor is better than a person with a tape
+              and far better than a person estimating, so correcting
+              it by hand replaces a good number with a worse one and
+              the drawing carries no sign of which it got.
+              The escape is still here. It just goes to the camera. */}
+          {onScanRoom && (
+            <button
+              type="button"
+              onClick={onScanRoom}
+              className="w-full justify-start rounded-xl border border-outline-variant/40 px-5 py-3 text-left text-sm font-semibold text-on-surface-variant"
+            >
+              Something looks wrong. Measure it again
+            </button>
+          )}
         </div>
       )}
 
