@@ -104,7 +104,7 @@ export default function AppButton({
         {eyebrow && (
           <span
             className={`font-label block text-sm font-bold uppercase tracking-[0.15em] ${
-              variant === "primary" ? "text-on-primary/80" : "text-primary"
+              variant === "primary" ? "text-on-primary" : "text-primary"
             }`}
           >
             {eyebrow}
@@ -133,7 +133,7 @@ export default function AppButton({
           <span
             className={`mt-0.5 block truncate text-sm normal-case tracking-normal ${
               variant === "primary"
-                ? "text-on-primary/80"
+                ? "text-on-primary"
                 : "text-on-surface-variant"
             }`}
           >

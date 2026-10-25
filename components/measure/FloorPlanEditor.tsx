@@ -123,9 +123,9 @@ const WINDOW_WIDTHS = [
   { value: "custom", label: "Something else. Type the width" },
 ] as const;
 
-const GOLD = "#b89650";
-const CREAM = "#fcf9f5";
-const DARK = "#1c1c1a";
+const GOLD = "#f15b22";
+const CREAM = "#cbd0d2";
+const DARK = "#181e22";
 /** Minimum visible viewBox in metres so a single small room isn't tiny. */
 const MIN_VIEW_M = 10;
 /** Padding around placed rooms for the auto-fit viewBox, in metres. */
@@ -1714,7 +1714,7 @@ export default function FloorPlanEditor({
               setCurrentFloor(Number(v));
             }}
             style={{ minHeight: 40 }}
-            className="rounded-full border border-[#b89650] bg-white px-3 font-semibold text-[#8a6f2f]"
+            className="rounded-full border border-[#f15b22] bg-white px-3 font-semibold text-[#9c3610]"
           >
             {usedFloors.map((f) => (
               <option key={f} value={f}>
@@ -1738,7 +1738,7 @@ export default function FloorPlanEditor({
                 setZoomRoomId(e.target.value);
               }}
               style={{ minHeight: 40 }}
-              className="min-w-0 max-w-[10rem] truncate rounded-full border border-[#b89650] bg-white px-3 font-semibold text-[#8a6f2f]"
+              className="min-w-0 max-w-[10rem] truncate rounded-full border border-[#f15b22] bg-white px-3 font-semibold text-[#9c3610]"
             >
               {roomsOnFloor.map((r, i) => (
                 <option key={r.id} value={r.id}>
@@ -1758,8 +1758,8 @@ export default function FloorPlanEditor({
             style={{ minHeight: 40 }}
             className={`rounded-full border px-3.5 font-semibold ${
               openPanel === "feature"
-                ? "border-[#b89650] bg-[#b89650] text-white"
-                : "border-[#b89650] text-[#8a6f2f]"
+                ? "border-[#f15b22] bg-[#f15b22] text-white"
+                : "border-[#f15b22] text-[#9c3610]"
             }`}
           >
             Add feature
@@ -1853,8 +1853,8 @@ export default function FloorPlanEditor({
               style={{ minHeight: 40 }}
               className={`rounded-full border px-3.5 font-semibold ${
                 openPanel === c.key
-                  ? "border-[#b89650] bg-[#b89650] text-white"
-                  : "border-[#b89650] text-[#8a6f2f]"
+                  ? "border-[#f15b22] bg-[#f15b22] text-white"
+                  : "border-[#f15b22] text-[#9c3610]"
               }`}
             >
               {c.label}
@@ -1884,7 +1884,7 @@ export default function FloorPlanEditor({
               setManualViewBox(null);
             }}
             style={{ minHeight: 40 }}
-            className="rounded-full border border-[#b89650] px-3.5 font-semibold text-[#8a6f2f]"
+            className="rounded-full border border-[#f15b22] px-3.5 font-semibold text-[#9c3610]"
           >
             Whole floor
           </button>
@@ -1978,7 +1978,7 @@ export default function FloorPlanEditor({
                     // panel off the plan.
                     if (unplacedOnFloor.length === 1) setOpenPanel(null);
                   }}
-                  className="rounded-lg border border-[#b89650] bg-white px-3 py-2 text-left text-sm font-semibold text-[#1c1c1a] shadow-sm transition hover:bg-[#fff8ea]"
+                  className="rounded-lg border border-[#f15b22] bg-white px-3 py-2 text-left text-sm font-semibold text-[#181e22] shadow-sm transition hover:bg-[#f2f4f4]"
                 >
                   <span className="block">{r.name || "Room"}</span>
                   <span className="text-sm font-normal text-[#6e6a5f]">
@@ -2129,7 +2129,7 @@ export default function FloorPlanEditor({
             <button
               type="button"
               onClick={insertIntoSelected}
-              className="rounded-full bg-[#b89650] px-4 py-2 text-sm font-bold uppercase tracking-widest text-white"
+              className="rounded-full bg-[#f15b22] px-4 py-2 text-sm font-bold uppercase tracking-widest text-white"
             >
               Add
             </button>
@@ -2495,7 +2495,7 @@ export default function FloorPlanEditor({
               <g key={r.id} transform={transform}>
                 <path
                   d={pathD}
-                  fill="#fff8ea"
+                  fill="#f2f4f4"
                   fillOpacity={0.92}
                   stroke={GOLD}
                   strokeWidth={1.6}
@@ -2591,7 +2591,7 @@ export default function FloorPlanEditor({
                   const py1 = y1 + (y2 - y1) * t1;
                   const px2 = x1 + (x2 - x1) * t2;
                   const py2 = y1 + (y2 - y1) * t2;
-                  const colour = op.kind === "door" ? "#b89650" : "#5a6a80";
+                  const colour = op.kind === "door" ? "#f15b22" : "#5a6a80";
                   /*
                    * Draggable, and magnetic to the walls.
                    *
@@ -3003,7 +3003,7 @@ export default function FloorPlanEditor({
         {justAdded && (
           <div
             className="pointer-events-none absolute inset-x-3 bottom-3 z-10 rounded-xl px-4 py-2.5 text-center text-sm font-semibold shadow-sm"
-            style={{ backgroundColor: "#1c1c1ae8", color: "#fff8ea" }}
+            style={{ backgroundColor: "#20272beb", color: "#f2f4f4" }}
           >
             {justAdded === "stairs" ? "Stairs" : justAdded === "door" ? "Door" : "Window"}{" "}
             added. Drag it to where it goes
@@ -3018,7 +3018,7 @@ export default function FloorPlanEditor({
         {!justAdded && !doorPromptOff && roomNeedingDoor && onRoomChange && (
           <div
             className="absolute inset-x-3 bottom-3 z-10 flex items-center gap-2 rounded-xl px-3 py-2 shadow-sm"
-            style={{ backgroundColor: "#1c1c1ae8", color: "#fff8ea" }}
+            style={{ backgroundColor: "#20272beb", color: "#f2f4f4" }}
           >
             <span className="min-w-0 flex-1 text-sm font-semibold">
               {roomNeedingDoor.name?.trim() || "This room"} has no doors yet 
@@ -3034,7 +3034,7 @@ export default function FloorPlanEditor({
                 setOpenPanel("feature");
               }}
               style={{ minHeight: 36 }}
-              className="shrink-0 rounded-full bg-[#b89650] px-3.5 text-sm font-bold uppercase tracking-widest text-white"
+              className="shrink-0 rounded-full bg-[#f15b22] px-3.5 text-sm font-bold uppercase tracking-widest text-white"
             >
               Add
             </button>
@@ -3077,7 +3077,7 @@ export default function FloorPlanEditor({
                   type="button"
                   onClick={applyAutoLayout}
                   style={{ minHeight: 48 }}
-                  className="rounded-full bg-[#b89650] px-6 text-sm font-bold uppercase tracking-widest text-white shadow-lg"
+                  className="rounded-full bg-[#f15b22] px-6 text-sm font-bold uppercase tracking-widest text-white shadow-lg"
                 >
                   Put my {unplacedOnFloor.length} room
                   {unplacedOnFloor.length === 1 ? "" : "s"} on the plan
@@ -3086,7 +3086,7 @@ export default function FloorPlanEditor({
                   type="button"
                   onClick={() => setOpenPanel("rooms")}
                   style={{ minHeight: 44 }}
-                  className="rounded-full border-2 border-[#b89650] bg-white/90 px-5 text-sm font-bold uppercase tracking-widest text-[#8a6f2f]"
+                  className="rounded-full border-2 border-[#f15b22] bg-white/90 px-5 text-sm font-bold uppercase tracking-widest text-[#9c3610]"
                 >
                   One at a time
                 </button>
@@ -3097,7 +3097,7 @@ export default function FloorPlanEditor({
                   type="button"
                   onClick={onAddRoom}
                   style={{ minHeight: 48 }}
-                  className="rounded-full border-2 border-[#b89650] bg-white/90 px-6 text-sm font-bold uppercase tracking-widest text-[#8a6f2f]"
+                  className="rounded-full border-2 border-[#f15b22] bg-white/90 px-6 text-sm font-bold uppercase tracking-widest text-[#9c3610]"
                 >
                   Measure another room
                 </button>
@@ -3123,11 +3123,11 @@ export default function FloorPlanEditor({
                     key={r.id}
                     type="button"
                     onClick={() => moveRoomToFloor(r.id, currentFloor)}
-                    className="rounded-lg border border-[#d9d3c8] bg-white px-3 py-1.5 text-left text-sm font-semibold text-[#1c1c1a]"
+                    className="rounded-lg border border-[#d9d3c8] bg-white px-3 py-1.5 text-left text-sm font-semibold text-[#181e22]"
                     title={`Currently on ${floorLabel(p.floor)}. Click to move here`}
                   >
                     {r.name || "Room"}
-                    <span className="ml-1 text-sm font-normal text-[#8a6f2f]">
+                    <span className="ml-1 text-sm font-normal text-[#9c3610]">
                       ({floorLabel(p.floor)} → {floorLabel(currentFloor)})
                     </span>
                   </button>

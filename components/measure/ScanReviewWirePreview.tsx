@@ -29,7 +29,7 @@ function WireRoom({
     <mesh rotation={[0.32, 0.58, 0]}>
       <boxGeometry args={[sx, sy, sz]} />
       <meshStandardMaterial
-        color="#b89650"
+        color="#f15b22"
         metalness={0.15}
         roughness={0.55}
         wireframe
@@ -57,7 +57,7 @@ export default function ScanReviewWirePreview({
         <color attach="background" args={["#141311"]} />
         <ambientLight intensity={0.5} />
         <directionalLight position={[5, 6, 4]} intensity={1.15} />
-        <directionalLight position={[-3, 2, -4]} intensity={0.35} color="#b89650" />
+        <directionalLight position={[-3, 2, -4]} intensity={0.35} color="#f15b22" />
         <Suspense fallback={null}>
           <WireRoom width={widthM} length={lengthM} height={heightM} />
         </Suspense>

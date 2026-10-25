@@ -9,7 +9,7 @@
  * or run the scan again ("Rescan Room").
  *
  * Design choices:
- * - Uses the existing TM tokens from app/globals.css (gold #b89650 primary,
+ * - Uses the existing TM tokens from app/globals.css (gold #f15b22 primary,
  *   Manrope body, Noto Serif headline, cream surfaces) so it sits naturally
  *   next to MeasureIntakeForm. The Stitch navy mockup (DESIGN.md) informs
  *   the STRUCTURE (no hard borders, confidence chips, asymmetric layout,
@@ -201,7 +201,7 @@ export default function ScanReviewScreen({
               <button
                 type="button"
                 aria-label="Expand preview"
-                className="absolute bottom-5 right-5 flex items-center justify-center w-14 h-14 rounded-full bg-primary text-on-primary shadow-[0_12px_28px_rgba(184,150,80,0.35)] hover:scale-105 transition-transform active:scale-95"
+                className="absolute bottom-5 right-5 flex items-center justify-center w-14 h-14 rounded-full bg-primary text-on-primary shadow-[0_12px_28px_rgba(241,91,34,0.35)] hover:scale-105 transition-transform active:scale-95"
               >
                 <span className="material-symbols-outlined">fullscreen</span>
               </button>
@@ -232,7 +232,7 @@ export default function ScanReviewScreen({
               </ul>
 
               {/* Tonal summary box — primary/5 background, no border */}
-              <div className="bg-[rgba(184,150,80,0.08)] rounded-lg p-5 flex gap-4 items-start">
+              <div className="bg-[rgba(241,91,34,0.08)] rounded-lg p-5 flex gap-4 items-start">
                 <span
                   className="material-symbols-outlined text-primary mt-0.5"
                   aria-hidden
@@ -275,7 +275,7 @@ export default function ScanReviewScreen({
             <button
               type="button"
               onClick={() => onConfirm(scan)}
-              className="px-10 py-4 rounded-lg font-semibold text-sm text-on-primary bg-gradient-to-r from-primary to-[#d9c292] shadow-[0_10px_24px_rgba(184,150,80,0.25)] hover:shadow-[0_14px_32px_rgba(184,150,80,0.4)] transition-all active:scale-95"
+              className="px-10 py-4 rounded-lg font-semibold text-sm text-on-primary bg-gradient-to-r from-primary to-[#d9c292] shadow-[0_10px_24px_rgba(241,91,34,0.25)] hover:shadow-[0_14px_32px_rgba(241,91,34,0.4)] transition-all active:scale-95"
             >
               Confirm &amp; Proceed
             </button>
@@ -422,8 +422,8 @@ function PlanPreview({
         y={y}
         width={rectW}
         height={rectH}
-        fill="rgba(184,150,80,0.08)"
-        stroke="#b89650"
+        fill="rgba(241,91,34,0.08)"
+        stroke="#f15b22"
         strokeWidth={1.5}
         strokeDasharray="4 4"
       />
@@ -455,8 +455,8 @@ function confidenceChipStyle(c: ScanConfidence) {
       return {
         label: "MEDIUM",
         tone: "text-[#7a5800]",
-        bg: "bg-[rgba(184,150,80,0.14)]",
-        dot: "bg-[#b89650]",
+        bg: "bg-[rgba(241,91,34,0.14)]",
+        dot: "bg-[#f15b22]",
       };
     case "low":
       return {

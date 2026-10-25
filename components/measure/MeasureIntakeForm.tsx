@@ -4045,7 +4045,13 @@ export default function MeasureIntakeForm() {
                   <span
                     className={`flex h-6 w-6 items-center justify-center rounded-full text-sm font-bold ${
                       active
-                        ? "bg-on-primary/20 text-on-primary"
+                        // A light wash, said as a light wash. This was
+                        // bg-on-primary/20, which was a 20% white veil
+                        // while on-primary was white -- and became a
+                        // dark one the moment the accent needed ink on
+                        // it, taking the numeral down to 3.7:1 on the
+                        // step it is meant to be highlighting.
+                        ? "bg-surface-container-lowest/35 text-on-primary"
                         : done
                           ? "bg-primary/15 text-primary"
                           : "bg-surface-container-high text-on-surface-variant"
@@ -4647,7 +4653,7 @@ export default function MeasureIntakeForm() {
                       onChange={(e) =>
                         setRoom(room.id, { cornersSquare: e.target.checked })
                       }
-                      className="mt-0.5 h-4 w-4 accent-[#b89650]"
+                      className="mt-0.5 h-4 w-4 accent-[#f15b22]"
                     />
                     <span className="text-sm leading-relaxed text-on-surface-variant">
                       <span className="font-semibold text-on-surface">
@@ -6530,7 +6536,7 @@ export default function MeasureIntakeForm() {
                     thing the draughtsman actually needs is quietly
                     absent. Nobody was told, at either end. */}
                 {!dxfWillBeAttached && (
-                  <div className="mt-2 rounded-xl border border-[#b89650]/50 bg-primary/10 p-4">
+                  <div className="mt-2 rounded-xl border border-[#f15b22]/50 bg-primary/10 p-4">
                     <p className="text-sm font-semibold text-on-surface">
                       No CAD drawing will be included
                     </p>
@@ -6934,13 +6940,13 @@ export default function MeasureIntakeForm() {
           aria-live="polite"
           className="fixed inset-x-0 bottom-0 z-[60] px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
         >
-          <div className="mx-auto flex max-w-lg flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#1c1c1a] px-5 py-3 text-[#f7f5ef] shadow-2xl">
+          <div className="mx-auto flex max-w-lg flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#181e22] px-5 py-3 text-[#f7f5ef] shadow-2xl">
             <span className="text-base font-semibold">{undoAction.label}</span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={takeUndo}
-                className="rounded-full bg-[#e7c177] px-5 py-2 text-base font-bold text-[#1c1c1a]"
+                className="rounded-full bg-[#e7c177] px-5 py-2 text-base font-bold text-[#181e22]"
               >
                 Undo
               </button>

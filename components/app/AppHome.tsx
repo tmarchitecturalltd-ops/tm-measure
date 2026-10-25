@@ -263,7 +263,7 @@ export default function AppHome() {
           are already there behind and dismissing lands on them. */}
       {showWelcome && <WelcomeScreen onGetStarted={dismissWelcome} />}
 
-      <header className="sticky top-0 z-40 border-b border-primary/25 bg-surface/90 shadow-[0_1px_0_rgba(184,150,80,0.08),0_8px_24px_-18px_rgba(28,28,26,0.25)] backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-primary/25 bg-surface/90 shadow-[0_1px_0_rgba(241,91,34,0.08),0_8px_24px_-18px_rgba(24,30,34,0.25)] backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-3xl items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-3">
             <AppLogo size={36} className="text-primary" />
@@ -526,7 +526,7 @@ export default function AppHome() {
                         <path
                           d={planThumb(r.outlines)!}
                           fill="none"
-                          stroke="#b89650"
+                          stroke="#f15b22"
                           strokeWidth={1.25}
                           strokeLinejoin="round"
                         />

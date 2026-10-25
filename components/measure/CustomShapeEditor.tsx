@@ -22,8 +22,8 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { useMemo, useRef, useState } from "react";
 import type { RoomDraft } from "@tm-designs/measure-core";
 
-const GOLD = "#b89650";
-const DARK = "#1c1c1a";
+const GOLD = "#f15b22";
+const DARK = "#181e22";
 const CANVAS_PX = 300; // SVG viewport edge
 
 export type CustomShapeEditorProps = {
@@ -223,7 +223,7 @@ export default function CustomShapeEditor({ room, onPatch }: CustomShapeEditorPr
           {polygon.length >= 3 && (
             <polygon
               points={pointsAttr}
-              fill="#fff8ea"
+              fill="#f2f4f4"
               fillOpacity={0.85}
               stroke={GOLD}
               strokeWidth={1.5}

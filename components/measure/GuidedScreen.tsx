@@ -170,12 +170,12 @@ export default function GuidedScreen({
        * page you cannot read.
        */
       style={{
-        backgroundColor: "#fcf9f5",
+        backgroundColor: "#cbd0d2",
         backgroundImage: [
-          "linear-gradient(rgba(28,28,26,0.05) 1px, transparent 1px)",
-          "linear-gradient(90deg, rgba(28,28,26,0.05) 1px, transparent 1px)",
-          "linear-gradient(rgba(28,28,26,0.03) 1px, transparent 1px)",
-          "linear-gradient(90deg, rgba(28,28,26,0.03) 1px, transparent 1px)",
+          "linear-gradient(rgba(24,30,34,0.05) 1px, transparent 1px)",
+          "linear-gradient(90deg, rgba(24,30,34,0.05) 1px, transparent 1px)",
+          "linear-gradient(rgba(24,30,34,0.03) 1px, transparent 1px)",
+          "linear-gradient(90deg, rgba(24,30,34,0.03) 1px, transparent 1px)",
         ].join(","),
         backgroundSize: "140px 140px, 140px 140px, 28px 28px, 28px 28px",
       }}

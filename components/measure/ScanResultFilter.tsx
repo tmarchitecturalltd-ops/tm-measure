@@ -193,8 +193,8 @@ export default function ScanResultFilter({
                     {thumb ? (
                       <path
                         d={thumb.path}
-                        fill="rgba(184,150,80,0.18)"
-                        stroke="#b89650"
+                        fill="rgba(241,91,34,0.18)"
+                        stroke="#f15b22"
                         strokeWidth={1.5}
                         strokeLinejoin="round"
                       />
@@ -204,8 +204,8 @@ export default function ScanResultFilter({
                         y={12}
                         width={28}
                         height={20}
-                        fill="rgba(184,150,80,0.18)"
-                        stroke="#b89650"
+                        fill="rgba(241,91,34,0.18)"
+                        stroke="#f15b22"
                         strokeWidth={1.5}
                       />
                     )}

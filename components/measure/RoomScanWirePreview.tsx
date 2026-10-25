@@ -21,7 +21,7 @@ function WireRoom({
     <mesh rotation={[0.35, 0.55, 0]}>
       <boxGeometry args={[sx, sy, sz]} />
       <meshStandardMaterial
-        color="#b89650"
+        color="#f15b22"
         metalness={0.15}
         roughness={0.55}
         wireframe
@@ -40,7 +40,7 @@ export default function RoomScanWirePreview({
   heightM: number;
 }) {
   return (
-    <div className="h-36 w-full overflow-hidden rounded-lg border border-[#b89650]/40 bg-[#0d0d0c] md:h-44">
+    <div className="h-36 w-full overflow-hidden rounded-lg border border-[#f15b22]/40 bg-[#0d0d0c] md:h-44">
       <Canvas camera={{ position: [2.2, 1.6, 2.2], fov: 42 }}>
         <color attach="background" args={["#0d0d0c"]} />
         <ambientLight intensity={0.55} />

@@ -179,9 +179,9 @@ export default function RoomsSoFar({
               // so the customer sees their own contribution land
               // rather than hunting for what changed.
               fill={
-                isLatest ? "rgba(184,150,80,0.22)" : "rgba(184,150,80,0.10)"
+                isLatest ? "rgba(241,91,34,0.22)" : "rgba(241,91,34,0.10)"
               }
-              stroke="#b89650"
+              stroke="#f15b22"
               strokeWidth={isLatest ? 1.6 : 1.1}
               strokeLinejoin="round"
               vectorEffect="non-scaling-stroke"

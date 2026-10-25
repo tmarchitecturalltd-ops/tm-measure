@@ -26,8 +26,8 @@ type Tool = {
 const TOOLS: Tool[] = [
   { color: "#d12d2d", width: 6, label: "Red 6 px" },
   { color: "#d12d2d", width: 3, label: "Red 3 px" },
-  { color: "#b89650", width: 6, label: "Gold 6 px" },
-  { color: "#1c1c1a", width: 4, label: "Black 4 px" },
+  { color: "#f15b22", width: 6, label: "Gold 6 px" },
+  { color: "#181e22", width: 4, label: "Black 4 px" },
 ];
 
 export type PhotoAnnotatorProps = {
