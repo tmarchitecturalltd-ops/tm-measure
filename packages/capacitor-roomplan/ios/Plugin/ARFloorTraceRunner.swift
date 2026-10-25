@@ -1029,15 +1029,71 @@ final class ARFloorTraceRunner: NSObject {
     private func handleOpeningTap(_ location: CGPoint) {
         guard let scene = sceneView else { return }
 
-        guard
-            let q = scene.raycastQuery(
-                from: location,
-                allowing: .existingPlaneGeometry,
-                alignment: .vertical
-            ),
-            let found = scene.session.raycast(q).first
-        else {
-            setStatus("Not on a wall. Sweep across it, then tap")
+        /*
+         * Once one edge is down, the wall is known, so the second
+         * tap does not need the sensor at all.
+         *
+         * The ray through the tap is intersected with the plane the
+         * first edge sits in. That is arithmetic, so it works in a
+         * dark corridor where ARKit has no hope of fitting a
+         * vertical plane to a blank door -- and it is more accurate
+         * than a second raycast would be, because it is constrained
+         * to the wall the opening is actually in rather than
+         * finding one again from scratch.
+         *
+         * It also makes the same-wall check unnecessary for that
+         * tap: a point computed on the plane is on the plane.
+         */
+        if let first = pendingCorner, let n = pendingWallNormal,
+            let p = pointOnWallPlane(at: location, through: first, normal: n)
+        {
+            completeOpening(first: first, second: p)
+            return
+        }
+
+        /*
+         * The first edge needs real geometry, with one step down.
+         *
+         * `.existingPlaneGeometry` only was right about the danger
+         * and wrong about the room. An infinite plane extends a
+         * detected wall across the whole building, which is how a
+         * 700 mm doorway came back as a door 1.70 m wide -- so that
+         * stays out. But refusing everything else means a wall
+         * ARKit has not fitted cannot be used at all, and in a dark
+         * hallway pointed at a flat door it will not fit one.
+         * Reported as the tapping not working, with "Not on a wall"
+         * and nothing to do about it.
+         *
+         * `.estimatedPlane` is the step between. It fits a plane to
+         * the feature points around where the phone is pointed, so
+         * it is local to the thing being tapped rather than an
+         * existing surface carried off into the distance. Less
+         * certain than mapped geometry and nothing like as wrong as
+         * infinite.
+         */
+        var found: ARRaycastResult?
+        for target in [
+            ARRaycastQuery.Target.existingPlaneGeometry,
+            .estimatedPlane,
+        ] {
+            guard
+                let q = scene.raycastQuery(
+                    from: location,
+                    allowing: target,
+                    alignment: .vertical
+                )
+            else { continue }
+            if let hit = scene.session.raycast(q).first {
+                found = hit
+                break
+            }
+        }
+
+        guard let found else {
+            setStatus(
+                "Can't read that wall. More light helps, or point at a "
+                    + "frame or skirting rather than flat paint"
+            )
             return
         }
 
@@ -1068,6 +1124,20 @@ final class ARFloorTraceRunner: NSObject {
             return
         }
 
+        completeOpening(first: first, second: p)
+    }
+
+    /**
+     * Record the opening, once both edges are down.
+     *
+     * Extracted because there are two routes to a second edge now
+     * -- a raycast, and the ray-plane intersection that works in
+     * the dark -- and both have to land in exactly the same
+     * checks. A width limit applied on one path and not the other
+     * is the kind of thing that holds for a year and then lets a
+     * nonsense number through.
+     */
+    private func completeOpening(first: SCNVector3, second: SCNVector3) {
         /*
          * Same wall, measured as a plane rather than as an anchor.
          *
@@ -1090,14 +1160,14 @@ final class ARFloorTraceRunner: NSObject {
          * refused, which is the case this guard exists for.
          */
         if let n = pendingWallNormal {
-            let delta = SIMD3<Float>(p.x - first.x, p.y - first.y, p.z - first.z)
+            let delta = SIMD3<Float>(second.x - first.x, second.y - first.y, second.z - first.z)
             if abs(simd_dot(n, delta)) > 0.25 {
                 setStatus("That's a different wall. Both edges are in one wall")
                 return
             }
         }
 
-        let w = distance(first, p)
+        let w = distance(first, second)
         /*
          * Too narrow to be the thing it claims to be.
          *
@@ -1147,7 +1217,7 @@ final class ARFloorTraceRunner: NSObject {
             return
         }
 
-        openings.append(MarkedOpening(kind: openingKind, a: first, b: p))
+        openings.append(MarkedOpening(kind: openingKind, a: first, b: second))
         lastWidthM = w
         liveWidthM = nil
         pendingCorner = nil
@@ -1156,12 +1226,57 @@ final class ARFloorTraceRunner: NSObject {
         // The upright guide has done its job; leaving it turns a
         // finished opening into an L of blue lines.
         removeMarker(named: "tm-guide")
-        dropMarker(at: p, colour: .systemBlue)
-        drawSpan(from: first, to: p)
+        dropMarker(at: second, colour: .systemBlue)
+        drawSpan(from: first, to: second)
         setStatus(
             "\(openingKind.rawValue.capitalized), \(String(format: "%.2f", w)) m"
         )
         refreshOpeningCount()
+    }
+
+    /**
+     * Where the ray through a tap meets a known wall.
+     *
+     * Used for the second edge of an opening, where the wall is
+     * already established by the first. Pure arithmetic, so it does
+     * not care whether ARKit has mapped anything there -- which is
+     * the point, because the rooms where it has not are dark
+     * hallways and flat painted doors, and those are rooms people
+     * need to measure.
+     */
+    private func pointOnWallPlane(
+        at location: CGPoint,
+        through origin: SCNVector3,
+        normal: SIMD3<Float>
+    ) -> SCNVector3? {
+        guard let scene = sceneView else { return nil }
+
+        let near = scene.unprojectPoint(
+            SCNVector3(Float(location.x), Float(location.y), 0)
+        )
+        let far = scene.unprojectPoint(
+            SCNVector3(Float(location.x), Float(location.y), 1)
+        )
+        let dir = SIMD3<Float>(far.x - near.x, far.y - near.y, far.z - near.z)
+        let denom = simd_dot(normal, dir)
+        // Looking along the wall rather than at it: the ray never
+        // meets the plane, or meets it so obliquely that the point
+        // is meaningless.
+        guard abs(denom) > 1e-4 else { return nil }
+
+        let toOrigin = SIMD3<Float>(
+            origin.x - near.x, origin.y - near.y, origin.z - near.z
+        )
+        let t = simd_dot(normal, toOrigin) / denom
+        guard t > 0 else { return nil }
+
+        let hit = SCNVector3(
+            near.x + dir.x * t, near.y + dir.y * t, near.z + dir.z * t
+        )
+        // A wall fifteen metres away is not the one in front of you.
+        let cam = scene.pointOfView?.worldPosition ?? SCNVector3(0, 0, 0)
+        guard distance(cam, hit) < 15 else { return nil }
+        return hit
     }
 
     /**
@@ -1215,17 +1330,16 @@ final class ARFloorTraceRunner: NSObject {
         }
 
         let centre = CGPoint(x: scene.bounds.midX, y: scene.bounds.midY)
+        // Against the wall the first edge is in, for the same reason
+        // the second tap is: this has to keep reading in a dark
+        // hallway, which is exactly where somebody needs to see the
+        // number before committing to the tap.
         guard
-            let q = scene.raycastQuery(
-                from: centre,
-                allowing: .existingPlaneGeometry,
-                alignment: .vertical
-            ),
-            let hit = scene.session.raycast(q).first
+            let n = pendingWallNormal,
+            let hit = pointOnWallPlane(at: centre, through: first, normal: n)
         else { return }
 
-        let t = hit.worldTransform.columns.3
-        let w = distance(first, SCNVector3(t.x, t.y, t.z))
+        let w = distance(first, hit)
         // A centimetre of change is the smallest worth redrawing for;
         // below that this is a label flickering sixty times a second.
         if let last = liveWidthM, abs(last - w) < 0.01 { return }
