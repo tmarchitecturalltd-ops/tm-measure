@@ -1,3 +1,5 @@
+import type { Opening } from "./types.ts";
+
 /**
  * Scan result types — add to packages/measure-core/src/scan.ts
  * Then re-export from packages/measure-core/src/index.ts:
@@ -710,6 +712,64 @@ export function outlineProblem(
     }
   }
 
+  return null;
+}
+
+/**
+ * An opening that cannot fit in the wall it is on.
+ *
+ * Reported as a door drawn on the wrong side of a small room. It
+ * was not: the door was placed on the nearest wall to where it
+ * was measured, which is the best anybody can do with the numbers
+ * given. The numbers were the problem. The cupboard came back
+ * 1.68 by 0.58 with a door 0.76 wide, and the end wall of a
+ * cupboard whose doorway is 760 mm cannot be 580 mm. One of those
+ * two measurements is wrong and the drawing cannot tell which.
+ *
+ * It mattered more than it looked. The DXF quietly drops an
+ * opening wider than its wall -- there is nowhere to put it --
+ * so the door vanished from the drawing without a word, while the
+ * app's own summary still said one door. Two different answers to
+ * the same question, neither of them flagged.
+ *
+ * So it is said out loud, with both figures, while the customer
+ * is still in the room and can look at the thing.
+ */
+export function openingTooWideForWall(room: {
+  doors?: Opening[];
+  windows?: Opening[];
+  floorPolygonM?: { x: number; z: number }[];
+  walls?: { lengthM: string }[];
+}): string | null {
+  const poly = room.floorPolygonM;
+  const wallLength = (i: number): number | null => {
+    if (poly && poly.length >= 3) {
+      const a = poly[i % poly.length];
+      const b = poly[(i + 1) % poly.length];
+      return Math.hypot(b.x - a.x, b.z - a.z);
+    }
+    const typed = Number.parseFloat(room.walls?.[i]?.lengthM ?? "");
+    return Number.isFinite(typed) && typed > 0 ? typed : null;
+  };
+
+  for (const [list, kind] of [
+    [room.doors ?? [], "door"],
+    [room.windows ?? [], "window"],
+  ] as const) {
+    for (const o of list) {
+      const w = Number.parseFloat(o.widthM);
+      if (!Number.isFinite(w) || w <= 0) continue;
+      const len = wallLength(o.wallIndex ?? 0);
+      if (len === null) continue;
+      if (w > len) {
+        return (
+          `A ${kind} ${w.toFixed(2)} m wide is on a wall ${len.toFixed(2)} m ` +
+          "long, so one of those two is wrong. Check the room, and trace " +
+          "it again if it needs it."
+        );
+      }
+    }
+  }
   return null;
 }
 

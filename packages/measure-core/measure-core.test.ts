@@ -50,6 +50,7 @@ import {
   placeOpeningOnOutline,
   axisAlignOutline,
   outlineProblem,
+  openingTooWideForWall,
 } from "./src/scan.ts";
 import type { RoomDraft } from "./src/types.ts";
 import {
@@ -2719,4 +2720,52 @@ test("the drawing names each storey when there is more than one", () => {
   assert.equal(floorName(0), "Ground floor");
   assert.equal(floorName(1), "First floor");
   assert.equal(floorName(-1), "Basement");
+});
+
+test("a door wider than its wall is called out, not silently dropped", () => {
+  /*
+   * The cupboard: 1.68 by 0.58, with a door 0.76 wide. The end
+   * wall of a cupboard whose doorway is 760 mm cannot be 580 mm,
+   * so one of those two numbers is wrong and the drawing cannot
+   * tell which.
+   *
+   * It mattered because the DXF quietly drops an opening wider
+   * than its wall -- there is nowhere to put it -- while the
+   * app's summary still counted one door. Two answers to the same
+   * question, neither flagged. Reported as the door being drawn
+   * on the wrong side of the room.
+   */
+  const cupboard = {
+    floorPolygonM: [
+      { x: 0, z: 0 },
+      { x: 1.68, z: 0 },
+      { x: 1.68, z: 0.58 },
+      { x: 0, z: 0.58 },
+    ],
+    doors: [{ id: "d", widthM: "0.76", note: "", wallIndex: 1 }],
+    windows: [],
+  };
+  const said = openingTooWideForWall(cupboard);
+  assert.ok(said, "an impossible pairing must be called out");
+  assert.match(said!, /0\.76/, "with the door's width");
+  assert.match(said!, /0\.58/, "and the wall's");
+
+  // The same door on the long wall is fine, and says nothing.
+  assert.equal(
+    openingTooWideForWall({ ...cupboard, doors: [{ id: "d", widthM: "0.76", note: "", wallIndex: 0 }] }),
+    null,
+    "a door that fits is not a problem",
+  );
+
+  // A typed survey has no outline, so the wall lengths are used.
+  assert.ok(
+    openingTooWideForWall({
+      walls: [{ lengthM: "0.6" }, { lengthM: "2.0" }],
+      doors: [{ id: "d", widthM: "0.9", note: "", wallIndex: 0 }],
+      windows: [],
+    }),
+    "and the check still works without a polygon",
+  );
+
+  assert.equal(openingTooWideForWall({ doors: [], windows: [] }), null);
 });

@@ -1225,9 +1225,34 @@ final class ARFloorTraceRunner: NSObject {
         pendingWallNormal = nil
         // The upright guide has done its job; leaving it turns a
         // finished opening into an L of blue lines.
-        removeMarker(named: "tm-guide")
+        /*
+         * An upright at each edge, and no bar between them.
+         *
+         * The first edge drew a vertical guide and the pair then
+         * drew a horizontal span, which was reported as the clear
+         * part and the confusing part respectively. That is the
+         * right way round: a doorway's edges are vertical, so an
+         * upright sits along the thing it marks, while a
+         * horizontal bar across the opening at whatever height the
+         * taps happened to be is a line through mid-air that
+         * resembles nothing in the room.
+         *
+         * So both edges get the same upright. The width is on
+         * screen as a number, which is the honest place for it --
+         * the drawing's job here is to show where, not how much.
+         */
+        // The first edge's upright stays, so it is no longer the
+        // "pending" one. Renamed into the ordinary marker stack so
+        // Undo treats it like everything else, instead of being
+        // swept away by name when the next opening is started.
+        sceneView?.scene.rootNode.childNodes
+            .filter { $0.name == "tm-guide" }
+            .forEach { $0.name = "tm-marker" }
         dropMarker(at: second, colour: .systemBlue)
-        drawSpan(from: first, to: second)
+        drawSpan(
+            from: SCNVector3(second.x, second.y - 0.4, second.z),
+            to: SCNVector3(second.x, second.y + 0.4, second.z)
+        )
         setStatus(
             "\(openingKind.rawValue.capitalized), \(String(format: "%.2f", w)) m"
         )
@@ -1683,9 +1708,9 @@ final class ARFloorTraceRunner: NSObject {
                 setStatus(openingPrompt())
             } else if !openings.isEmpty {
                 openings.removeLast()
-                // Three nodes to a finished opening: both dots and
-                // the span between them. The upright guide was
-                // taken away when the pair completed.
+                // Four nodes to a finished opening: a dot and an
+                // upright at each edge.
+                removeLastMarker()
                 removeLastMarker()
                 removeLastMarker()
                 removeLastMarker()

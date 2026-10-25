@@ -33,6 +33,7 @@ import type {
 import {
   outlineThumbnail,
   outlineProblem,
+  openingTooWideForWall,
   roomFootprint,
   validateRoom,
 } from "@tm-designs/measure-core";
@@ -1161,7 +1162,14 @@ export default function GuidedRoomFlow({
               to doubt the sensor and every reason to doubt
               themselves. See outlineProblem. */}
           {(() => {
-            const problem = outlineProblem(room.floorPolygonM);
+            // Either kind of nonsense gets the same banner. A
+            // customer who is being told the shape is wrong does
+            // not need a second box telling them the door is too,
+            // and the outline is the thing to fix first: get the
+            // room right and the opening usually follows.
+            const problem =
+              outlineProblem(room.floorPolygonM) ??
+              openingTooWideForWall(room);
             if (!problem) {
               return (
                 <p className="text-sm text-on-surface-variant">
