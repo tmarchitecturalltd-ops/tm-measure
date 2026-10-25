@@ -125,8 +125,8 @@ const CALIB_PRESETS: { label: string; cm: string; hint: string }[] = [
  */
 const LIDAR_ENABLED = process.env.NEXT_PUBLIC_ENABLE_LIDAR === "1";
 
-const HUD = "#181e22";
-const GOLD = "#f15b22";
+const HUD = "#1c1c1a";
+const GOLD = "#b89650";
 
 /**
  * DEFAULT_CAMERA_HEIGHT_M — average adult phone-holding height when
@@ -1604,7 +1604,7 @@ export default function RoomScanOverlay({
       {markers.map((m, i) => (
         <div
           key={`${m.x}-${m.y}-${i}`}
-          className="pointer-events-none absolute z-[8] h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#181e22] bg-[#f15b22]"
+          className="pointer-events-none absolute z-[8] h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#1c1c1a] bg-[#b89650]"
           style={{ left: `${m.x}%`, top: `${m.y}%` }}
         />
       ))}
@@ -1680,7 +1680,7 @@ export default function RoomScanOverlay({
             <button
               type="button"
               onClick={onClose}
-              className="mt-4 rounded-lg px-6 py-3 text-sm font-bold uppercase tracking-widest text-[#181e22]"
+              className="mt-4 rounded-lg px-6 py-3 text-sm font-bold uppercase tracking-widest text-[#1c1c1a]"
               style={{ backgroundColor: GOLD }}
             >
               Dismiss
@@ -1734,7 +1734,7 @@ export default function RoomScanOverlay({
                     <button
                       type="button"
                       onClick={() => void requestTiltPermission()}
-                      className="w-full rounded-full px-4 py-2.5 text-sm font-bold uppercase tracking-widest text-[#181e22]"
+                      className="w-full rounded-full px-4 py-2.5 text-sm font-bold uppercase tracking-widest text-[#1c1c1a]"
                       style={{ backgroundColor: GOLD }}
                     >
                       Enable motion sensor
@@ -1769,7 +1769,7 @@ export default function RoomScanOverlay({
                         tiltPerCornerRef.current = [];
                         setPhase("calibrate");
                       }}
-                      className="w-full rounded-full px-4 py-2.5 text-sm font-bold uppercase tracking-widest text-[#181e22] disabled:opacity-40"
+                      className="w-full rounded-full px-4 py-2.5 text-sm font-bold uppercase tracking-widest text-[#1c1c1a] disabled:opacity-40"
                       style={{ backgroundColor: GOLD }}
                     >
                       Start calibration
@@ -1878,7 +1878,7 @@ export default function RoomScanOverlay({
                     className="rounded-lg p-3 text-left"
                     style={
                       measureMode === "span"
-                        ? { backgroundColor: GOLD, color: "#181e22" }
+                        ? { backgroundColor: GOLD, color: "#1c1c1a" }
                         : {
                             border: "1px solid rgba(255,255,255,0.2)",
                             // Explicit, because without it the title
@@ -1893,7 +1893,7 @@ export default function RoomScanOverlay({
                       Wall to wall · easiest
                     </span>
                     <span
-                      className={`mt-0.5 block text-sm ${measureMode === "span" ? "text-[#181e22]/70" : "text-white/60"}`}
+                      className={`mt-0.5 block text-sm ${measureMode === "span" ? "text-[#1c1c1a]/70" : "text-white/60"}`}
                     >
                       Back against one wall, one tap at the base of the wall
                       opposite. Nothing to fit in frame.
@@ -1905,7 +1905,7 @@ export default function RoomScanOverlay({
                     className="rounded-lg p-3 text-left"
                     style={
                       measureMode === "wall"
-                        ? { backgroundColor: GOLD, color: "#181e22" }
+                        ? { backgroundColor: GOLD, color: "#1c1c1a" }
                         : {
                             border: "1px solid rgba(255,255,255,0.2)",
                             // Explicit, because without it the title
@@ -1920,7 +1920,7 @@ export default function RoomScanOverlay({
                       One wall at a time
                     </span>
                     <span
-                      className={`mt-0.5 block text-sm ${measureMode === "wall" ? "text-[#181e22]/70" : "text-white/60"}`}
+                      className={`mt-0.5 block text-sm ${measureMode === "wall" ? "text-[#1c1c1a]/70" : "text-white/60"}`}
                     >
                       Two corners per wall. Needs both ends in frame.
                     </span>
@@ -1931,7 +1931,7 @@ export default function RoomScanOverlay({
                     className="rounded-lg p-3 text-left"
                     style={
                       measureMode === "room"
-                        ? { backgroundColor: GOLD, color: "#181e22" }
+                        ? { backgroundColor: GOLD, color: "#1c1c1a" }
                         : {
                             border: "1px solid rgba(255,255,255,0.2)",
                             // Explicit, because without it the title
@@ -1952,7 +1952,7 @@ export default function RoomScanOverlay({
                       Whole room · rarely fits
                     </span>
                     <span
-                      className={`mt-0.5 block text-sm ${measureMode === "room" ? "text-[#181e22]/70" : "text-white/60"}`}
+                      className={`mt-0.5 block text-sm ${measureMode === "room" ? "text-[#1c1c1a]/70" : "text-white/60"}`}
                     >
                       All four ceiling corners visible at once, and the phone
                       still for all four taps. You can&apos;t turn to reach
@@ -2065,7 +2065,7 @@ export default function RoomScanOverlay({
                           minHeight: 48,
                           borderColor: active ? GOLD : "rgba(255,255,255,0.15)",
                           backgroundColor: active
-                            ? "rgba(241,91,34,0.15)"
+                            ? "rgba(184,150,80,0.15)"
                             : "transparent",
                         }}
                         className="flex items-center justify-between rounded-xl border px-4 text-left"
@@ -2142,7 +2142,7 @@ export default function RoomScanOverlay({
                     <p
                       className="mt-1.5 rounded-md px-2 py-1.5 text-sm"
                       style={{
-                        backgroundColor: "rgba(241,91,34,0.16)",
+                        backgroundColor: "rgba(184,150,80,0.16)",
                         color: GOLD,
                       }}
                     >
@@ -2218,7 +2218,7 @@ export default function RoomScanOverlay({
                           className="rounded-lg px-3 py-2 text-left text-sm font-semibold"
                           style={
                             d.deviceId === (activeDeviceId ?? detectedDeviceId)
-                              ? { backgroundColor: GOLD, color: "#181e22" }
+                              ? { backgroundColor: GOLD, color: "#1c1c1a" }
                               : {
                                   border: "1px solid rgba(255,255,255,0.2)",
                                   color: "rgba(255,255,255,0.8)",
@@ -2296,7 +2296,7 @@ export default function RoomScanOverlay({
                         setMethodChosen(true);
                         setHudCollapsed(true);
                       }}
-                      className="flex-[2] rounded-full px-4 text-sm font-bold uppercase tracking-widest text-[#181e22] disabled:opacity-40"
+                      className="flex-[2] rounded-full px-4 text-sm font-bold uppercase tracking-widest text-[#1c1c1a] disabled:opacity-40"
                     >
                       {gateStep < 2 ? "Next" : "Start measuring"}
                     </button>
@@ -2375,7 +2375,7 @@ export default function RoomScanOverlay({
                       type="button"
                       onClick={() => void handleLidarStart()}
                       disabled={roomPlanRunning}
-                      className="w-full rounded-lg py-3 text-sm font-bold uppercase tracking-widest text-[#181e22] disabled:opacity-50"
+                      className="w-full rounded-lg py-3 text-sm font-bold uppercase tracking-widest text-[#1c1c1a] disabled:opacity-50"
                       style={{ backgroundColor: GOLD }}
                     >
                       {roomPlanRunning ? "Opening RoomPlan…" : "Start RoomPlan capture"}
@@ -2402,7 +2402,7 @@ export default function RoomScanOverlay({
                           void requestTiltPermission();
                         }
                       }}
-                      className="w-full rounded-lg py-3 text-sm font-bold uppercase tracking-widest text-[#181e22]"
+                      className="w-full rounded-lg py-3 text-sm font-bold uppercase tracking-widest text-[#1c1c1a]"
                       style={{ backgroundColor: GOLD }}
                     >
                       Switch to Corner mark
@@ -2729,7 +2729,7 @@ export default function RoomScanOverlay({
                               minHeight: 48,
                               borderColor: active ? GOLD : "rgba(255,255,255,0.15)",
                               backgroundColor: active
-                                ? "rgba(241,91,34,0.15)"
+                                ? "rgba(184,150,80,0.15)"
                                 : "transparent",
                             }}
                             className="flex items-center justify-between rounded-xl border px-4 text-left"
@@ -2788,7 +2788,7 @@ export default function RoomScanOverlay({
                     type="button"
                     onClick={resolveCalibration}
                     disabled={calibTapCount !== 2}
-                    className="rounded-full px-4 py-2 text-sm font-bold uppercase tracking-widest text-[#181e22] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-full px-4 py-2 text-sm font-bold uppercase tracking-widest text-[#1c1c1a] disabled:cursor-not-allowed disabled:opacity-40"
                     style={{ backgroundColor: GOLD }}
                   >
                     Confirm calibration
@@ -2914,7 +2914,7 @@ export default function RoomScanOverlay({
                   onApply(result);
                   onClose();
                 }}
-                className="flex-1 rounded-lg py-3 text-sm font-bold uppercase tracking-widest text-[#181e22] sm:flex-none sm:px-8"
+                className="flex-1 rounded-lg py-3 text-sm font-bold uppercase tracking-widest text-[#1c1c1a] sm:flex-none sm:px-8"
                 style={{ backgroundColor: GOLD }}
               >
                 Apply to form
@@ -2965,7 +2965,7 @@ function ModeChip({
       style={{
         backgroundColor: active ? GOLD : "rgba(255,255,255,0.06)",
         color: active
-          ? "#181e22"
+          ? "#1c1c1a"
           : disabled
             ? "rgba(255,255,255,0.30)"
             : "rgba(255,255,255,0.65)",

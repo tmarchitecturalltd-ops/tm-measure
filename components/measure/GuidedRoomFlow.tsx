@@ -1050,7 +1050,7 @@ export default function GuidedRoomFlow({
             const size = roomFootprint(room);
 
             return (
-              <div className="rounded-2xl bg-surface-container-lowest p-5 shadow-[0_18px_40px_-20px_rgba(24,30,34,0.45),0_2px_6px_-2px_rgba(24,30,34,0.12)]">
+              <div className="rounded-2xl bg-surface-container-lowest p-5 shadow-[0_18px_40px_-20px_rgba(28,28,26,0.45),0_2px_6px_-2px_rgba(28,28,26,0.12)]">
                 <div className="flex items-start gap-4">
                   <div className="min-w-0 flex-1">
                     <p className="font-label text-xs font-medium uppercase tracking-[0.25em] text-primary">
@@ -1092,8 +1092,8 @@ export default function GuidedRoomFlow({
                       <svg width={96} height={96} viewBox="0 0 96 96">
                         <path
                           d={thumb.path}
-                          fill="rgba(241,91,34,0.18)"
-                          stroke="#f15b22"
+                          fill="rgba(184,150,80,0.18)"
+                          stroke="#b89650"
                           strokeWidth={2}
                           strokeLinejoin="round"
                         />

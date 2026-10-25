@@ -4653,7 +4653,7 @@ export default function MeasureIntakeForm() {
                       onChange={(e) =>
                         setRoom(room.id, { cornersSquare: e.target.checked })
                       }
-                      className="mt-0.5 h-4 w-4 accent-[#f15b22]"
+                      className="mt-0.5 h-4 w-4 accent-[#b89650]"
                     />
                     <span className="text-sm leading-relaxed text-on-surface-variant">
                       <span className="font-semibold text-on-surface">
@@ -6536,7 +6536,7 @@ export default function MeasureIntakeForm() {
                     thing the draughtsman actually needs is quietly
                     absent. Nobody was told, at either end. */}
                 {!dxfWillBeAttached && (
-                  <div className="mt-2 rounded-xl border border-[#f15b22]/50 bg-primary/10 p-4">
+                  <div className="mt-2 rounded-xl border border-[#b89650]/50 bg-primary/10 p-4">
                     <p className="text-sm font-semibold text-on-surface">
                       No CAD drawing will be included
                     </p>
@@ -6940,7 +6940,7 @@ export default function MeasureIntakeForm() {
           aria-live="polite"
           className="fixed inset-x-0 bottom-0 z-[60] px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
         >
-          <div className="mx-auto flex max-w-lg flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#181e22] px-5 py-3 text-[#f7f5ef] shadow-2xl">
+          <div className="mx-auto flex max-w-lg flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#1c1c1a] px-5 py-3 text-[#f7f5ef] shadow-2xl">
             <span className="text-base font-semibold">{undoAction.label}</span>
             <div className="flex items-center gap-2">
               <button

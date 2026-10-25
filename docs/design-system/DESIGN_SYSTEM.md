@@ -1,12 +1,16 @@
-# TM Measure — Industrial design system
+# TM Measure — design system
 
 **Status:** authoritative. Supersedes `_stitch_extract/DESIGN.md` ("Architectural Editorial", gold-and-cream), which is kept only as history.
 **Last revised:** 2026-10-25. See `CHANGELOG.md` in this folder.
 
-The app is one continuous instrument chassis: cool grey, recessed dark
-screens, raised keys, engraved labels, small orange indicators. Depth
-comes from highlights and shadows applied consistently; content stays
-ordinary readable text and recognisable controls.
+The TM palette -- warm neutrals, brand gold, Noto Serif headings --
+given the depth of a physical instrument: raised keys that press in,
+recessed wells, panels that catch light from the upper left.
+
+The depth language was taken from an industrial design system. The
+cool-grey-and-orange palette that came with it was tried and
+rejected: it was a different brand rather than a restyle of this
+one. Colours here are TM's; the material treatment is what was kept.
 
 ---
 
@@ -35,17 +39,19 @@ folder for programmatic use.
 
 | Variable | Value | Role |
 | --- | --- | --- |
-| `--dp-color-chassis` | `#cbd0d2` | Main cool-grey ground |
-| `--dp-color-raised` | `#e7eaeb` | Keys, panels, decks |
-| `--dp-color-well` | `#b6bec2` | Recessed material |
-| `--dp-color-ink` | `#181e22` | Primary text |
-| `--dp-color-label` | `#414b52` | Secondary text, labels |
-| `--dp-color-field` | `#20272b` | Deep screen |
-| `--dp-color-on-field` | `#f2f4f4` | Text on the screen |
-| `--dp-color-on-field-muted` | `#d8dee1` | Secondary text on screen |
-| `--dp-color-accent` | `#f15b22` | Indicators, action details |
-| `--dp-typography-sans` | `"Industrial Host", sans-serif` | Headings, reading |
-| `--dp-typography-mono` | `"Industrial Plex", monospace` | Small labels, metadata |
+| `--dp-color-chassis` | `#fcf9f5` | Page ground |
+| `--dp-color-raised` | `#ffffff` | Keys, panels, decks |
+| `--dp-color-well` | `#e5e2de` | Recessed material |
+| `--dp-color-ink` | `#1c1c1a` | Primary text |
+| `--dp-color-label` | `#4d4639` | Secondary text, labels |
+| `--dp-color-field` | `#31302e` | Deep screen |
+| `--dp-color-on-field` | `#f3f0ec` | Text on the screen |
+| `--dp-color-on-field-muted` | `#ddd8d0` | Secondary text on screen |
+| `--dp-color-accent` | `#b89650` | Brand gold |
+| `--dp-color-accent-glyph` | `#7a6128` | Gold as text, see §7 |
+| `--dp-typography-sans` | `"Manrope", sans-serif` | Reading, labels |
+| `--dp-typography-serif` | `"Noto Serif", serif` | Headings |
+
 | `--dp-typography-body` | `17px` | |
 | `--dp-typography-reading` | `16px` | |
 | `--dp-typography-metadata` | `13px` | |
@@ -60,10 +66,9 @@ folder for programmatic use.
 | `--dp-motion-dial` | `150ms` | |
 | `--dp-motion-settle` | `cubic-bezier(0.3, 0.7, 0.4, 1.25)` | |
 
-`"Industrial Host"` and `"Industrial Plex"` are the system's names for
-the families. They resolve through to **Host Grotesk** and **IBM Plex
-Mono**, loaded from Google Fonts in `app/globals.css`. The CSP in
-`app/layout.tsx` already permits both.
+**Noto Serif** for headings, **Manrope** for reading and labels, both
+loaded from Google Fonts in `app/globals.css`. The CSP in
+`app/layout.tsx` permits them.
 
 ---
 
@@ -74,24 +79,24 @@ a component.
 
 | Tailwind class | Value | Material role |
 | --- | --- | --- |
-| `bg-surface`, `bg-background` | `#cbd0d2` | Chassis |
-| `bg-surface-container-lowest` | `#eef1f2` | Proudest raised part |
-| `bg-surface-container-low`, `bg-surface-bright` | `#e7eaeb` | Raised panel / key |
-| `bg-surface-container` | `#dde1e3` | Raised, slightly set down |
-| `bg-surface-container-high` | `#d3d8da` | Transitional |
-| `bg-surface-container-highest` | `#c3cacd` | Shallow recess |
-| `bg-surface-dim`, `bg-surface-variant` | `#b6bec2` | Well, tray |
-| `bg-inverse-surface` | `#20272b` | Deep screen / output deck |
-| `text-on-surface` | `#181e22` | Ink |
-| `text-on-surface-variant`, `text-secondary` | `#414b52` | Label |
-| `text-inverse-on-surface` | `#f2f4f4` | On the screen |
-| `border-outline` | `#8d979d` | Groove, divider |
-| `border-outline-variant` | `#a8b1b6` | Hairline |
-| `bg-primary` | `#f15b22` | Accent fill — keys, lamps |
-| `text-on-primary` | `#181e22` | **Ink**, see §7 |
-| `text-primary` | `#8f300d` | **Darkened**, see §7 |
-| `bg-surface-tint` | `#d44d18` | Accent hover |
-| `text-error` | `#b3261e` | Error |
+| `bg-surface`, `bg-background` | `#fcf9f5` | Page ground |
+| `bg-surface-container-lowest` | `#ffffff` | Proudest raised part |
+| `bg-surface-container-low` | `#f6f3ef` | Raised panel / key |
+| `bg-surface-container` | `#f0edea` | Raised, slightly set down |
+| `bg-surface-container-high` | `#ebe8e4` | Transitional |
+| `bg-surface-container-highest` | `#e5e2de` | Shallow recess |
+| `bg-surface-dim`, `bg-surface-variant` | `#dcdad6` / `#e5e2de` | Well, tray |
+| `bg-inverse-surface` | `#31302e` | Deep screen / output deck |
+| `text-on-surface` | `#1c1c1a` | Ink |
+| `text-on-surface-variant` | `#4d4639` | Label |
+| `text-inverse-on-surface` | `#f3f0ec` | On the screen |
+| `border-outline` | `#7f7667` | Groove, divider |
+| `border-outline-variant` | `#d1c5b4` | Hairline |
+| `bg-primary` | `#b89650` | Brand gold fill |
+| `text-on-primary` | `#1c1c1a` | **Ink**, see §7 |
+| `text-primary` | `#7a6128` | **Darkened**, see §7 |
+| `bg-surface-tint` | `#a07f3d` | Gold hover |
+| `text-error` | `#ba1a1a` | Error |
 
 ---
 
@@ -125,7 +130,7 @@ what makes a screen of grey rectangles read as one machined object.
 These are applied by selector in `globals.css`. A component gets its
 material by saying what it is — which it was already doing.
 
-Small key corners (`4px`) inside larger rounded cases (`10px`).
+Small key corners (`4px`) inside larger rounded cases (`16px`).
 
 ---
 
@@ -164,25 +169,25 @@ focus ring exists purely to be seen.
 
 These are the non-obvious ones. Each was a real defect.
 
-**1. Text on the accent is ink, never white.**
-White on `#f15b22` is **3.3:1** and fails AA at normal size. Ink is
-**5.0:1** and passes. This app puts whole sentences on filled buttons,
-so it is not a large-text edge case.
+**1. Text on gold is ink, never white.**
+White on `#b89650` is **2.79:1** and fails AA outright. Ink is
+**5.8:1**. This was a pre-existing fault, not one a repaint
+introduced — it was simply never measured. The app puts whole
+sentences on gold buttons, so it is not a large-text edge case.
 
-**2. Accent used as a glyph darkens to `#8f300d`.**
-The accent is a signal colour chosen to be seen against grey at a
-glance, which is exactly what makes it poor as text — `#f15b22` on the
-raised panels is **3.0:1**. So `text-primary` darkens; `bg-primary`
-keeps the true accent. Inside dark decks it goes the other way and
-brightens to `#ff8a5c`, because the dark orange disappears there.
-Opt a genuine indicator back into the bright accent with
+**2. Gold used as a glyph darkens to `#7a6128`.**
+Gold is a fill colour. As text on cream it is **2.62:1**. So
+`text-primary` darkens; `bg-primary` keeps the brand gold. Inside
+dark decks it brightens to `#e7c177` instead. Several components had
+already hand-darkened gold to `#8a6f2f` locally — the same instinct
+without a rule. Opt a genuine indicator back into true gold with
 `.tm-accent-lamp`.
 
 **3. Alpha tints of `on-primary` invert when `on-primary` flips.**
 `bg-on-primary/20` was a 20% **white** veil while `on-primary` was
-white. The moment the accent needed ink on it, the same class became a
-20% **dark** veil and took a step numeral to 3.7:1 on the step it
-exists to highlight. If a tint is meant to be light, say light
+white. The moment gold needed ink on it, the same class became a 20%
+**dark** veil and took a step numeral to a failing ratio on the step
+it exists to highlight. If a tint is meant to be light, say light
 (`bg-surface-container-lowest/35`).
 
 **Targets:** AA — 4.5:1 normal text, 3:1 for ≥24px or ≥18.66px bold.
@@ -192,8 +197,9 @@ Verify at the rendered width, not from the token table.
 
 ## 8. Images
 
-Editorial photographs are **grayscale**, in a recessed well with a 1px
-inset rim (`.hero-split-right`, `.tm-image-well`).
+Editorial photographs sit in a **recessed well** with a 1px inset rim
+(`.hero-split-right`, `.tm-image-well`). They are not desaturated:
+this brand is warm, and a grayscale house photograph sells nothing.
 
 **Survey photographs are never filtered.** A customer's room photos are
 evidence a draughtsman reads — damp staining, a brick course, which way
@@ -270,8 +276,8 @@ and screenshot scripts depend on the rest.
 - Use white text on the accent.
 - Use the bright accent for small text on light grounds.
 - Apply image filters globally — survey photos stay true.
-- Add glossy chrome, rust, hazard striping, animated fake telemetry, or
-  unlabelled switches.
+- Add fake telemetry, unlabelled switches, or decoration that implies
+  a system state nothing is measuring.
 - Let texture or shadow muddy a reading area. Recessed reading needs
   strong contrast.
 - Put physical decoration ahead of content or interaction.

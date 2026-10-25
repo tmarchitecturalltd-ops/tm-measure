@@ -11,7 +11,48 @@ Dates ISO 8601.
 
 ---
 
-## [2026-10-25] — Industrial adopted
+## [2026-10-25b] — Brand palette restored, depth kept
+
+The cool-grey-and-orange palette was tried on a phone and rejected:
+it read as a different brand rather than a restyle of this one. The
+physical treatment that arrived with it was worth keeping, so the two
+were separated.
+
+### Changed
+- Palette back to TM's: cream grounds, brand gold `#b89650`, Noto
+  Serif headings with Manrope for reading.
+- `--dp-*` tokens repainted to the brand values, names kept so the
+  docs and anything written against them still resolve.
+- Editorial photographs keep the recessed well and lose the
+  grayscale. This brand is warm and a desaturated house photograph
+  sells nothing.
+
+### Kept from the repaint
+- Raised keys that lift on hover and sink on press; recessed wells;
+  light from the upper left. The depth of an instrument suits a
+  measuring tool regardless of its colours.
+- Directional step transitions — forward from the right, back from
+  the left.
+- `text-on-primary` stays **ink**. White on gold is 2.79:1 and fails
+  AA outright. That was a pre-existing fault, never measured until
+  the repaint forced the question; restoring white would reintroduce
+  a real defect for no gain.
+- `text-primary` stays **darkened**, now `#7a6128`. Gold as text on
+  cream is 2.62:1. Several components had already hand-darkened it to
+  `#8a6f2f` locally — the same instinct without a rule.
+- The focus ring stays ink rather than gold: 2.62:1 against roughly
+  15:1, on the one element that exists purely to be seen.
+- Every hardcoded hex found during the repaint stays as a semantic
+  token.
+
+### Verified
+- Contrast audit on `/measure` at 375px: no failures.
+- Gold key, ink label, key shadow, Noto Serif heading and the
+  directional transition all confirmed live in the browser.
+
+---
+
+## [2026-10-25] — Industrial adopted (superseded same day)
 
 Replaced the gold-and-cream "Architectural Editorial" styling with the
 Industrial instrument-chassis system across the whole web layer.

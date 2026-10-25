@@ -1,10 +1,4 @@
-/*
- * Host Grotesk for headings and reading, IBM Plex Mono for the small
- * engraved-looking labels. Bound to the "Industrial Host" and
- * "Industrial Plex" names the design tokens call for, with the real
- * Google families behind them so the alias resolves to something.
- */
-@import url("https://fonts.googleapis.com/css2?family=Host+Grotesk:ital,wght@0,300..800;1,300..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,400&family=Manrope:wght@300;400;600;800&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=block");
 @import "tailwindcss";
 
@@ -98,74 +92,65 @@ textarea {
 
 @theme {
   /*
-   * The instrument chassis, mapped onto the names the app already
-   * uses.
+   * The TM palette. Warm neutrals and the brand gold.
    *
-   * Every component in here is written against semantic tokens --
-   * bg-surface, text-on-surface-variant, border-outline-variant,
-   * text-primary. Repainting those is what moves thirty-odd
-   * components and six routes onto the new material at once,
-   * without touching a single className or any behaviour. The
-   * alternative, editing each file, would have risked the markup
-   * for a change that is entirely about colour.
+   * These were briefly repainted cool grey and orange for an
+   * "industrial chassis" look. The depth that came with it was
+   * worth keeping and the colours were not: grey and orange is a
+   * different brand, not a restyle of this one. So the palette is
+   * back and the physical treatment below stays.
    *
-   * Reading the roles across: surface is the cool-grey chassis
-   * everything sits in; the container steps are the raised key and
-   * panel material, lightest where a part stands proudest; dim and
-   * variant are the darker recessed material; inverse is the deep
-   * screen. Light falls from the upper left throughout, which is
-   * what the shadow utilities below assume.
+   * Two values do NOT go back, and they are both contrast fixes
+   * that the repaint happened to surface. See the note on each.
    */
-  --color-background: #cbd0d2;
-  --color-surface: #cbd0d2;
-  --color-surface-bright: #e7eaeb;
-  --color-surface-container-lowest: #eef1f2;
-  --color-surface-container-low: #e7eaeb;
-  --color-surface-container: #dde1e3;
-  --color-surface-container-high: #d3d8da;
-  --color-surface-container-highest: #c3cacd;
-  --color-surface-dim: #b6bec2;
-  --color-surface-variant: #b6bec2;
-
-  --color-on-surface: #181e22;
-  --color-on-surface-variant: #414b52;
-  --color-outline: #8d979d;
-  --color-outline-variant: #a8b1b6;
+  --color-surface-tint: #a07f3d;
+  --color-surface-container-lowest: #ffffff;
+  --color-on-secondary: #ffffff;
+  --color-on-primary-container: #432f00;
+  --color-surface-container-low: #f6f3ef;
+  --color-tertiary-container: #9e9b92;
+  --color-inverse-primary: #e7c177;
+  --color-primary-container: #d9c292;
+  --color-secondary-container: #e5e2de;
+  --color-surface: #fcf9f5;
+  --color-error: #ba1a1a;
+  --color-surface-variant: #e5e2de;
+  --color-inverse-on-surface: #f3f0ec;
+  --color-outline-variant: #d1c5b4;
+  --color-inverse-surface: #31302e;
+  --color-outline: #7f7667;
+  --color-surface-container-high: #ebe8e4;
+  --color-on-surface-variant: #4d4639;
+  --color-secondary-fixed: #e5e2de;
+  --color-on-surface: #1c1c1a;
+  --color-background: #fcf9f5;
 
   /*
-   * Orange is the accent, and the text on it is ink rather than
-   * white. White on this orange is 3.3:1, which fails normal-size
-   * AA; the ink is 5:1 and passes. The app puts real sentences on
-   * primary-filled buttons, so that difference is not academic.
+   * Ink on gold, not white. Kept from the repaint.
+   *
+   * White on #b89650 is 2.79:1, which fails AA badly, and this app
+   * puts whole sentences on gold buttons. The dark ink is 5.8:1.
+   * That was a pre-existing fault here -- it was not introduced by
+   * the repaint, only found by it -- so putting white back would
+   * be reintroducing a real defect for no gain.
    */
-  --color-primary: #f15b22;
-  --color-on-primary: #181e22;
-  --color-surface-tint: #d44d18;
-  --color-primary-container: #f8c4ad;
-  --color-on-primary-container: #3d1402;
-  --color-inverse-primary: #ff8a5c;
+  --color-on-primary: #1c1c1a;
 
-  --color-secondary: #414b52;
-  --color-on-secondary: #f2f4f4;
-  --color-secondary-container: #c3cacd;
-  --color-secondary-fixed: #c3cacd;
-  --color-tertiary: #414b52;
-  --color-tertiary-container: #b6bec2;
+  --color-surface-container-highest: #e5e2de;
+  --color-surface-dim: #dcdad6;
+  --color-secondary: #5f5e5c;
+  --color-primary: #b89650;
+  --color-tertiary: #605e57;
+  --color-surface-bright: #fcf9f5;
+  --color-surface-container: #f0edea;
 
-  /* The deep screen, for dark output decks. */
-  --color-inverse-surface: #20272b;
-  --color-inverse-on-surface: #f2f4f4;
+  --font-headline: "Noto Serif", ui-serif, Georgia, serif;
+  --font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-label: "Manrope", ui-sans-serif, system-ui, sans-serif;
 
-  --color-error: #b3261e;
-
-  --font-headline: "Industrial Host", "Host Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-body: "Industrial Host", "Host Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-label: "Industrial Plex", "IBM Plex Mono", ui-monospace, monospace;
-
-  /* Small key corners inside the larger rounded case. */
-  --radius-DEFAULT: 4px;
-  --radius-lg: 6px;
-  --radius-xl: 10px;
+  --radius-DEFAULT: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 1rem;
 }
 
 /*
@@ -175,18 +160,26 @@ textarea {
  * directly resolves, and so the mapping above can be read against
  * its source without translating back and forth.
  */
+/*
+ * Named tokens for the physical treatment, on the TM palette.
+ *
+ * The depth language came from an industrial design system; the
+ * colours are this brand's. Names kept so the design-system docs
+ * and anything written against them still resolve.
+ */
 :root {
-  --dp-color-chassis: #cbd0d2;
-  --dp-color-raised: #e7eaeb;
-  --dp-color-well: #b6bec2;
-  --dp-color-ink: #181e22;
-  --dp-color-label: #414b52;
-  --dp-color-field: #20272b;
-  --dp-color-on-field: #f2f4f4;
-  --dp-color-on-field-muted: #d8dee1;
-  --dp-color-accent: #f15b22;
-  --dp-typography-sans: "Industrial Host", sans-serif;
-  --dp-typography-mono: "Industrial Plex", monospace;
+  --dp-color-chassis: #fcf9f5;
+  --dp-color-raised: #ffffff;
+  --dp-color-well: #e5e2de;
+  --dp-color-ink: #1c1c1a;
+  --dp-color-label: #4d4639;
+  --dp-color-field: #31302e;
+  --dp-color-on-field: #f3f0ec;
+  --dp-color-on-field-muted: #ddd8d0;
+  --dp-color-accent: #b89650;
+  --dp-color-accent-glyph: #7a6128;
+  --dp-typography-sans: "Manrope", sans-serif;
+  --dp-typography-serif: "Noto Serif", serif;
   --dp-typography-body: 17px;
   --dp-typography-reading: 16px;
   --dp-typography-metadata: 13px;
@@ -222,8 +215,8 @@ textarea {
 .bg-surface-bright {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    inset 0 -1px 0 rgba(24, 30, 34, 0.14),
-    0 1px 2px rgba(24, 30, 34, 0.18);
+    inset 0 -1px 0 rgba(28, 28, 26, 0.14),
+    0 1px 2px rgba(28, 28, 26, 0.18);
 }
 
 /* Recessed: wells, trays, anything content sits down inside. */
@@ -231,7 +224,7 @@ textarea {
 .bg-surface-variant,
 .bg-surface-container-highest {
   box-shadow:
-    inset 0 2px 3px rgba(24, 30, 34, 0.22),
+    inset 0 2px 3px rgba(28, 28, 26, 0.22),
     inset 0 -1px 0 rgba(255, 255, 255, 0.5);
 }
 
@@ -268,8 +261,8 @@ button.bg-surface-container-low,
 button.bg-surface-container-lowest {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -2px 0 rgba(24, 30, 34, 0.22),
-    0 2px 3px rgba(24, 30, 34, 0.26);
+    inset 0 -2px 0 rgba(28, 28, 26, 0.22),
+    0 2px 3px rgba(28, 28, 26, 0.26);
 }
 
 @media (hover: hover) {
@@ -280,8 +273,8 @@ button.bg-surface-container-lowest {
     transform: translateY(-1px);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.6),
-      inset 0 -2px 0 rgba(24, 30, 34, 0.22),
-      0 4px 6px rgba(24, 30, 34, 0.28);
+      inset 0 -2px 0 rgba(28, 28, 26, 0.22),
+      0 4px 6px rgba(28, 28, 26, 0.28);
   }
 }
 
@@ -291,8 +284,8 @@ button.bg-surface-container-low:active,
 button.bg-surface-container-lowest:active {
   transform: translateY(1px);
   box-shadow:
-    inset 0 2px 4px rgba(24, 30, 34, 0.38),
-    0 0 0 rgba(24, 30, 34, 0);
+    inset 0 2px 4px rgba(28, 28, 26, 0.38),
+    0 0 0 rgba(28, 28, 26, 0);
 }
 
 /*
@@ -304,7 +297,7 @@ button.bg-surface-container-lowest:active {
  */
 body {
   background-image:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(24, 30, 34, 0.06));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(28, 28, 26, 0.06));
   background-attachment: fixed;
 }
 
@@ -318,10 +311,11 @@ body {
 /*
  * Orange reads as a lamp, not as a sentence.
  *
- * The accent is a bright signal colour chosen to be seen against
- * grey at a glance, which is exactly what makes it poor as text:
- * #f15b22 on the raised panels is 3.0:1, and the app uses
- * text-primary for small icons and labels in a dozen places.
+ * The brand gold is a fill colour. As text on cream it is 2.62:1,
+ * which fails AA outright, and the app uses text-primary for small
+ * icons and labels in a dozen places. This was already true before
+ * any repaint -- several components had hand-darkened the gold to
+ * #8a6f2f locally, which is the same instinct without the rule.
  *
  * Fills are unaffected and stay the true accent -- a key or a lamp
  * is a block of colour doing the job the colour was picked for.
@@ -339,12 +333,12 @@ body {
  * chance for a contrast fix.
  */
 .text-primary:not(.tm-accent-lamp) {
-  color: #8f300d;
+  color: #7a6128;
 }
 
 .bg-inverse-surface .text-primary:not(.tm-accent-lamp),
 .text-inverse-on-surface .text-primary:not(.tm-accent-lamp) {
-  color: #ff8a5c;
+  color: #e7c177;
 }
 
 /* Opt back into the bright accent where it is genuinely a lamp or
@@ -354,29 +348,19 @@ body {
 }
 
 /*
- * Editorial photographs: grayscale, in a recessed well.
+ * Editorial photographs sit in a recessed well.
  *
- * Scoped to the marketing pages by targeting the hero and the
- * editorial figures, and deliberately NOT to anything the survey
- * produces. A customer's room photographs are evidence a
- * draughtsman reads -- damp staining, a brick course, which way a
- * window opens -- and draining the colour out of those to match a
- * house style would be the style damaging the product.
- *
- * The rim is inset so the image sits down inside the chassis
- * rather than on top of it, which is the same depth language as
- * every other recess here.
+ * The rim is inset so the image sits down inside the page rather
+ * than on top of it, which is the same depth language as every
+ * other recess here. The grayscale that came with the industrial
+ * palette is gone: this brand is warm, and a desaturated house
+ * photograph sells nothing.
  */
-.hero-split-right img,
-.tm-image-well img {
-  filter: grayscale(1) contrast(1.04);
-}
-
 .hero-split-right,
 .tm-image-well {
   box-shadow:
-    inset 0 0 0 1px rgba(24, 30, 34, 0.28),
-    inset 0 3px 8px rgba(24, 30, 34, 0.35);
+    inset 0 0 0 1px rgba(28, 28, 26, 0.28),
+    inset 0 3px 8px rgba(28, 28, 26, 0.35);
 }
 
 /*
@@ -582,23 +566,23 @@ button {
  */
 
 section {
-  background-color: rgba(203, 208, 210, 0.96) !important;
+  background-color: rgba(252, 249, 245, 0.96) !important;
 }
 
 section.bg-surface-container-low {
-  background-color: rgba(231, 234, 235, 0.97) !important;
+  background-color: rgba(246, 243, 239, 0.97) !important;
 }
 
 section.bg-inverse-surface {
-  background-color: rgba(32, 39, 43, 0.97) !important;
+  background-color: rgba(49, 48, 46, 0.97) !important;
 }
 
 footer {
-  background-color: rgba(231, 234, 235, 0.98) !important;
+  background-color: rgba(246, 243, 239, 0.98) !important;
 }
 
 nav {
-  background-color: rgba(203, 208, 210, 0.88) !important;
+  background-color: rgba(252, 249, 245, 0.88) !important;
 }
 
 .hero-split {
@@ -626,13 +610,13 @@ nav {
   justify-content: center;
   position: relative;
   z-index: 2;
-  background: rgba(203, 208, 210, 0.97);
+  background: rgba(252, 249, 245, 0.97);
 }
 
 .hero-split-right {
   position: relative;
   overflow: hidden;
-  background: #20272b;
+  background: #1c1c1a;
 }
 
 .cycle-slide {
@@ -694,7 +678,7 @@ nav {
   font-family: "Noto Serif", serif;
   font-size: 2.2rem;
   font-weight: 700;
-  color: #ff8a5c;
+  color: #e7c177;
   display: block;
   line-height: 1;
 }
@@ -711,7 +695,7 @@ nav {
   font-size: 11px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: #c2410c;
+  color: #b89650;
   margin-bottom: 1.5rem;
   display: flex;
   align-items: center;
@@ -723,7 +707,7 @@ nav {
   display: block;
   width: 28px;
   height: 0.5px;
-  background: #c2410c;
+  background: #b89650;
 }
 
 .hero-stats-row {
@@ -739,7 +723,7 @@ nav {
   font-family: "Noto Serif", serif;
   font-size: 1.8rem;
   font-weight: 700;
-  color: #c2410c;
+  color: #b89650;
   line-height: 1;
 }
 
@@ -752,8 +736,8 @@ nav {
 }
 
 .marquee-strip {
-  background: #20272b;
-  color: #f2f4f4;
+  background: #1c1c1a;
+  color: #f7f5ef;
   padding: 13px 0;
   overflow: hidden;
   white-space: nowrap;
@@ -773,7 +757,7 @@ nav {
 }
 
 .marquee-inner .mdot {
-  color: #ff8a5c;
+  color: #e7c177;
   padding: 0 0.5rem;
 }
 
@@ -798,7 +782,7 @@ nav {
 }
 
 .review-card:hover {
-  border-color: #c2410c;
+  border-color: #b89650;
 }
 
 @media (max-width: 767px) {
@@ -843,13 +827,13 @@ nav {
  * clean for sighted mouse/touch users.
  */
 /*
- * The focus ring is ink, not the accent.
+ * The focus ring is ink, not the brand gold.
  *
- * It was the brand colour, which worked on cream. On the chassis
- * the accent orange is 3.3:1 and the ink is 9.9:1, and a focus
- * ring is the one piece of interface that exists purely to be
- * seen. Offset keeps it outside the key's physical edge, where it
- * survives the key sinking on press.
+ * Gold on cream is 2.62:1. Ink is around 15:1. A focus ring is the
+ * one piece of interface that exists purely to be seen, so it gets
+ * the colour that can be, not the one that is on brand. Offset
+ * keeps it outside the control's edge, where it survives a key
+ * sinking on press.
  */
 :focus-visible {
   outline: 2px solid var(--dp-color-ink);
@@ -887,11 +871,11 @@ select:focus-visible {
     --color-surface: #ffffff;
     --color-surface-container-low: #ffffff;
     --color-surface-container-lowest: #ffffff;
-    --color-surface-container-high: #eef1f2;
-    --color-on-surface: #181e22;
+    --color-surface-container-high: #f5f1ea;
+    --color-on-surface: #1c1c1a;
     --color-on-surface-variant: #4d4639;
-    --color-primary: #c2410c;
-    --color-outline: #cbd5d8;
+    --color-primary: #b89650;
+    --color-outline: #d6cbb6;
   }
   html, body {
     background: #ffffff !important;

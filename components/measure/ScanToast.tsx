@@ -27,8 +27,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const HUD = "#181e22";
-const GOLD = "#f15b22";
+const HUD = "#1c1c1a";
+const GOLD = "#b89650";
 
 export type ScanToastProps = {
   /**
