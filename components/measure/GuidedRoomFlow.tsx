@@ -978,12 +978,14 @@ export default function GuidedRoomFlow({
               sensor that will not settle. Being stuck in your own
               hallway with a button that does nothing is the failure
               this app has produced more than once. */}
-          {(scanFailed || somethingElseScanned) && !manualEscape && (
+          {!manualEscape && (
             <div className="rounded-xl border border-outline-variant/40 p-4">
               <p className="text-sm text-on-surface-variant">
                 {somethingElseScanned && !scanFailed
                   ? "Already scanned this one as part of the property? Remove it from the Steps menu, or type the sizes if you have them."
-                  : "Try scanning once more if you can \u2014 the phone measures this better than a tape does. If the room won't scan at all, you can type the sizes instead."}
+                  : scanFailed
+                    ? "Try scanning once more if you can \u2014 the phone measures this better than a tape does. If the room won't scan at all, you can type the sizes instead."
+                    : "Scanning is the accurate way and takes about a minute. If you would rather measure this room yourself, you can."}
               </p>
               <button
                 type="button"
@@ -1300,6 +1302,19 @@ export default function GuidedRoomFlow({
               Something looks wrong. Measure it again
             </button>
           )}
+
+          {/* And the typed route, kept.
+              Measuring again is the better answer and is offered
+              first, but a customer who can see the scan is wrong is
+              entitled to say what is right. Second in the order, in
+              the quieter weight: a preference, not a prohibition. */}
+          <button
+            type="button"
+            onClick={onExitGuided}
+            className="w-full justify-start rounded-xl px-5 py-3 text-left text-sm font-semibold text-on-surface-variant/80"
+          >
+            Or type the sizes myself
+          </button>
         </div>
       )}
 

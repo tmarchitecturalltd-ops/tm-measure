@@ -149,6 +149,9 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
 
     private func presentCapture(roomNumber: Int) {
         isCancellingRoom = false
+        // Per room, not per survey: each new room earns its own
+        // "that's enough" the moment it has walls and a floor.
+        enoughPromptShown = false
         guard let host = hostVC else {
             finish(.failure(HouseError.cancelled))
             return
@@ -191,12 +194,49 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
         )
         alert.addAction(UIAlertAction(title: "Next room", style: .default) { [weak self] _ in
             guard let self else { return }
-            self.presentCapture(roomNumber: self.capturedRooms.count + 1)
+            /*
+             * Wait for the alert to actually be gone.
+             *
+             * This called presentCapture directly, and the button
+             * did nothing. A UIAlertAction handler runs while the
+             * alert is still dismissing, so the host still has a
+             * presented view controller and UIKit refuses the second
+             * presentation -- silently, with only a console warning.
+             * The customer presses "Next room" and stays where they
+             * are, which is the end of a whole-property scan.
+             */
+            self.whenHostIsFree {
+                self.presentCapture(roomNumber: self.capturedRooms.count + 1)
+            }
         })
         alert.addAction(UIAlertAction(title: "That's the lot", style: .default) { [weak self] _ in
             self?.buildAndFinish()
         })
         host.present(alert, animated: true)
+    }
+
+    /**
+     * Run `work` once the host has nothing presented over it.
+     *
+     * UIKit will not present a second view controller while the
+     * first is still on its way out, and says so only in the
+     * console. Rather than guessing at an animation duration, this
+     * polls briefly for the host to be free.
+     *
+     * Bounded: twenty tries at 50ms is a second, far longer than a
+     * dismissal takes. If it somehow has not cleared by then the
+     * work runs anyway, because a missed animation is better than a
+     * survey that stops.
+     */
+    private func whenHostIsFree(_ work: @escaping () -> Void, attempt: Int = 0) {
+        guard let host = hostVC else { work(); return }
+        if host.presentedViewController == nil || attempt >= 20 {
+            work()
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.whenHostIsFree(work, attempt: attempt + 1)
+        }
     }
 
     private func dismissModal(then work: @escaping () -> Void) {
@@ -353,6 +393,28 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
         let hasFloor = !room.floors.isEmpty
         let ready = walls >= 4 && hasFloor
 
+        /*
+         * Say it once, out loud, when the room is complete.
+         *
+         * The readiness line updates continuously, which is right
+         * for something you glance at and wrong for the one moment
+         * that actually matters -- the point where there is enough
+         * to finish. Somebody concentrating on sweeping a room does
+         * not notice a label change, and carries on scanning a room
+         * that was already done.
+         *
+         * Once per room, through the coaching strip, which is the
+         * channel the customer is already being spoken to on.
+         */
+        if ready && !enoughPromptShown {
+            enoughPromptShown = true
+            DispatchQueue.main.async { [weak self] in
+                self?.modalVC?.showCoaching(
+                    "That's the walls and the floor. Press Done, or carry on if there is more of this room."
+                )
+            }
+        }
+
         DispatchQueue.main.async { [weak self] in
             guard let self, let vc = self.modalVC else { return }
             vc.setReadiness(
@@ -401,6 +463,8 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
         }
     }
 
+    /// One "that's enough" prompt per room. Reset in presentCapture.
+    private var enoughPromptShown = false
     /// One doorway prompt per scan. See captureSession(_:didAdd:).
     private var doorPromptShown = false
     /// One partial-room prompt per scan, for the same reason.

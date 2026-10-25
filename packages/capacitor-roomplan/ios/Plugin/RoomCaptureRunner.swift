@@ -228,6 +228,8 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionDe
 
     /// One doorway prompt per scan. See captureSession(_:didAdd:).
     private var doorPromptShown = false
+    /// One "that's enough" prompt per scan. See didUpdate.
+    private var enoughPromptShown = false
     /// One window prompt per scan, same reasoning.
     private var windowPromptShown = false
     /// One partial-room prompt per scan, for the same reason.
@@ -268,6 +270,32 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionDe
         _ session: RoomCaptureSession,
         didUpdate room: CapturedRoom
     ) {
+        /*
+         * Tell them when the room is done.
+         *
+         * Apple's own coaching says what is wrong, never what is
+         * finished, so a single-room scan has no completion signal
+         * at all -- the customer keeps sweeping a room that has
+         * been fully captured for a minute, or stops early because
+         * nothing said either way.
+         *
+         * Four walls and a floor is an ordinary room captured
+         * properly. Said once, and not a gate: a three-walled scan
+         * may be exactly what somebody wants, and Done works
+         * throughout.
+         */
+        liveWallCount = room.walls.count
+        liveHasFloor = !room.floors.isEmpty
+
+        if !enoughPromptShown, room.walls.count >= 4, !room.floors.isEmpty {
+            enoughPromptShown = true
+            DispatchQueue.main.async { [weak self] in
+                self?.modalVC?.showCoaching(
+                    "That's the walls and the floor. Press Done, or carry on if there is more of this room."
+                )
+            }
+        }
+
         liveDoors = room.doors.map { d in
             let mid = CaptureSerializer.midpointXZForDoorway(d.transform)
             return (
@@ -307,6 +335,10 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionDe
      * then to come back and press Done.
      */
     private var liveDoors: [(id: String, x: Double, z: Double, widthM: Double)] = []
+    /// Live room shape, for the doorway prompt and the completion
+    /// prompt. Updated in captureSession(_:didUpdate:).
+    private var liveWallCount = 0
+    private var liveHasFloor = false
     private var doorwaysPassed: [String] = []
     private var doorwayTimer: Timer?
 
@@ -352,10 +384,35 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionDe
         if doorwaysPassed.last == near.id { return }
         doorwaysPassed.append(near.id)
 
+        /*
+         * A doorway reached with the room already captured is the
+         * moment the partition gets lost.
+         *
+         * Reported as internal partitions not appearing: two
+         * bedrooms with a landing between them came back without
+         * the walls that separate them. That is what happens when
+         * the customer keeps walking. RoomPlan decides for itself
+         * where one room ends, and carrying the scan through a
+         * doorway invites it to treat the lot as one space -- at
+         * which point the wall between two bedrooms is interior
+         * clutter rather than a boundary, and it is not drawn.
+         *
+         * Scanned separately, that same wall is the far wall of one
+         * room and the near wall of the next, and both get it.
+         *
+         * So the prompt depends on whether this room is finished.
+         * Early on, a doorway is a feature to capture. Once the
+         * walls and floor are in, it is a boundary, and the useful
+         * instruction is to stop here.
+         */
+        let roomLooksComplete = liveWallCount >= 4 && liveHasFloor
         DispatchQueue.main.async { [weak self] in
             self?.modalVC?.showCoaching(
-                "In the doorway - point through it for a moment so we can see "
-                    + "where it leads, then carry on round this room"
+                roomLooksComplete
+                    ? "That's a doorway. Press Done here and scan the next room "
+                        + "on its own, so the wall between them gets drawn."
+                    : "In the doorway - point through it for a moment so we can see "
+                        + "where it leads, then carry on round this room"
             )
         }
     }
