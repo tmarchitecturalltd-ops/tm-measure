@@ -234,13 +234,25 @@ Mobile first — this app is used standing in someone's hallway.
 
 ## 11. Repository hazards
 
-**`app/globals.css` is position-sensitive.** Rules added low in the
-file have more than once failed to reach the browser after a restart.
-Verified symptom: `document.styleSheets` contains rules from the top of
-the file and not from the bottom. If a new rule does not take effect,
-check it is actually emitted before assuming a cascade problem.
-`components/measure/GuidedScreen.tsx` uses inline styles for its
-background for exactly this reason.
+**`app/globals.css` stops rebuilding in `next dev`.** Observed
+repeatedly. Two symptoms, in order of severity:
+
+1. *Lag.* A new rule is not in `document.styleSheets` until the file
+   is touched and the page hard-reloaded.
+2. *Freeze.* Eventually the emitted chunk filename stops changing
+   (`_next/static/chunks/app_globals_<hash>.css` keeps the same hash
+   however often the file is saved) and **no further CSS change is
+   served at all**. TSX recompiles normally throughout, so a new
+   class appears in the markup with no rule behind it — which looks
+   like a cascade or specificity problem and is not one.
+
+**Diagnosis:** compare the chunk hash before and after a save. Same
+hash means frozen.
+**Fix:** restart the dev server. There is no in-session workaround.
+
+Before concluding that a rule "does not work", confirm it was
+actually emitted. `components/measure/GuidedScreen.tsx` uses inline
+styles for its background because of this.
 
 **Tailwind v4.** Tokens live in `@theme`. A bare `.text-primary`
 override ties on specificity with the generated utility, so overrides

@@ -379,6 +379,52 @@ body {
     inset 0 3px 8px rgba(24, 30, 34, 0.35);
 }
 
+/*
+ * Directional step transitions.
+ *
+ * The guided flow is one question per screen, and every one of them
+ * used to arrive with the same upward fade whichever control
+ * produced it. Back and Next were visually identical, so the six
+ * steps read as six unrelated screens rather than as a line the
+ * customer is moving along, and nobody could feel where they were.
+ *
+ * Forward enters from the right, back from the left. Small travel
+ * -- 18px, not a full slide -- because this is a phone held at
+ * arm's length and the point is to say which way, not to perform.
+ *
+ * Paired with .tm-fade-up rather than replacing it: that one
+ * staggers the content within a screen, this one moves the screen.
+ */
+@keyframes tmStepFwd {
+  from { opacity: 0; transform: translate3d(18px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes tmStepBack {
+  from { opacity: 0; transform: translate3d(-18px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.tm-step-fwd {
+  animation: tmStepFwd var(--dp-motion-navigation, 130ms) var(--dp-motion-settle) both;
+}
+
+.tm-step-back {
+  animation: tmStepBack var(--dp-motion-navigation, 130ms) var(--dp-motion-settle) both;
+}
+
+/*
+ * Reduced motion keeps the step change legible and loses the
+ * travel. A cross-fade still marks that the screen changed, which
+ * is the information; the sliding was only the flavour.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .tm-step-fwd,
+  .tm-step-back {
+    animation: none;
+  }
+}
+
 /* Headings are bold with tight tracking. */
 .font-headline {
   letter-spacing: -0.02em;

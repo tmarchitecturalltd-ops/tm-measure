@@ -146,6 +146,22 @@ export default function GuidedScreen({
     scrollRef.current?.scrollTo({ top: 0 });
   }, [scrollKey]);
 
+  /*
+   * Which way the customer is travelling.
+   *
+   * Every step used to arrive the same way regardless of whether
+   * Back or Next produced it, so going back felt identical to going
+   * forward and the flow had no spatial shape -- six screens of
+   * questions that each appeared from nowhere. Reading the
+   * direction off the control that was pressed is enough: forward
+   * enters from the right, back from the left, which is the model
+   * every phone already teaches.
+   *
+   * Held here rather than passed in, so no caller has to know about
+   * it and nothing about the existing step logic changes.
+   */
+  const [direction, setDirection] = useState<"fwd" | "back">("fwd");
+
   return (
     <div
       className="fixed inset-0 z-[45] flex flex-col"
@@ -378,7 +394,10 @@ export default function GuidedScreen({
             that. */}
         <div
           key={wide ? undefined : scrollKey}
-          className={wide ? "w-full" : "mx-auto w-full max-w-xl"}
+          className={
+            (wide ? "w-full " : "mx-auto w-full max-w-xl ") +
+            (direction === "back" ? "tm-step-back" : "tm-step-fwd")
+          }
         >
           {/* ── Typography pass ─────────────────────────────────────
               The question is the screen, and it was not being
@@ -448,9 +467,19 @@ export default function GuidedScreen({
             : undefined
         }
         backLabel={backLabelOverride}
-        onBack={onBack}
+        onBack={
+          onBack
+            ? () => {
+                setDirection("back");
+                onBack();
+              }
+            : undefined
+        }
         backDisabled={backDisabled || !onBack}
-        onNext={onNext}
+        onNext={() => {
+          setDirection("fwd");
+          onNext();
+        }}
         nextLabel={nextLabel}
         nextDisabled={nextDisabled}
         message={
