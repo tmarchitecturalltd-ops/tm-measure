@@ -482,26 +482,6 @@ export default function GuidedRoomFlow({
    * we ask.
    */
   const blocked = (): string | null => {
-    if (step === "scan" && !scanned) {
-      /*
-       * Not a block once the property has been scanned.
-       *
-       * This softened the wording and left the button disabled,
-       * which is the half of the fix that does nothing: `block`
-       * feeds nextDisabled, so a message here is a locked door with
-       * a politer sign on it. Reported from the field as "scan
-       * whole property is the right button, however doesn't let you
-       * progress" -- the customer had scanned the house, came back
-       * to a leftover room, and could not get past it.
-       *
-       * A leftover room after a property scan is a tidying job, not
-       * an unanswered question. Next carries on; the panel above
-       * still offers to scan it or remove it for anyone who wants
-       * to.
-       */
-      if (somethingElseScanned) return null;
-      return "Scan the room to carry on. It only takes a minute.";
-    }
     if (step === "name" && !room.name.trim()) {
       return "Give the room a name so we know which one it is.";
     }
@@ -519,6 +499,29 @@ export default function GuidedRoomFlow({
     return null;
   };
   const block = blocked();
+
+  /**
+   * An unmeasured room says so, and does not hold the door shut.
+   *
+   * This used to be a line in `blocked()`, which feeds both the
+   * message and `nextDisabled` -- so softening the words left the
+   * button dead and changed nothing anyone could feel. Reported
+   * twice from the field: once after a whole-property scan, with the
+   * flow reopening on a leftover room, and once after several rooms
+   * done one at a time, where the next empty room stopped the survey
+   * dead.
+   *
+   * Nothing downstream needs this room measured. An empty room is
+   * dropped at submission, and a half-finished survey is still worth
+   * more than a customer who gave up in their own hallway. So it
+   * warns, in the same panel, and Next carries on.
+   */
+  const scanWarning =
+    step === "scan" && !scanned
+      ? somethingElseScanned
+        ? "This room hasn't been measured. Scan it, or carry on without it."
+        : "Scan the room when you can — it only takes a minute."
+      : null;
 
   /** Which step a validation path belongs to, so we can go there. */
   const stepForPath = (path: string): StepId | null => {
@@ -836,7 +839,7 @@ export default function GuidedRoomFlow({
             : (doneLabel ?? "Done with the rooms")
           : "Next"
       }
-      blockMessage={block ?? finishIssue}
+      blockMessage={block ?? finishIssue ?? scanWarning}
     >
 
       {step === "name" && (
