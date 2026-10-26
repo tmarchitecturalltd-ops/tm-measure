@@ -28,6 +28,8 @@ import {
   looksLikeMergedCapture,
   looksLikeStrayCapture,
   outlineThumbnail,
+  outlineAreaM2,
+  roomFootprint,
   type RoomDraft,
   type RoomStairs,
 } from "@tm-designs/measure-core";
@@ -76,9 +78,8 @@ export default function ScanResultFilter({
       new Set(
         rooms
           .filter((r) => {
-            const w = Number.parseFloat(r.walls[0]?.lengthM ?? "") || 0;
-            const l = Number.parseFloat(r.walls[1]?.lengthM ?? "") || 0;
-            return looksLikeStrayCapture(w, l);
+            const { widthM, lengthM } = roomFootprint(r);
+            return looksLikeStrayCapture(widthM, lengthM);
           })
           .map((r) => r.id),
       ),
@@ -144,8 +145,19 @@ export default function ScanResultFilter({
       <ul className="overflow-hidden rounded-2xl border border-outline-variant/40">
         {rooms.map((r, i) => {
           const kept = !dropped.has(r.id);
-          const w = Number.parseFloat(r.walls[0]?.lengthM ?? "") || 0;
-          const l = Number.parseFloat(r.walls[1]?.lengthM ?? "") || 0;
+          /*
+           * The footprint, not walls[0] by walls[1].
+           *
+           * A scanned room's walls arrive in the sensor's order, so
+           * those two are whichever it fitted first. The capture that
+           * made this matter was three rooms taken as one: its
+           * envelope was 9.81 by 6.97 m, but the first two walls it
+           * returned were short ones, so every test on this screen
+           * was asked about a small room and sensibly said nothing.
+           * `roomFootprint` is the same fix already made in
+           * floorplan.ts, and the same reason.
+           */
+          const { widthM: w, lengthM: l } = roomFootprint(r);
           const thumb = outlineThumbnail(r.floorPolygonM, 44, 4);
           return (
             <li key={r.id}>
@@ -301,6 +313,7 @@ export default function ScanResultFilter({
                   {looksLikeMergedCapture({
                     widthM: w,
                     lengthM: l,
+                    floorAreaM2: outlineAreaM2(r.floorPolygonM),
                     // Hung doors only. A cased opening lives in the
                     // same list now, and counting them here would
                     // push ordinary open-plan rooms over the "this

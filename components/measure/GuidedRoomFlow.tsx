@@ -483,11 +483,24 @@ export default function GuidedRoomFlow({
    */
   const blocked = (): string | null => {
     if (step === "scan" && !scanned) {
-      // Not a demand when the property has already been scanned.
-      // See somethingElseScanned.
-      return somethingElseScanned
-        ? "This room hasn't been measured. Scan it, or fill it in by hand below."
-        : "Scan the room to carry on. It only takes a minute.";
+      /*
+       * Not a block once the property has been scanned.
+       *
+       * This softened the wording and left the button disabled,
+       * which is the half of the fix that does nothing: `block`
+       * feeds nextDisabled, so a message here is a locked door with
+       * a politer sign on it. Reported from the field as "scan
+       * whole property is the right button, however doesn't let you
+       * progress" -- the customer had scanned the house, came back
+       * to a leftover room, and could not get past it.
+       *
+       * A leftover room after a property scan is a tidying job, not
+       * an unanswered question. Next carries on; the panel above
+       * still offers to scan it or remove it for anyone who wants
+       * to.
+       */
+      if (somethingElseScanned) return null;
+      return "Scan the room to carry on. It only takes a minute.";
     }
     if (step === "name" && !room.name.trim()) {
       return "Give the room a name so we know which one it is.";

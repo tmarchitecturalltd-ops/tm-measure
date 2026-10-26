@@ -906,7 +906,7 @@ export function axisAlignOutline(polygon: { x: number; z: number }[]): {
  * said so: it was only spotted by reading the dimensions on a
  * submission and thinking they looked odd.
  *
- * Two tests, either of which is enough:
+ * Three tests, any of which is enough:
  *
  * Area. The largest room in an ordinary British house is a through
  * lounge or a kitchen-diner at around 35 m2. Above 45 there is a good
@@ -920,13 +920,46 @@ export function axisAlignOutline(polygon: { x: number; z: number }[]): {
  * swallowed the hall and what opens off it. Counted together with
  * windows because a merged capture usually has too many of both.
  *
+ * Sprawl. The two tests above both missed a capture from the field:
+ * three rooms taken as one, 32.7 m2 of floor with four doors, so
+ * under both thresholds — but its envelope was 9.81 m by 6.97 m, 68
+ * m2, and the floor filled less than half of it. That is the shape of
+ * several rooms with the space between them unaccounted for, not of a
+ * room. One real room of 32 m2 fills most of its own bounding box;
+ * even a sharp L fills roughly two thirds. So a large envelope that
+ * is mostly empty is the signal, and neither half means anything
+ * alone: a small L-shape is fine, and a well-filled 68 m2 envelope is
+ * already caught by area.
+ *
  * The point is not to be right. It is that the only person who can
  * fix a merged capture is the customer, while they are still in the
  * house, and they cannot fix what nobody told them about.
  */
+/**
+ * The floor area enclosed by a room outline, in square metres.
+ *
+ * Shoelace, absolute, so winding order does not matter. Zero for
+ * anything that is not a polygon, which the callers treat as "no
+ * area known" rather than "a room of no size".
+ */
+export function outlineAreaM2(
+  polygon: { x: number; z: number }[] | null | undefined,
+): number {
+  if (!polygon || polygon.length < 3) return 0;
+  let sum = 0;
+  for (let i = 0; i < polygon.length; i += 1) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % polygon.length];
+    sum += a.x * b.z - b.x * a.z;
+  }
+  return Math.abs(sum) / 2;
+}
+
 export const MERGED_CAPTURE_MIN_M2 = 45;
 export const MERGED_CAPTURE_MIN_DOORS = 5;
 export const MERGED_CAPTURE_MIN_OPENINGS = 9;
+export const MERGED_CAPTURE_SPRAWL_BBOX_M2 = 45;
+export const MERGED_CAPTURE_SPRAWL_FILL = 0.65;
 
 export function looksLikeMergedCapture(opts: {
   widthM: number;
@@ -943,6 +976,18 @@ export function looksLikeMergedCapture(opts: {
 
   if (Number.isFinite(area) && area >= MERGED_CAPTURE_MIN_M2) return true;
   if (doorCount >= MERGED_CAPTURE_MIN_DOORS) return true;
+
+  const bbox = widthM * lengthM;
+  if (
+    Number.isFinite(bbox) &&
+    Number.isFinite(area) &&
+    area > 0 &&
+    bbox >= MERGED_CAPTURE_SPRAWL_BBOX_M2 &&
+    area / bbox < MERGED_CAPTURE_SPRAWL_FILL
+  ) {
+    return true;
+  }
+
   return doorCount + windowCount >= MERGED_CAPTURE_MIN_OPENINGS;
 }
 

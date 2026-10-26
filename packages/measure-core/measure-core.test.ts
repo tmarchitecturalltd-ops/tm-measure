@@ -1846,6 +1846,46 @@ test("a capture the size of a house is flagged as more than one room", () => {
     false,
     "a downstairs loo is a real room",
   );
+
+  /*
+   * The sprawl test, from the capture that got past the two above.
+   * Three rooms and the landing between them taken as one: only
+   * 32.7 m2 of floor and four doors, so under both thresholds, but
+   * spread over a 9.81 x 6.97 m envelope it fills under half of.
+   */
+  assert.equal(
+    looksLikeMergedCapture({
+      widthM: 9.81,
+      lengthM: 6.97,
+      floorAreaM2: 32.7,
+      doorCount: 4,
+    }),
+    true,
+    "a 68 square metre envelope half full of floor is several rooms",
+  );
+
+  // Neither half of the sprawl test means anything on its own.
+  assert.equal(
+    looksLikeMergedCapture({
+      widthM: 5,
+      lengthM: 4,
+      floorAreaM2: 11,
+      doorCount: 1,
+    }),
+    false,
+    "a small L-shaped room fills little of its box and is still a room",
+  );
+  assert.equal(
+    looksLikeMergedCapture({
+      widthM: 4.2,
+      lengthM: 3.1,
+      floorAreaM2: 12.4,
+      doorCount: 1,
+      windowCount: 1,
+    }),
+    false,
+    "a filled rectangle is quiet whatever its fill ratio says",
+  );
 });
 
 test("a rotated sliver is still rejected", () => {
