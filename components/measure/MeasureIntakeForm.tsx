@@ -2579,6 +2579,51 @@ export default function MeasureIntakeForm() {
     return kept;
   };
 
+  /**
+   * A room with a name on it and nothing else, on a phone that scans.
+   *
+   * The scan-capable flow has two screens, name and scan, and no
+   * typed-length screen at all -- so a room the customer carried on
+   * past is a room with a name and no measurement, and there is no
+   * field anywhere in that flow where the missing lengths could be
+   * supplied. Validation does not know that. It asked for the wall
+   * lengths, the guided screen could not show a step that does not
+   * exist, and the survey dropped into the all-at-once form with red
+   * errors under boxes the customer had never been shown. Reported
+   * as "that continue button worked now, but then it's saying input
+   * measurements".
+   *
+   * So carrying on without a room means the room goes. The warning on
+   * the scan screen says exactly that, and a named room with nothing
+   * in it carries nothing a draughtsman could draw.
+   *
+   * Strict in the same way as roomIsBlank, and for the same reason:
+   * any photo, memo, opening, outline or scan is real work and the
+   * room stays, lengths or no lengths. Only the name is ignored,
+   * because the name is the one thing this flow asks for before it
+   * asks for anything else.
+   */
+  /**
+   * The same test as the `scanRequired` prop below, named once.
+   * These two must agree: this decides what happens to a room the
+   * scan-only flow let the customer past, and that decides whether
+   * the flow is scan-only in the first place.
+   */
+  const scanCapable =
+    SCAN_ENABLED && (arSupport === "yes" || arTraceSupport === "yes");
+
+  const roomIsNameOnly = (r: RoomDraft): boolean =>
+    !r.walls.some((w) => w.lengthM.trim()) &&
+    (r.photos?.length ?? 0) === 0 &&
+    (r.voiceMemos?.length ?? 0) === 0 &&
+    (r.doors?.length ?? 0) === 0 &&
+    (r.windows?.length ?? 0) === 0 &&
+    (r.stairs?.length ?? 0) === 0 &&
+    (r.floorPolygonM?.length ?? 0) === 0 &&
+    r.measuredByScan !== true &&
+    !r.notes.trim() &&
+    !r.irregularNotes.trim();
+
   const nonBlockingIssues = (rooms: RoomDraft[]) =>
     validateProject(rooms).filter((i) => !/-photos$/.test(i.path));
 
@@ -6795,7 +6840,30 @@ export default function MeasureIntakeForm() {
               setActiveRoomIndex((i) => i + 1);
               return;
             }
-            const v = nonBlockingIssues(pruneBlankRooms());
+            let surviving = pruneBlankRooms();
+            /*
+             * Carrying on without a room has to actually leave it
+             * out. On a scanning phone there is no screen that could
+             * fix a missing length, so keeping the room only produces
+             * errors nobody can clear -- see roomIsNameOnly.
+             */
+            if (scanCapable) {
+              const kept = surviving.filter((r) => !roomIsNameOnly(r));
+              if (kept.length && kept.length < surviving.length) {
+                const goneIds = new Set(
+                  surviving.filter((r) => roomIsNameOnly(r)).map((r) => r.id),
+                );
+                setRooms(kept);
+                setPlacements((prev) => {
+                  const next = { ...prev };
+                  for (const id of goneIds) delete next[id];
+                  return next;
+                });
+                setActiveRoomIndex((i) => Math.min(i, kept.length - 1));
+                surviving = kept;
+              }
+            }
+            const v = nonBlockingIssues(surviving);
             setIssues(v);
             if (v.length) {
               // Something is wrong in a room other than this one —
@@ -6914,10 +6982,7 @@ export default function MeasureIntakeForm() {
            * cannot do either, and for anyone whose scan fails —
            * manualEscape inside the flow still brings them back.
            */
-          scanRequired={
-            SCAN_ENABLED &&
-            (arSupport === "yes" || arTraceSupport === "yes")
-          }
+          scanRequired={scanCapable}
           scanFailed={scanAttempts > 0}
         />
       )}
