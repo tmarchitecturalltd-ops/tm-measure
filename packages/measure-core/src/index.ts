@@ -9,3 +9,4 @@ export * from "./joinRooms";
 export * from "./floorplan";
 export * from "./dxf";
 export * from "./dxfPlan";
+export * from "./splitRooms";

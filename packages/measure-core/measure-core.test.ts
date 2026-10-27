@@ -39,6 +39,12 @@ import {
 import { fixtureFootprintM, rotatePointM } from "./src/types.ts";
 import { validateRoom, validateOpening } from "./src/validation.ts";
 import {
+  wallFaces,
+  splitRoomsByWalls,
+  polygonAreaXZ,
+  faceForOpening,
+} from "./src/splitRooms.ts";
+import {
   scanPolygonIsUsable,
   scanOutlineWorthKeeping,
   looksLikeStrayCapture,
@@ -2844,4 +2850,107 @@ test("a measured opening is not judged by the typing limits", () => {
     "Invalid number.",
     "a broken value is still a fault, measured or not",
   );
+});
+
+/*
+ * Rooms rebuilt from the walls.
+ *
+ * From the field: a whole-property scan of two rooms either side of
+ * a small hallway came back as one 38.3 m2 room, with the partitions
+ * showing as kinks in a single outline. RoomPlan merges a continuous
+ * walk; the walls it reports do not merge, so the rooms are read back
+ * off those instead.
+ */
+const wallLine = (x1: number, z1: number, x2: number, z2: number) => ({
+  start: { x: x1, z: z1 },
+  end: { x: x2, z: z2 },
+  thicknessM: 0.125,
+});
+
+test("two rooms either side of a hallway come out as three", () => {
+  const walls = [
+    wallLine(0, 0, 9.2, 0),
+    wallLine(0, 4, 9.2, 4),
+    wallLine(0, 0, 0, 4),
+    wallLine(9.2, 0, 9.2, 4),
+    wallLine(4, 0, 4, 4),
+    wallLine(5.2, 0, 5.2, 4),
+  ];
+  const faces = wallFaces(walls);
+  assert.equal(faces.length, 3, "two bedrooms and the landing");
+  const areas = faces
+    .map((f) => Math.abs(polygonAreaXZ(f)))
+    .sort((a, b) => a - b);
+  assert.ok(
+    Math.abs(areas[0] - 4.8) < 0.6,
+    `the hallway is about 4.8 m2, got ${areas[0].toFixed(2)}`,
+  );
+});
+
+test("walls that stop short of each other still enclose a room", () => {
+  /*
+   * RoomPlan reports inner faces, so walls meeting at a corner stop
+   * short of each other by about a wall thickness and share no
+   * endpoint. Without the extension there is no closed region
+   * anywhere and the split silently finds nothing.
+   */
+  const g = 0.13;
+  const walls = [
+    wallLine(g, 0, 9.2 - g, 0),
+    wallLine(g, 4, 9.2 - g, 4),
+    wallLine(0, g, 0, 4 - g),
+    wallLine(9.2, g, 9.2, 4 - g),
+    wallLine(4, g, 4, 4 - g),
+    wallLine(5.2, g, 5.2, 4 - g),
+  ];
+  assert.equal(wallFaces(walls).length, 3);
+});
+
+test("a genuine single room is never split", () => {
+  // The harder half. A rectangle and an L-shape must come through
+  // untouched, or every one-room scan gains imaginary rooms.
+  assert.equal(
+    splitRoomsByWalls([
+      wallLine(0, 0, 4, 0),
+      wallLine(0, 4, 4, 4),
+      wallLine(0, 0, 0, 4),
+      wallLine(4, 0, 4, 4),
+    ]),
+    null,
+    "a rectangle is one room",
+  );
+  assert.equal(
+    splitRoomsByWalls([
+      wallLine(0, 0, 6, 0),
+      wallLine(6, 0, 6, 3),
+      wallLine(6, 3, 3, 3),
+      wallLine(3, 3, 3, 6),
+      wallLine(3, 6, 0, 6),
+      wallLine(0, 6, 0, 0),
+    ]),
+    null,
+    "and so is an L",
+  );
+});
+
+test("an opening goes to the room whose wall it is in", () => {
+  const faces = [
+    [
+      { x: 0, z: 0 },
+      { x: 4, z: 0 },
+      { x: 4, z: 4 },
+      { x: 0, z: 4 },
+    ],
+    [
+      { x: 5.2, z: 0 },
+      { x: 9.2, z: 0 },
+      { x: 9.2, z: 4 },
+      { x: 5.2, z: 4 },
+    ],
+  ];
+  // A window in the first room's outside wall. Its centre sits on
+  // the boundary, which is why "inside the polygon" is the wrong
+  // test and nearest boundary is the right one.
+  assert.equal(faceForOpening({ x: 2, z: 0 }, faces), 0);
+  assert.equal(faceForOpening({ x: 7, z: 4 }, faces), 1);
 });

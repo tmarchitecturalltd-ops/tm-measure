@@ -28,6 +28,8 @@ import {
   squareUpOutline,
   axisAlignOutline,
   placeOpeningOnOutline,
+  splitRoomsByWalls,
+  faceForOpening,
   roomFootprint,
   rotatePointM,
   roomBoundingBox,
@@ -73,6 +75,7 @@ import LengthHint from "@/components/measure/LengthHint";
 import {
   RoomPlan,
   type RoomPlanScanResult,
+  type RoomPlanRoom,
   type RoomPlanStairs,
 } from "@tm-designs/capacitor-roomplan";
 import {
@@ -155,6 +158,100 @@ function wallDefaults(): WallSegment[] {
     { id: newId(), label: "Wall 3", lengthM: "" },
     { id: newId(), label: "Wall 4", lengthM: "" },
   ];
+}
+
+/**
+ * One captured room that is really several, taken apart.
+ *
+ * RoomPlan merges a continuous walk into a single CapturedRoom. The
+ * floor polygon it returns then wanders around every space the
+ * customer walked through, pinching at each doorway, and the app drew
+ * exactly that: one room the size of a floor, with the partitions
+ * showing as kinks in its outline rather than as walls. The hallway
+ * between two bedrooms had no existence at all.
+ *
+ * The partitions are in the data -- RoomPlan reports every wall it
+ * found, internal ones included. So the walls are laid down as lines
+ * and the enclosed regions read back off them; see splitRoomsByWalls.
+ * Each region becomes a room, the openings go to the region whose
+ * wall they sit in, and everything downstream carries on as though
+ * the sensor had returned them separately.
+ *
+ * Left alone when the split finds fewer than two regions, which is
+ * the ordinary single-room case and must come through untouched.
+ */
+function explodeMergedRooms(rooms: RoomPlanRoom[]): RoomPlanRoom[] {
+  const out: RoomPlanRoom[] = [];
+  for (const sr of rooms) {
+    const lines = (sr.walls ?? [])
+      .filter((w) => w.start && w.end)
+      .map((w) => ({
+        start: w.start,
+        end: w.end,
+        thicknessM: w.thicknessM,
+      }));
+    const faces =
+      lines.length >= 4 ? splitRoomsByWalls(lines, sr.floorPolygonM) : null;
+    if (!faces || faces.length < 2) {
+      out.push(sr);
+      continue;
+    }
+
+    const openingsOf = <T extends { midpoint?: { x: number; z: number } }>(
+      list: T[] | undefined,
+      faceIndex: number,
+    ): T[] =>
+      (list ?? []).filter((o) =>
+        o.midpoint ? faceForOpening(o.midpoint, faces) === faceIndex : false,
+      );
+
+    faces.forEach((face, fi) => {
+      const xs = face.map((p) => p.x);
+      const zs = face.map((p) => p.z);
+      const minX = Math.min(...xs);
+      const minZ = Math.min(...zs);
+      const widthM = Math.max(...xs) - minX;
+      const lengthM = Math.max(...zs) - minZ;
+      // The anchor is the region's own bottom-left corner, so the
+      // polygon below is expressed relative to something inside it
+      // rather than to the whole property's origin.
+      const originM = { x: minX, z: minZ };
+      out.push({
+        ...sr,
+        id: `${sr.id ?? "room"}-${fi + 1}`,
+        name: "",
+        widthM,
+        lengthM,
+        originM,
+        floorPolygonM: face,
+        // Each edge of the region is a wall of that room. The
+        // sensor's own wall list describes the whole floor and
+        // would give a bedroom the landing's walls.
+        walls: face.map((p, i) => {
+          const q = face[(i + 1) % face.length];
+          return {
+            id: `${sr.id ?? "room"}-${fi + 1}-w${i + 1}`,
+            midpoint: { x: (p.x + q.x) / 2, z: (p.z + q.z) / 2 },
+            start: p,
+            end: q,
+            lengthM: Math.hypot(q.x - p.x, q.z - p.z),
+            heightM: sr.heightM ?? 0,
+            thicknessM: sr.walls?.[0]?.thicknessM ?? 0.125,
+          };
+        }),
+        doors: openingsOf(sr.doors, fi),
+        windows: openingsOf(sr.windows, fi),
+        openings: openingsOf(sr.openings, fi),
+        // Stairs belong to whichever region they stand in, and a
+        // flight reported without a position belongs to none of
+        // them rather than to all of them.
+        stairs: (sr.stairs ?? []).filter((s) =>
+          s.midpoint ? faceForOpening(s.midpoint, faces) === fi : false,
+        ),
+      });
+    });
+  }
+  return out;
 }
 
 function emptyRoom(): RoomDraft {
@@ -905,7 +1002,7 @@ export default function MeasureIntakeForm() {
   );
 
   const applyHouseScan = useCallback((result: RoomPlanScanResult) => {
-    const scanned = result.rooms ?? [];
+    const scanned = explodeMergedRooms(result.rooms ?? []);
     if (!scanned.length) return;
 
     const stamp = `[Whole-property LiDAR scan ${new Date().toISOString()}. ${scanned.length} room${scanned.length === 1 ? "" : "s"}]`;
