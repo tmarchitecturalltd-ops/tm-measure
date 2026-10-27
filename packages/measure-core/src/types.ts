@@ -53,6 +53,25 @@ export type Opening = {
    * invisible on the drawing while a missing door is obvious.
    */
   cased?: boolean;
+  /**
+   * The sensor reported this opening; nobody typed it.
+   *
+   * The width limits are a typo-catcher for a person entering a
+   * number into a box -- nobody means to type a 4 cm door. They are
+   * not facts about buildings. RoomPlan reports what is there,
+   * including a 2.38 m opening between two rooms, and that is over
+   * the 2 m door maximum: a real measurement failing a rule written
+   * for mistyping.
+   *
+   * The consequence was not a warning. The survey ran the whole-
+   * project validator, found the "fault", and dropped out of the
+   * guided flow into the all-at-once form to show the customer a
+   * red line under a number they had never entered and could not
+   * improve. Reported as "the buttons aren't working after scanning
+   * the room". The same shape as the wall-length minimum, which was
+   * exempted for the same reason.
+   */
+  fromScan?: boolean;
 };
 
 /** Cross-platform photo reference (web: blob URI; native: file/content URI). */

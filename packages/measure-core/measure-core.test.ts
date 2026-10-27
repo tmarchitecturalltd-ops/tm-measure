@@ -37,7 +37,7 @@ import {
   FLOOR_GAP_M,
 } from "./src/dxfPlan.ts";
 import { fixtureFootprintM, rotatePointM } from "./src/types.ts";
-import { validateRoom } from "./src/validation.ts";
+import { validateRoom, validateOpening } from "./src/validation.ts";
 import {
   scanPolygonIsUsable,
   scanOutlineWorthKeeping,
@@ -2808,4 +2808,40 @@ test("a door wider than its wall is called out, not silently dropped", () => {
   );
 
   assert.equal(openingTooWideForWall({ doors: [], windows: [] }), null);
+});
+
+test("a measured opening is not judged by the typing limits", () => {
+  /*
+   * From the field: RoomPlan reported a 2.38 m cased opening, which
+   * is over the 2 m door maximum. The maximum is a typo-catcher for
+   * someone entering a number, not a fact about buildings, and the
+   * survey stopped dead on it -- the guided flow dropped into the
+   * all-at-once form to show a red line under a figure the customer
+   * had never typed and could not improve.
+   */
+  assert.notEqual(
+    validateOpening("2.38", "room-0-door-0", "door"),
+    null,
+    "a typed 2.38 m door is questioned, which is the rule working",
+  );
+  assert.equal(
+    validateOpening("2.38", "room-0-door-0", "door", true),
+    null,
+    "the same width, measured, passes",
+  );
+  assert.equal(
+    validateOpening("2.6", "room-0-door-0", "door", true),
+    null,
+    "a measured 2.6 m opening is a real opening",
+  );
+  assert.notEqual(
+    validateOpening("2.6", "room-0-door-0", "door"),
+    null,
+    "a typed 2.6 m door is still questioned",
+  );
+  assert.equal(
+    validateOpening("wide", "room-0-door-0", "door", true)?.message,
+    "Invalid number.",
+    "a broken value is still a fault, measured or not",
+  );
 });

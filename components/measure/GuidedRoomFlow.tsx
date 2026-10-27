@@ -955,8 +955,8 @@ export default function GuidedRoomFlow({
               to do the wrong thing with the right tool. */}
           <p className="text-base leading-relaxed text-on-surface-variant">
             {scanIsLidar
-              ? "Your phone can measure this room itself. Walls, ceiling, doors and windows. More precisely than a tape, and there's nothing to type afterwards."
-              : "Your phone can measure this room from its camera. You tap the corners of the floor, then the doors and windows, and it works out the real sizes. No tape measure, and nothing to type afterwards."}
+              ? "Your phone measures the walls, ceiling, doors and windows. Nothing to type."
+              : "Tap the corners of the floor, then the doors and windows. Nothing to type."}
           </p>
           <button
             type="button"
@@ -978,8 +978,8 @@ export default function GuidedRoomFlow({
           )}
           <p className="text-sm text-on-surface-variant">
             {scanIsLidar
-              ? "Hold the phone up and walk slowly round the room, pointing it at each wall in turn. Tap Done when the whole room is covered."
-              : "Two parts, both tapping. First the corners of the room: aim where the walls meet the floor, not at the furniture. Then the doors and windows, two taps each. It takes a minute or two."}
+              ? "Walk slowly round the room, pointing at each wall. Tap Done when it's covered."
+              : "Aim where the walls meet the floor, not at the furniture. Then two taps on each door and window."}
           </p>
 
           {/* The last resort, and framed as one.
@@ -998,10 +998,10 @@ export default function GuidedRoomFlow({
             <div className="rounded-xl border border-outline-variant/40 p-4">
               <p className="text-sm text-on-surface-variant">
                 {somethingElseScanned && !scanFailed
-                  ? "Already scanned this one as part of the property? Remove it from the Steps menu, or type the sizes if you have them."
+                  ? "Already scanned as part of the property? Remove it from the Steps menu."
                   : scanFailed
-                    ? "Try scanning once more if you can \u2014 the phone measures this better than a tape does. If the room won't scan at all, you can type the sizes instead."
-                    : "Scanning is the accurate way and takes about a minute. If you would rather measure this room yourself, you can."}
+                    ? "Try once more if you can \u2014 the phone measures better than a tape. If it won't scan, type the sizes."
+                    : "Scanning takes about a minute. You can measure it yourself instead."}
               </p>
               <button
                 type="button"

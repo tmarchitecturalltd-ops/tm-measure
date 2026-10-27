@@ -265,6 +265,7 @@ function scannedOpening(
   note: string;
   wallIndex?: number;
   positionM?: string;
+  fromScan: true;
 } {
   const placed = o.midpoint
     ? placeOpeningOnOutline(o.midpoint, outline)
@@ -274,6 +275,7 @@ function scannedOpening(
       id,
       widthM: o.widthM.toFixed(2),
       note: "Detected by scan",
+      fromScan: true,
       wallIndex: placed.wallIndex,
       positionM: placed.positionM.toFixed(2),
     };
@@ -287,6 +289,7 @@ function scannedOpening(
     id,
     widthM: o.widthM.toFixed(2),
     note: "Detected by scan",
+    fromScan: true,
     ...(wallIndex >= 0 ? { wallIndex } : {}),
     ...(Number.isFinite(o.offsetFromWallStartM)
       ? { positionM: (o.offsetFromWallStartM as number).toFixed(2) }
@@ -765,6 +768,7 @@ export default function MeasureIntakeForm() {
                   id: newId(),
                   widthM: d.valueM.toFixed(2),
                   note: d.note ?? "Detected by scan",
+                  fromScan: true,
                 })),
               ]
             : r.doors;
@@ -776,6 +780,7 @@ export default function MeasureIntakeForm() {
                   id: newId(),
                   widthM: w.valueM.toFixed(2),
                   note: w.note ?? "Detected by scan",
+                  fromScan: true,
                 })),
               ]
             : r.windows;

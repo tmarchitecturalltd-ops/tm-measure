@@ -50,11 +50,14 @@ export function validateOpening(
   value: string,
   path: string,
   kind: "door" | "window",
+  /** Measured by the sensor: skip the range, keep the number check. */
+  fromScan = false,
 ): FieldIssue | null {
   const t = value.trim();
   if (!t) return null;
   const n = parseMeters(t);
   if (n === null) return { path, message: "Invalid number." };
+  if (fromScan) return null;
   const lo = kind === "door" ? LIMITS.doorMin : LIMITS.windowMin;
   const hi = kind === "door" ? LIMITS.doorMax : LIMITS.windowMax;
   if (n < lo || n > hi)
@@ -114,12 +117,29 @@ export function validateRoom(room: RoomDraft, index: number): FieldIssue[] {
   }
   const c = validateCeiling(room.ceilingHeightM, `${p}-ceiling`);
   if (c) issues.push(c);
+  /*
+   * A measured opening is not checked against the typing limits.
+   * See Opening.fromScan -- a 2.38 m cased opening is a real one,
+   * and failing it stopped the survey dead with no field to fix.
+   * A width that is not a number is still a fault, because that is
+   * a broken value rather than a surprising one.
+   */
   room.doors.forEach((d, di) => {
-    const hit = validateOpening(d.widthM, `${p}-door-${di}`, "door");
+    const hit = validateOpening(
+      d.widthM,
+      `${p}-door-${di}`,
+      "door",
+      d.fromScan === true,
+    );
     if (hit) issues.push(hit);
   });
   room.windows.forEach((w, wi) => {
-    const hit = validateOpening(w.widthM, `${p}-window-${wi}`, "window");
+    const hit = validateOpening(
+      w.widthM,
+      `${p}-window-${wi}`,
+      "window",
+      w.fromScan === true,
+    );
     if (hit) issues.push(hit);
   });
   /*
