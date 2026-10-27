@@ -306,7 +306,7 @@ class RoomCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionDe
             enoughPromptShown = true
             DispatchQueue.main.async { [weak self] in
                 self?.modalVC?.showCoaching(
-                    "That's the walls and the floor. Press Done, or carry on if there is more of this room."
+                    "You can press Done whenever the room is covered."
                 )
             }
         }

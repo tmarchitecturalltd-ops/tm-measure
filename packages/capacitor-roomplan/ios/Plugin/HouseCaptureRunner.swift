@@ -410,7 +410,7 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
             enoughPromptShown = true
             DispatchQueue.main.async { [weak self] in
                 self?.modalVC?.showCoaching(
-                    "That's the walls and the floor. Press Done, or carry on if there is more of this room."
+                    "You can press Done whenever the room is covered."
                 )
             }
         }
@@ -419,11 +419,26 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
             guard let self, let vc = self.modalVC else { return }
             vc.setReadiness(
                 ready: ready,
+                /*
+                 * No counts, and no instruction to move on.
+                 *
+                 * This read "4 walls and the floor. Ready to finish
+                 * this room" halfway round a room, which the
+                 * customer reasonably took as the app saying the
+                 * room was done -- reported as "it's like 4 walls
+                 * done, move onto next room, except I've done like
+                 * half the room". The sensor cannot know how many
+                 * walls a room has, so a count is a number that
+                 * invites exactly that reading and tells nobody
+                 * anything. Only the customer knows when the room
+                 * is covered, so the line says what to do and
+                 * leaves the deciding to them.
+                 */
                 text: ready
-                    ? "\(walls) walls and the floor. Ready to finish this room"
+                    ? "Keep going until the whole room is covered"
                     : hasFloor
-                        ? "\(walls) wall\(walls == 1 ? "" : "s") so far. Keep going round"
-                        : "Looking for the floor. Point the phone down and move slowly"
+                        ? "Keep going round the room"
+                        : "Point the phone down to pick up the floor"
             )
         }
     }

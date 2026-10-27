@@ -1159,8 +1159,24 @@ export default function MeasureIntakeForm() {
       // Drop rooms the customer never filled in — otherwise a scan of
       // six rooms lands alongside the blank starter room and they have
       // to work out which one is real.
+      /*
+       * A name on its own is not work worth keeping here.
+       *
+       * This kept any room with a name, so the starter room the app
+       * created came through a whole-property scan intact and the
+       * flow reopened on "Room 1 of 4" — a room with nothing in it,
+       * sitting in front of the three the customer had just
+       * scanned, asking to be scanned. Reported as "after that's
+       * the lot it says 1/4 so I have to spam skip".
+       *
+       * Anything the customer actually put in a room still saves
+       * it: a measurement, a photo, a memo, an opening, an
+       * outline. See roomIsNameOnly.
+       */
       const kept = prev.filter(
-        (r) => r.name.trim() || r.walls.some((w) => w.lengthM.trim()),
+        (r) =>
+          (r.name.trim() || r.walls.some((w) => w.lengthM.trim())) &&
+          !roomIsNameOnly(r),
       );
       keptCount = kept.length;
       return [...kept, ...built];
