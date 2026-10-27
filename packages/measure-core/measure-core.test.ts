@@ -43,6 +43,7 @@ import {
   splitRoomsByWalls,
   polygonAreaXZ,
   faceForOpening,
+  openFloorEdges,
 } from "./src/splitRooms.ts";
 import {
   scanPolygonIsUsable,
@@ -2953,4 +2954,64 @@ test("an opening goes to the room whose wall it is in", () => {
   // test and nearest boundary is the right one.
   assert.equal(faceForOpening({ x: 2, z: 0 }, faces), 0);
   assert.equal(faceForOpening({ x: 7, z: 4 }, faces), 1);
+});
+
+test("a landing open to the stairwell is still a room", () => {
+  /*
+   * The case from the photograph: two bedrooms off a narrow landing
+   * with the staircase dropping out of it. The landing's fourth side
+   * is a void, so the walls alone leave it open and it is lost. The
+   * sensor measured where the floor stops at the head of the stairs,
+   * and that edge bounds the room exactly as a wall would.
+   */
+  const walls = [
+    wallLine(0, 0, 9.2, 0),
+    wallLine(0, 0, 0, 4),
+    wallLine(9.2, 0, 9.2, 4),
+    wallLine(4, 0, 4, 4),
+    wallLine(5.2, 0, 5.2, 4),
+    // The back wall exists either side of the stairwell only.
+    wallLine(0, 4, 4, 4),
+    wallLine(5.2, 4, 9.2, 4),
+  ];
+  const floor = [
+    { x: 0, z: 0 },
+    { x: 9.2, z: 0 },
+    { x: 9.2, z: 4 },
+    { x: 5.2, z: 4 },
+    { x: 5.2, z: 4 },
+    { x: 4, z: 4 },
+    { x: 0, z: 4 },
+  ];
+  assert.equal(
+    wallFaces(walls).length,
+    2,
+    "walls alone: the two bedrooms, and no landing",
+  );
+  const withFloor = splitRoomsByWalls(walls, floor);
+  assert.equal(withFloor?.length, 3, "with the floor edge: the landing too");
+});
+
+test("the floor outline does not lay a sliver beside every wall", () => {
+  /*
+   * The floor outline runs a few centimetres inside each wall. Fed
+   * in wholesale it encloses a long thin strip against every wall in
+   * the house, and on a long enough wall that strip is bigger than a
+   * cupboard -- a phantom room the shape of a wall. Only edges that
+   * shadow no wall are kept.
+   */
+  const walls = [
+    wallLine(0, 0, 15, 0),
+    wallLine(0, 4, 15, 4),
+    wallLine(0, 0, 0, 4),
+    wallLine(15, 0, 15, 4),
+  ];
+  const inset = [
+    { x: 0.12, z: 0.12 },
+    { x: 14.88, z: 0.12 },
+    { x: 14.88, z: 3.88 },
+    { x: 0.12, z: 3.88 },
+  ];
+  assert.equal(openFloorEdges(inset, walls).length, 0, "all four shadow a wall");
+  assert.equal(splitRoomsByWalls(walls, inset), null, "so it stays one room");
 });

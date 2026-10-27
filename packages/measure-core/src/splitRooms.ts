@@ -375,6 +375,51 @@ export function faceForOpening(p: Pt, faces: Pt[][]): number {
 }
 
 /**
+ * The edges of the floor that are not already walls.
+ *
+ * Most of the floor outline runs along a wall, a few centimetres
+ * inside it. Feeding those in as well would lay a second line
+ * alongside every wall in the house and enclose a long thin sliver
+ * between the two — and on a 15 m run a 0.12 m sliver is 1.8 m2,
+ * which is a room by any test this file applies. A bedroom would
+ * gain a phantom neighbour the shape of its own wall.
+ *
+ * So an edge is only kept when it is not shadowing a wall: nothing
+ * running roughly parallel to it, roughly where it is. What
+ * survives is the floor edge at a stairwell, a balcony or a
+ * galleried landing — the places where the room genuinely has no
+ * wall, which is the whole reason for doing this.
+ */
+export function openFloorEdges(
+  floorPolygon: Pt[],
+  walls: WallLine[],
+  nearM = CORNER_SNAP_M,
+): WallLine[] {
+  const dirOf = (a: Pt, b: Pt) => {
+    const d = sub(b, a);
+    const len = Math.hypot(d.x, d.z) || 1;
+    return { x: d.x / len, z: d.z / len };
+  };
+  const out: WallLine[] = [];
+  for (let i = 0; i < floorPolygon.length; i += 1) {
+    const a = floorPolygon[i];
+    const b = floorPolygon[(i + 1) % floorPolygon.length];
+    if (dist(a, b) < 0.15) continue;
+    const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+    const dir = dirOf(a, b);
+    const shadowed = walls.some((w) => {
+      const wd = dirOf(w.start, w.end);
+      // |cross| near zero means the two run the same way, whichever
+      // direction each happens to be drawn in.
+      if (Math.abs(cross(dir, wd)) > 0.26) return false; // ~15 degrees
+      return distanceToBoundary(mid, [w.start, w.end]) <= nearM;
+    });
+    if (!shadowed) out.push({ start: a, end: b });
+  }
+  return out;
+}
+
+/**
  * Split one captured room into the rooms it actually contains.
  *
  * Returns null when there is nothing to split — fewer than two
@@ -384,17 +429,39 @@ export function faceForOpening(p: Pt, faces: Pt[][]): number {
  * difference between a failure and a genuine one-room house unless
  * this says so.
  *
- * `floorPolygon`, when given, discards faces whose centre falls
- * outside the floor the sensor measured — the arrangement can close
- * a region in the garden between an outside wall and a fence-line
- * the scanner caught through a window.
+ * `floorPolygon`, when given, does two jobs.
+ *
+ * It discards faces whose centre falls outside the floor the sensor
+ * measured — the arrangement can close a region in the garden
+ * between an outside wall and a fence line the scanner caught
+ * through a window.
+ *
+ * It also joins in as boundary. Not every edge of a room is a wall:
+ * a landing at the top of a staircase is open on the stairwell side,
+ * and there is nothing there for the walls to close against, so the
+ * landing never forms a region and the one space the customer most
+ * wants named is the one that disappears. The sensor does measure
+ * where the floor stops at the void, and that edge bounds the room
+ * exactly as a wall would. Balconies, galleried hallways and open
+ * stairwells are all the same case.
+ *
+ * The polygon also pinches at doorways, so in principle it can slice
+ * a room in two where a doorway is. The minimum face area absorbs
+ * the slivers that produces, and the review screen is where anything
+ * that survives gets dropped — which is the right place, because a
+ * room the customer can see and delete beats a room they were never
+ * told about.
  */
 export function splitRoomsByWalls(
   walls: WallLine[],
   floorPolygon?: Pt[] | null,
   opts: { minAreaM2?: number } = {},
 ): Pt[][] | null {
-  const faces = wallFaces(walls, opts);
+  const bounded =
+    floorPolygon && floorPolygon.length >= 3
+      ? [...walls, ...openFloorEdges(floorPolygon, walls)]
+      : walls;
+  const faces = wallFaces(bounded, opts);
   if (faces.length < 2) return null;
 
   const centre = (poly: Pt[]): Pt => {
