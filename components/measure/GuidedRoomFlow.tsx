@@ -1545,11 +1545,32 @@ export default function GuidedRoomFlow({
 
       {step === "photos" && (
         <div className="space-y-4">
+          {/* ── What the photo is for, as a list ─────────────────
+              This was a sentence ending "radiators, alcoves, where
+              the light comes from", and it read as scene-setting
+              rather than as a request. People photographed the room
+              from the doorway and moved on, and the things a
+              draughtsman actually needs were in shot by luck.
+
+              A list is read as a list. These five are the ones that
+              change a drawing and that no measurement carries:
+              blinds and shutters set the reveal depth, a chimney
+              breast and its alcoves set the wall line, a radiator
+              under a window fixes the sill height, a sloped or
+              beamed ceiling changes the section, and the meter and
+              boiler are what somebody has to work around. */}
           <p className="text-base leading-relaxed text-on-surface-variant">
-            One photo of the whole room is enough. It shows us things the
-            measurements can&apos;t. Radiators, alcoves, where the light
-            comes from.
+            One photo of the whole room, plus a closer one of anything
+            below. These are the things the measurements can&apos;t show
+            us.
           </p>
+          <ul className="space-y-1.5 rounded-xl border border-outline-variant/40 bg-surface-container-low p-4 text-base text-on-surface">
+            <li>Blinds, shutters or curtains at the windows</li>
+            <li>Chimney breast, fireplace and the alcoves beside it</li>
+            <li>Radiators, and what is above them</li>
+            <li>Sloped ceilings, beams, bulkheads</li>
+            <li>Boiler, meters, the consumer unit</li>
+          </ul>
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold uppercase tracking-widest text-on-primary">
             <span
               className="material-symbols-outlined"
