@@ -76,7 +76,6 @@ import {
   RoomPlan,
   type RoomPlanScanResult,
   type RoomPlanRoom,
-  type RoomPlanStairs,
 } from "@tm-designs/capacitor-roomplan";
 import {
   clearDraft,
@@ -395,66 +394,28 @@ function scannedOpening(
 }
 
 /**
- * Staircases the sensor found, as proposals.
+ * Staircases are not taken from the scan.
  *
- * RoomPlan has been classifying stairs all along -- it is one of
- * its object categories -- and nothing read `CapturedRoom.objects`,
- * so a LiDAR survey of a house with a staircase in it produced a
- * drawing with no staircase.
+ * This used to read RoomPlan's stair classification and propose a
+ * flight for the customer to confirm. The measurement looked like
+ * the part the sensor was good at -- width, position, bearing --
+ * and the existence looked like the part it was not, so it proposed
+ * and the customer confirmed.
  *
- * Turned off for a while, and the reason was right: a staircase is
- * the thing on a drawing a draughtsman sizes from directly, and a
- * flight the sensor got slightly wrong is worse than one somebody
- * drew themselves, because nothing about it says it was guessed.
+ * In the house that reasoning did not hold. RoomPlan returns a
+ * staircase as a plain box on the floor: no direction, no going, no
+ * rise, a landing and a winder reported as the same blank slab. The
+ * customer was being asked to confirm something they could not
+ * check against anything, and what the draughtsman received was a
+ * rectangle that had to be redrawn regardless.
  *
- * What was wrong was the choice between all and nothing. The
- * measurement is the part the sensor is good at -- width, position
- * and bearing, none of which anybody reproduces by dragging a
- * rectangle onto a plan. The part it cannot do is vouch for the
- * thing existing. So it proposes and the customer confirms, on the
- * review screen, while they are still in the house. See
- * stairsProposals.
- *
- * High confidence only. A medium-confidence detection is a
- * question not worth asking: most of them are not staircases, and
- * a list of things to say no to is how people start saying yes to
- * everything.
- *
- * Positioned by `worldM`, not against a wall. A staircase is a
- * free object in the house far more often than it is a thing
- * running along one wall of one room, and the sensor gives a
- * centre and a bearing rather than a wall and an offset, so
- * forcing it onto a wall would invent a relationship in order to
- * throw away a measurement.
- *
- * Direction defaults to "up" and is marked approximate, because
- * RoomPlan does not report one and the geometry does not imply
- * one. Up is the better guess: most staircases a homeowner scans
- * are in a hall on the ground floor, where the flight they are
- * looking at goes up. The customer can change it, and the drawing
- * says it was assumed either way.
+ * A staircase is the one item on a survey where roughly right is
+ * worse than absent, because the floor-to-floor geometry upstairs
+ * hangs off it and nothing on the drawing says it was guessed. So
+ * it is placed deliberately on the floor plan, where its room,
+ * position and direction are stated. See the stairs prompt in
+ * FloorPlanEditor.
  */
-function scannedStairs(
-  sr: { stairs?: RoomPlanStairs[]; originM?: { x: number; z: number } },
-  newId: () => string,
-): RoomStairs[] {
-  return (sr.stairs ?? [])
-    .filter((s) => s.confident)
-    .map((s) => ({
-    id: newId(),
-    widthM: s.widthM.toFixed(2),
-    direction: "up" as const,
-    // Same shift the outline gets, so the flight lands on the room
-    // rather than at raw ARKit world coordinates.
-    worldM: {
-      x: Number((s.midpoint.x - (sr.originM?.x ?? 0)).toFixed(3)),
-      z: Number((s.midpoint.z - (sr.originM?.z ?? 0)).toFixed(3)),
-    },
-    headingDeg: Number(s.headingDeg.toFixed(1)),
-    positionApprox: true,
-    notes: "Detected by scan, confirmed by the customer",
-  }));
-}
 
 export default function MeasureIntakeForm() {
   const [step, setStep] = useState<Step>("project");
@@ -1143,16 +1104,23 @@ export default function MeasureIntakeForm() {
       } satisfies RoomDraft;
     });
 
-    // Staircases the sensor found, offered on the review screen.
-    // See stairsProposals.
-    const proposals: Record<string, RoomStairs[]> = {};
-    scanned.forEach((sr, i) => {
-      const found = scannedStairs(sr, newId);
-      if (found.length) proposals[built[i].id] = found;
-    });
-    if (Object.keys(proposals).length) {
-      setStairsProposals((prev) => ({ ...prev, ...proposals }));
-    }
+    /*
+     * Stairs are not taken from the scan.
+     *
+     * RoomPlan classifies a staircase as a box on the floor, which
+     * is enough to know one is there and nowhere near enough to
+     * draw one: no direction, no going, no rise, and a landing or a
+     * winder reported as the same blank slab. Proposing it then
+     * asked the customer to confirm something they could not check
+     * and the draughtsman could not use.
+     *
+     * A staircase is the one thing on a survey where being roughly
+     * right is worse than being absent -- it sets the floor-to-floor
+     * geometry everything upstairs hangs off. So it is drawn
+     * deliberately on the floor plan instead, where its position
+     * and direction are stated rather than guessed. See the stairs
+     * prompt in FloorPlanEditor.
+     */
 
     let keptCount = 0;
     setRooms((prev) => {
@@ -1428,12 +1396,8 @@ export default function MeasureIntakeForm() {
           ? { roomId, doorId: exitDoorId }
           : null;
 
-        // Offered on the review screen rather than added. See
-        // stairsProposals.
-        const proposed = scannedStairs(sr, newId);
-        setStairsProposals((prev) =>
-          proposed.length ? { ...prev, [roomId]: proposed } : prev,
-        );
+        // Stairs are added on the floor plan, not taken from the
+        // scan. See the note in applyHouseScan.
 
         setRooms((prev) =>
           prev.map((r) =>

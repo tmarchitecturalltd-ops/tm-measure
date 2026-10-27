@@ -245,6 +245,22 @@ export default function FloorPlanEditor({
     return [...all].sort((a, b) => a - b);
   }, [rooms, extraFloors, currentFloor]);
 
+  /**
+   * Does the survey have a staircase on it yet?
+   *
+   * Nothing else on a drawing is as easy to walk past. A door is
+   * missing from a wall the customer is looking at; a staircase is
+   * missing from a survey of a two-storey house, which reads as
+   * finished right up until the draughtsman opens it. The scan does
+   * not supply one -- see the note in MeasureIntakeForm -- so if the
+   * customer does not place it, nobody does.
+   */
+  const anyStairs = useMemo(
+    () => rooms.some((r) => (r.stairs ?? []).length > 0),
+    [rooms],
+  );
+  const multiStorey = usedFloors.length > 1;
+
   const placementFor = useCallback(
     (roomId: string): RoomPlacement => placements[roomId] ?? defaultPlacement(0),
     [placements],
@@ -1690,6 +1706,31 @@ export default function FloorPlanEditor({
           panel opens already pointed at somewhere, and it doubles as a
           way to find a room on a busy plan -- picking one highlights
           it and zooms to it. */}
+      {/* ── Stairs, asked for plainly ───────────────────────────────
+          The scan does not measure a staircase, and the plan is the
+          only place one can be added, so the plan has to say so.
+          Stated in the order the customer will do it, because "Add
+          feature" is three taps from here and nothing on screen
+          connects that button to the word stairs.
+
+          It goes away the moment a flight exists anywhere in the
+          survey, and it is firmer on a house with more than one
+          storey — where a missing staircase is not an omission but a
+          drawing that cannot be built from. */}
+      {onRoomChange && !anyStairs && (
+        <div className="rounded-xl border border-[#b89650]/50 bg-[#b89650]/10 p-3 text-sm text-on-surface">
+          <p className="font-semibold">
+            {multiStorey
+              ? "Add your stairs — the scan can't measure them"
+              : "Got stairs? The scan can't measure them"}
+          </p>
+          <p className="mt-0.5 text-on-surface-variant">
+            Tap Add feature, choose Stairs, then tap the plan where the
+            bottom step is.
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <label className="flex items-center gap-1.5">
           <span className="font-bold uppercase tracking-[0.15em] text-on-surface-variant">
