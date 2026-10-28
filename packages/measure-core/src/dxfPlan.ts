@@ -90,6 +90,22 @@ export type PlanRoomInput = {
 export const FLOOR_GAP_M = 4;
 
 /**
+ * Printable sheets, in metres at 1:100 — A3, A2, A1.
+ *
+ * Metres because that is what the drawing is in: an A3 sheet at
+ * 1:100 holds 42 m by 29.7 m of building. Ordered smallest first so
+ * the smallest one that fits is the one picked.
+ */
+export const SHEETS_M = [
+  { name: "A3", w: 42, h: 29.7 },
+  { name: "A2", w: 59.4, h: 42 },
+  { name: "A1", w: 84.1, h: 59.4 },
+];
+
+/** Clear space inside a sheet border, in metres at 1:100. */
+export const SHEET_MARGIN_M = 2;
+
+/**
  * Lay each storey out beside the last, rather than on top of it.
  *
  * Every room carries a position on its own floor, and those
@@ -112,37 +128,162 @@ export const FLOOR_GAP_M = 4;
  * the correct one. Geometry inside a storey is untouched: this
  * only moves whole storeys relative to each other.
  */
+/**
+ * The bearing the building is drawn at, in degrees.
+ *
+ * A scanned room keeps the angle the sensor measured, which is
+ * right: a bay or a rear addition set off-square is exactly what a
+ * survey is for. But the sensor's zero is wherever the customer was
+ * standing when the scan began, so a perfectly square house arrives
+ * three or four degrees off true and the whole drawing sits skewed
+ * on the paper. Reported as "the drawing is rotated slightly on the
+ * paper".
+ *
+ * The fix is not to square the rooms up -- that would throw away
+ * the thing worth measuring. It is to turn the sheet. Every wall
+ * votes, weighted by its length, folded onto a quarter turn so that
+ * a wall and the wall at right angles to it agree rather than
+ * cancelling. The longest run of wall in a house is almost always
+ * meant to be straight, so that is what ends up horizontal, and
+ * anything genuinely off-square stays off-square relative to it.
+ *
+ * Returns 0 when there is nothing to go on, and never more than 45
+ * degrees: past that it is the next quarter turn, and spinning a
+ * plan round to save a degree would be worse than leaving it.
+ */
+export function planBearingDeg(entries: PlanRoomInput[]): number {
+  let sumSin = 0;
+  let sumCos = 0;
+  for (const entry of entries) {
+    const pts = roomOutlineM(entry);
+    for (let i = 0; i < pts.length; i += 1) {
+      const a = pts[i];
+      const b = pts[(i + 1) % pts.length];
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      if (len < 0.3) continue;
+      // Quadrupled so that 0 and 90 degrees land in the same place:
+      // walls at right angles to each other are the same evidence
+      // about which way the building faces, not opposite evidence.
+      const ang = 4 * Math.atan2(b.z - a.z, b.x - a.x);
+      sumSin += Math.sin(ang) * len;
+      sumCos += Math.cos(ang) * len;
+    }
+  }
+  if (sumSin === 0 && sumCos === 0) return 0;
+  const deg = (Math.atan2(sumSin, sumCos) * 180) / Math.PI / 4;
+  return Number(deg.toFixed(2));
+}
+
+/**
+ * Turn the whole drawing so the building sits square on the sheet.
+ *
+ * Rotates anchors and room rotations together, about the origin, by
+ * the same angle -- so nothing inside a room changes shape and
+ * nothing moves relative to anything else. See planBearingDeg.
+ */
+export function squareToSheet(entries: PlanRoomInput[]): PlanRoomInput[] {
+  const bearing = planBearingDeg(entries);
+  if (Math.abs(bearing) < 0.05) return entries;
+  const rad = (-bearing * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  return entries.map((e) => ({
+    ...e,
+    anchor: {
+      x: e.anchor.x * cos - e.anchor.z * sin,
+      z: e.anchor.x * sin + e.anchor.z * cos,
+    },
+    rotationDeg: (e.rotationDeg ?? 0) - bearing,
+  }));
+}
+
 export function spreadFloors(entries: PlanRoomInput[]): {
   entries: PlanRoomInput[];
   labels: { floor: number; x: number; z: number }[];
+  sheets: { floor: number; x: number; z: number; w: number; h: number }[];
 } {
   const floors = [...new Set(entries.map((e) => e.floor ?? 0))].sort(
     (a, b) => a - b,
   );
-  if (floors.length < 2) return { entries, labels: [] };
+  if (floors.length < 2) return { entries, labels: [], sheets: [] };
+
+  /*
+   * One sheet per storey, rather than two plans on one.
+   *
+   * They used to be shifted sideways by whatever width the storey
+   * below happened to have, which kept them from overlapping and
+   * nothing more: a whole house arrived as one wide drawing with
+   * the storeys at arbitrary spacings, and printing it meant
+   * fitting the lot on a single page at whatever scale came out.
+   * Reported as "the dxf output is all on one page, please spread
+   * neatly across one floor per page".
+   *
+   * So each storey is centred in a sheet-sized cell with a border
+   * drawn round it, and the cells are laid left to right. One
+   * border is one page: a draughtsman prints each to its own sheet
+   * at 1:100 without measuring anything first, and the storeys
+   * line up with each other rather than sitting at whatever offset
+   * the room widths produced.
+   *
+   * The sheet size is the smallest of A3, A2, A1 at 1:100 that
+   * takes the largest storey, and the same size is used for all of
+   * them -- a set of plans at two different scales is worse than a
+   * set at one big one.
+   */
+  const extentOf = (floor: number) => {
+    const pts = entries
+      .filter((e) => (e.floor ?? 0) === floor)
+      .flatMap((e) => roomOutlineM(e));
+    if (!pts.length) return null;
+    const xs = pts.map((p) => p.x);
+    const zs = pts.map((p) => p.z);
+    return {
+      minX: Math.min(...xs),
+      maxX: Math.max(...xs),
+      minZ: Math.min(...zs),
+      maxZ: Math.max(...zs),
+    };
+  };
+
+  const extents = floors
+    .map((f) => ({ floor: f, ext: extentOf(f) }))
+    .filter((e): e is { floor: number; ext: NonNullable<typeof e.ext> } =>
+      e.ext !== null,
+    );
+  if (!extents.length) return { entries, labels: [], sheets: [] };
+
+  const widest = Math.max(...extents.map((e) => e.ext.maxX - e.ext.minX));
+  const tallest = Math.max(...extents.map((e) => e.ext.maxZ - e.ext.minZ));
+  const sheet =
+    SHEETS_M.find(
+      (s) => widest <= s.w - 2 * SHEET_MARGIN_M && tallest <= s.h - 2 * SHEET_MARGIN_M,
+    ) ?? SHEETS_M[SHEETS_M.length - 1];
 
   const out: PlanRoomInput[] = [];
   const labels: { floor: number; x: number; z: number }[] = [];
+  const sheets: { floor: number; x: number; z: number; w: number; h: number }[] =
+    [];
   let cursor = 0;
 
-  for (const floor of floors) {
+  for (const { floor, ext } of extents) {
     const on = entries.filter((e) => (e.floor ?? 0) === floor);
-    const pts = on.flatMap((e) => roomOutlineM(e));
-    if (!pts.length) continue;
-
-    const minX = Math.min(...pts.map((p) => p.x));
-    const maxX = Math.max(...pts.map((p) => p.x));
-    const minZ = Math.min(...pts.map((p) => p.z));
-    const shift = cursor - minX;
+    // Centred in its own sheet, so the storeys sit above one another
+    // the way they do in the building.
+    const shiftX = cursor + (sheet.w - (ext.maxX - ext.minX)) / 2 - ext.minX;
+    const shiftZ = (sheet.h - (ext.maxZ - ext.minZ)) / 2 - ext.minZ;
 
     for (const e of on) {
-      out.push({ ...e, anchor: { x: e.anchor.x + shift, z: e.anchor.z } });
+      out.push({
+        ...e,
+        anchor: { x: e.anchor.x + shiftX, z: e.anchor.z + shiftZ },
+      });
     }
-    labels.push({ floor, x: cursor, z: minZ });
-    cursor += maxX - minX + FLOOR_GAP_M;
+    sheets.push({ floor, x: cursor, z: 0, w: sheet.w, h: sheet.h });
+    labels.push({ floor, x: cursor + SHEET_MARGIN_M, z: SHEET_MARGIN_M / 2 });
+    cursor += sheet.w + FLOOR_GAP_M;
   }
 
-  return { entries: out, labels };
+  return { entries: out, labels, sheets };
 }
 
 /** "Ground floor", "First floor", "Basement". */
@@ -696,7 +837,10 @@ export function buildDetailedPlanDxf(
   // every dimension, label and bounding box that follows is
   // computed against where the rooms actually end up on the sheet.
   // See spreadFloors.
-  const spread = spreadFloors(entries.filter((e) => e.anchor));
+  // Square to the sheet before the storeys are laid out, so each
+  // storey's bounding box is measured on the turned drawing rather
+  // than on the skewed one. See squareToSheet.
+  const spread = spreadFloors(squareToSheet(entries.filter((e) => e.anchor)));
   const placed = spread.entries;
   const walls = buildWalls(placed);
   const out: string[] = [];
@@ -1042,6 +1186,26 @@ export function buildDetailedPlanDxf(
    * drawing is a clean shell to build on, and a shell of two
    * unlabelled storeys is not clean, it is ambiguous.
    */
+  /*
+   * The sheet border, one per storey.
+   *
+   * A rectangle is all it takes: it tells the draughtsman where one
+   * page ends and the next begins, and it gives a print window to
+   * select. Drawn on the title layer so it can be frozen in one
+   * action by anybody who would rather not have it.
+   */
+  for (const s of spread.sheets) {
+    const c = [
+      { x: s.x, z: s.z },
+      { x: s.x + s.w, z: s.z },
+      { x: s.x + s.w, z: s.z + s.h },
+      { x: s.x, z: s.z + s.h },
+    ];
+    for (let i = 0; i < c.length; i += 1) {
+      out.push(line(LAYER.title, c[i], c[(i + 1) % c.length]));
+    }
+  }
+
   for (const label of spread.labels) {
     out.push(
       text(

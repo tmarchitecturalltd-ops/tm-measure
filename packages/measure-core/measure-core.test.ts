@@ -31,6 +31,8 @@ import { buildFloorPlanDxf, roomCornersM } from "./src/dxf.ts";
 import {
   buildWalls,
   buildDetailedPlanDxf,
+  planBearingDeg,
+  squareToSheet,
   roomOutlineM,
   spreadFloors,
   floorName,
@@ -2689,10 +2691,21 @@ test("two storeys are drawn side by side, not on top of each other", () => {
 
   const xOf = (id: string) =>
     spread.entries.find((e) => e.room.id === id)!.anchor.x;
-  assert.equal(xOf("g"), 0, "the lowest storey stays where it is");
+  /*
+   * Each storey now sits centred on a sheet of its own, so the
+   * lowest one is no longer at zero -- it is inset by the margin
+   * its sheet gives it. What matters is that the storeys are a
+   * whole sheet apart and that each is inside its own border.
+   */
+  assert.equal(spread.sheets.length, 2, "one sheet per storey");
+  const sheetW = spread.sheets[0].w;
   assert.ok(
-    xOf("f") >= 4 + FLOOR_GAP_M - 0.001,
-    `the storey above must clear the one below, was at ${xOf("f")}`,
+    xOf("g") > 0 && xOf("g") < sheetW,
+    `the ground floor sits inside its own sheet, was at ${xOf("g")}`,
+  );
+  assert.ok(
+    xOf("f") >= sheetW,
+    `the storey above is on the next sheet, was at ${xOf("f")}`,
   );
 
   // Nothing inside a storey moves relative to the rest of it.
@@ -3014,4 +3027,67 @@ test("the floor outline does not lay a sliver beside every wall", () => {
   ];
   assert.equal(openFloorEdges(inset, walls).length, 0, "all four shadow a wall");
   assert.equal(splitRoomsByWalls(walls, inset), null, "so it stays one room");
+});
+
+test("a square house captured off true is drawn square on the sheet", () => {
+  /*
+   * The sensor's zero is wherever the customer was standing when
+   * they started, so a perfectly square house arrives a few degrees
+   * off and the whole drawing sits skewed on the paper. Turning the
+   * sheet fixes that without squaring the rooms up, which would
+   * throw away a bay or an addition genuinely set off-square.
+   */
+  const skew = 3.4;
+  const entries = [
+    {
+      room: { ...planRoom("a", "Kitchen", 5, 4) } as unknown as RoomDraft,
+      anchor: { x: 0, z: 0 },
+      rotationDeg: skew,
+      floor: 0,
+    },
+    {
+      room: { ...planRoom("b", "Hall", 2, 4) } as unknown as RoomDraft,
+      anchor: { x: 6, z: 0 },
+      rotationDeg: skew,
+      floor: 0,
+    },
+  ];
+
+  assert.ok(
+    Math.abs(planBearingDeg(entries) - skew) < 0.3,
+    `the drawing's bearing is the skew, got ${planBearingDeg(entries)}`,
+  );
+
+  const square = squareToSheet(entries);
+  assert.ok(
+    Math.abs(planBearingDeg(square)) < 0.1,
+    "and after turning the sheet there is no skew left",
+  );
+  // Nothing moved relative to anything else.
+  const gap = (list: typeof entries) => {
+    const a = list.find((e) => e.room.id === "a")!.anchor;
+    const b = list.find((e) => e.room.id === "b")!.anchor;
+    return Math.hypot(b.x - a.x, b.z - a.z);
+  };
+  assert.ok(
+    Math.abs(gap(square) - gap(entries)) < 0.001,
+    "the rooms keep their spacing",
+  );
+
+  // A room genuinely off-square keeps its angle relative to the rest.
+  const withBay = squareToSheet([
+    ...entries,
+    {
+      room: { ...planRoom("c", "Bay", 2, 1) } as unknown as RoomDraft,
+      anchor: { x: 0, z: 5 },
+      rotationDeg: skew + 30,
+      floor: 0,
+    },
+  ]);
+  const bay = withBay.find((e) => e.room.id === "c")!.rotationDeg as number;
+  const kitchen = withBay.find((e) => e.room.id === "a")!.rotationDeg as number;
+  assert.ok(
+    Math.abs(bay - kitchen - 30) < 0.5,
+    `the bay stays 30 degrees off the kitchen, was ${bay - kitchen}`,
+  );
 });
