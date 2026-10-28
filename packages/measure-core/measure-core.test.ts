@@ -3064,7 +3064,7 @@ test("a square house captured off true is drawn square on the sheet", () => {
     "and after turning the sheet there is no skew left",
   );
   // Nothing moved relative to anything else.
-  const gap = (list: typeof entries) => {
+  const gap = (list: { room: RoomDraft; anchor: { x: number; z: number } }[]) => {
     const a = list.find((e) => e.room.id === "a")!.anchor;
     const b = list.find((e) => e.room.id === "b")!.anchor;
     return Math.hypot(b.x - a.x, b.z - a.z);
