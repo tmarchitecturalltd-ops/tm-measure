@@ -41,6 +41,11 @@ import type {
 } from "./types";
 import { FIXTURE_SIZES_M, fixtureFootprintM, rotatePointM } from "./types.ts";
 import { roomFootprint } from "./floorplan.ts";
+import {
+  buildElevations,
+  elevationName,
+  type ElevationRoom,
+} from "./elevation.ts";
 import { roomCornersM, sanitiseDxfText } from "./dxf.ts";
 
 export const WALL_INTERNAL_M = 0.125;
@@ -57,6 +62,17 @@ export const LAYER = {
   fixtures: "TM-FIXTURES",
   labels: "TM-LABELS",
   title: "TM-TITLE",
+  /*
+   * The elevations get layers of their own.
+   *
+   * Not TM-WALLS and TM-DOORS. A plan and an elevation are
+   * different drawings that happen to share a file, and sharing
+   * layers means a draughtsman cannot freeze one without gutting
+   * the other -- and anything counting entities on a layer, tests
+   * included, silently starts counting both.
+   */
+  elev: "TM-ELEV",
+  elevOpenings: "TM-ELEV-OPENINGS",
 } as const;
 
 type Pt = { x: number; z: number };
@@ -903,6 +919,8 @@ export function buildDetailedPlanDxf(
         [LAYER.fixtures, 4],
         [LAYER.labels, 2],
         [LAYER.title, 7],
+        [LAYER.elev, 7],
+        [LAYER.elevOpenings, 5],
       ]
     : [
         [LAYER.walls, 7],
@@ -1218,6 +1236,16 @@ export function buildDetailedPlanDxf(
     );
   }
 
+  /*
+   * Elevations on the detailed drawing only.
+   *
+   * The plain companion is a clean shell of the plan to build on,
+   * and it says so by carrying nothing but walls and room names --
+   * no title layer, no openings. Four more sheets of faces would
+   * make it a different document.
+   */
+  if (detailed) drawElevations(out, placed, spread.sheets);
+
   if (detailed) drawTitleBlock(out, placed, options);
 
   out.push(pair(0, "ENDSEC"), pair(0, "EOF"));
@@ -1512,4 +1540,118 @@ function drawTitleBlock(
   out.push(
     line(LAYER.title, { x: minX, z: top + 0.25 }, { x: maxX, z: top + 0.25 }),
   );
+}
+
+/**
+ * The elevations, on sheets of their own beneath the plans.
+ *
+ * In the same file rather than a second one, because a set of
+ * drawings is a set: a draughtsman opening the survey should find
+ * the plans and the faces together, aligned and at one scale, not
+ * have to hunt for an attachment. Each face gets its own border, so
+ * each is still one page.
+ *
+ * The heading says what the drawing is and what it is not. An
+ * elevation carries more authority than any other sheet in a
+ * planning submission, and this one has measured widths and assumed
+ * heights -- so it says so, on the sheet, where it cannot be
+ * separated from the geometry it describes. See ASSUMED.
+ */
+function drawElevations(
+  out: string[],
+  placed: PlanRoomInput[],
+  sheets: { floor: number; x: number; z: number; w: number; h: number }[],
+): void {
+  const rooms: ElevationRoom[] = placed.map((e) => ({
+    room: e.room,
+    outline: roomOutlineM(e),
+    floor: e.floor ?? 0,
+  }));
+  const elevations = buildElevations(rooms);
+  if (!elevations.length) return;
+
+  // Beneath the plan sheets, or beneath the origin when there was
+  // only one storey and so no plan sheet was drawn.
+  const sheet = sheets.length
+    ? { w: sheets[0].w, h: sheets[0].h }
+    : SHEETS_M[0];
+  const rowZ =
+    (sheets.length ? Math.max(...sheets.map((s) => s.z + s.h)) : 0) +
+    FLOOR_GAP_M;
+
+  elevations.forEach((el, i) => {
+    const ox = i * (sheet.w + FLOOR_GAP_M);
+    const oz = rowZ;
+
+    const c = [
+      { x: ox, z: oz },
+      { x: ox + sheet.w, z: oz },
+      { x: ox + sheet.w, z: oz + sheet.h },
+      { x: ox, z: oz + sheet.h },
+    ];
+    for (let k = 0; k < c.length; k += 1) {
+      out.push(line(LAYER.title, c[k], c[(k + 1) % c.length]));
+    }
+
+    // Centred on its sheet, standing on a ground line. z is negated
+    // throughout: the drawing's y is up and this file's z is down.
+    const left = ox + (sheet.w - el.widthM) / 2;
+    const base = oz + sheet.h - SHEET_MARGIN_M - 1;
+    const at = (u: number, y: number): Pt => ({ x: left + u, z: base - y });
+
+    for (const s of el.storeys) {
+      const corners = [
+        at(s.u0, s.y0),
+        at(s.u1, s.y0),
+        at(s.u1, s.y1),
+        at(s.u0, s.y1),
+      ];
+      for (let k = 0; k < corners.length; k += 1) {
+        out.push(
+          line(LAYER.elev, corners[k], corners[(k + 1) % corners.length]),
+        );
+      }
+    }
+
+    for (const o of el.openings) {
+      const corners = [
+        at(o.u0, o.y0),
+        at(o.u1, o.y0),
+        at(o.u1, o.y1),
+        at(o.u0, o.y1),
+      ];
+      for (let k = 0; k < corners.length; k += 1) {
+        out.push(
+          line(
+            LAYER.elevOpenings,
+            corners[k],
+            corners[(k + 1) % corners.length],
+          ),
+        );
+      }
+    }
+
+    // Ground line, run past the building on both sides the way one
+    // is drawn.
+    out.push(line(LAYER.elev, at(-1, 0), at(el.widthM + 1, 0)));
+
+    out.push(
+      text(
+        LAYER.title,
+        { x: ox + SHEET_MARGIN_M, z: oz + SHEET_MARGIN_M / 2 },
+        400,
+        elevationName(el.side),
+        false,
+      ),
+    );
+    out.push(
+      text(
+        LAYER.title,
+        { x: ox + SHEET_MARGIN_M, z: oz + SHEET_MARGIN_M / 2 + 0.9 },
+        200,
+        "Widths and positions measured. Heights assumed. Roof not surveyed.",
+        false,
+      ),
+    );
+  });
 }

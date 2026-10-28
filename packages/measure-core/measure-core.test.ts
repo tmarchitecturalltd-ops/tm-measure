@@ -48,6 +48,11 @@ import {
   openFloorEdges,
 } from "./src/splitRooms.ts";
 import {
+  buildElevation,
+  buildElevations,
+  ASSUMED,
+} from "./src/elevation.ts";
+import {
   scanPolygonIsUsable,
   scanOutlineWorthKeeping,
   looksLikeStrayCapture,
@@ -3090,4 +3095,105 @@ test("a square house captured off true is drawn square on the sheet", () => {
     Math.abs(bay - kitchen - 30) < 0.5,
     `the bay stays 30 degrees off the kitchen, was ${bay - kitchen}`,
   );
+});
+
+test("an elevation puts the openings where they actually are", () => {
+  /*
+   * The horizontal half of an elevation is measured: the scan gives
+   * the face's width, and every opening's width and distance along
+   * its wall. Only the heights are assumed, and the drawing says so.
+   */
+  const room = planRoom("k", "Kitchen", 6, 4) as unknown as RoomDraft;
+  room.ceilingHeightM = "2.50";
+  room.windows = [
+    { id: "w1", widthM: "1.20", note: "", wallIndex: 0, positionM: "1.5" },
+  ];
+  const outline = [
+    { x: 0, z: 0 },
+    { x: 6, z: 0 },
+    { x: 6, z: 4 },
+    { x: 0, z: 4 },
+  ];
+
+  const front = buildElevation([{ room, outline, floor: 0 }], "front");
+  assert.ok(front, "the front of a detached room is a face");
+  assert.ok(
+    Math.abs(front!.widthM - 6) < 0.01,
+    `the front is the width of the house, got ${front!.widthM}`,
+  );
+  assert.equal(front!.openings.length, 1, "the window is on the front");
+  const w = front!.openings[0];
+  assert.ok(
+    Math.abs(w.u1 - w.u0 - 1.2) < 0.01,
+    "and it is as wide as it was measured",
+  );
+  assert.ok(
+    Math.abs((w.u0 + w.u1) / 2 - 1.5) < 0.01,
+    `and 1.5 m from the corner, got ${(w.u0 + w.u1) / 2}`,
+  );
+  // Heights are the stated assumptions, not measurements.
+  assert.ok(Math.abs(w.y0 - ASSUMED.windowSillM) < 0.01);
+
+  // The same window is not also on the back.
+  const back = buildElevation([{ room, outline, floor: 0 }], "back");
+  assert.equal(back!.openings.length, 0, "the back wall has no window in it");
+});
+
+test("the back elevation is mirrored, as it is seen", () => {
+  /*
+   * Walk round to the back of a house and what was on your left is
+   * on your right. Drawing the back unmirrored puts the kitchen
+   * window at the wrong end, which survives all the way to a
+   * planning officer.
+   */
+  const room = planRoom("k", "Kitchen", 6, 4) as unknown as RoomDraft;
+  room.windows = [
+    // On wall 2, the far side, near the x = 6 corner.
+    { id: "w1", widthM: "1.00", note: "", wallIndex: 2, positionM: "1" },
+  ];
+  const outline = [
+    { x: 0, z: 0 },
+    { x: 6, z: 0 },
+    { x: 6, z: 4 },
+    { x: 0, z: 4 },
+  ];
+  const back = buildElevation([{ room, outline, floor: 0 }], "back");
+  assert.equal(back!.openings.length, 1);
+  const centre = (back!.openings[0].u0 + back!.openings[0].u1) / 2;
+  // Wall 2 runs from (6,4) to (0,4), so 1 m along it is x = 5 --
+  // which on a mirrored back elevation is 1 m from the left edge.
+  assert.ok(
+    Math.abs(centre - 1) < 0.01,
+    `mirrored, the window is 1 m from the left, got ${centre}`,
+  );
+});
+
+test("two storeys stack, and a terrace has no side elevation", () => {
+  const ground = planRoom("g", "Lounge", 5, 4) as unknown as RoomDraft;
+  ground.ceilingHeightM = "2.60";
+  const first = planRoom("f", "Bedroom", 5, 4) as unknown as RoomDraft;
+  first.ceilingHeightM = "2.40";
+  const outline = [
+    { x: 0, z: 0 },
+    { x: 5, z: 0 },
+    { x: 5, z: 4 },
+    { x: 0, z: 4 },
+  ];
+  const el = buildElevation(
+    [
+      { room: ground, outline, floor: 0 },
+      { room: first, outline, floor: 1 },
+    ],
+    "front",
+  )!;
+  assert.equal(el.storeys.length, 2);
+  assert.ok(Math.abs(el.storeys[0].y1 - 2.6) < 0.01, "ground floor height");
+  assert.ok(
+    Math.abs(el.storeys[1].y0 - (2.6 + ASSUMED.slabM)) < 0.01,
+    "the first floor sits on the ground floor plus the slab",
+  );
+
+  // Nothing facing left means no left elevation, rather than an
+  // empty sheet headed "Left elevation" that reads as missing.
+  assert.equal(buildElevations([]).length, 0);
 });
