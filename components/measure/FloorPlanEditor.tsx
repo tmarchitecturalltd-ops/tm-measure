@@ -1717,7 +1717,20 @@ export default function FloorPlanEditor({
           survey, and it is firmer on a house with more than one
           storey — where a missing staircase is not an omission but a
           drawing that cannot be built from. */}
-      {onRoomChange && !anyStairs && (
+      {/* An empty storey says so.
+          The Room select and Add feature both need somewhere to put
+          the thing, so both disappear when the storey being shown
+          has no rooms on it -- which looks exactly like the feature
+          having been taken away rather than there being nothing
+          here to attach it to. */}
+      {roomsOnFloor.length === 0 && (
+        <p className="rounded-xl border border-outline-variant/40 bg-surface-container-low p-3 text-sm text-on-surface-variant">
+          Nothing on this floor yet. Pick the floor your rooms are on, or
+          set a room&apos;s floor back on its own screen.
+        </p>
+      )}
+
+      {onRoomChange && roomsOnFloor.length > 0 && !anyStairs && (
         <div className="rounded-xl border border-[#b89650]/50 bg-[#b89650]/10 p-3 text-sm text-on-surface">
           <p className="font-semibold">
             {multiStorey

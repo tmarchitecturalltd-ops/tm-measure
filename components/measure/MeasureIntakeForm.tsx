@@ -3015,6 +3015,26 @@ export default function MeasureIntakeForm() {
     advanceTo("plan");
   };
 
+  /*
+   * Place the rooms whichever way the plan was reached.
+   *
+   * goPlan does this, and goPlan is not the only door: the Steps
+   * menu, the back button from the exterior, and the finish of a
+   * LiDAR survey all call setStep("plan") directly. A room with no
+   * position is not on the floor, and the plan hides the Room
+   * select and the Add feature button when the floor it is showing
+   * has nothing on it -- so arriving by any of those doors gave a
+   * plan with no way to add a door, a window or the stairs, which
+   * is the one job that screen exists for. Reported as "add back
+   * stairs doors features on the floorplan page".
+   *
+   * An effect rather than another call site, because the next door
+   * someone adds will not know to make the call either.
+   */
+  useEffect(() => {
+    if (step === "plan") ensureEveryRoomPlaced();
+  }, [step, ensureEveryRoomPlaced]);
+
   const goReview = () => advanceTo("review");
 
   const issueFor = (path: string) => issues.find((i) => i.path === path)?.message;
