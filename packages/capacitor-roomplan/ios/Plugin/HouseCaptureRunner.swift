@@ -132,20 +132,6 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
      * room means everything.
      */
     private var roomFrames: [String] = []
-    /*
-     * The camera's height above where the survey started, per room.
-     *
-     * The shared AR session keeps one origin for the whole house,
-     * so the vertical position of the phone is directly comparable
-     * between rooms. Walking upstairs moves it by a storey, and
-     * nothing else a customer does during a survey moves it by
-     * anything close -- so this is a reliable guess at which floor
-     * a room is on, and it costs the customer nothing.
-     *
-     * A guess, and labelled as one: the app confirms it rather than
-     * acting on it silently.
-     */
-    private var roomCameraY: [Double] = []
     private var startedAt: Date = Date()
 
     private weak var hostVC: UIViewController?
@@ -158,6 +144,30 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
 
     /// The completion closure must fire exactly once.
     private var hasCompleted = false
+
+    /*
+     * Which storey the customer says they are on.
+     *
+     * Asked rather than inferred. The phone's height does separate
+     * storeys reliably, but it cannot name them -- it does not know
+     * whether the survey started in a basement, a ground floor or a
+     * first-floor flat, and a plan with the floors labelled wrongly
+     * is wrong in a way that reads as right. One tap per room, with
+     * the last answer offered first, is cheaper than any of the ways
+     * of getting it wrong.
+     *
+     * It carries forward, so a customer doing five rooms upstairs
+     * taps "First floor" five times, each time on the first button.
+     */
+    private var currentFloor = 0
+    private var roomFloors: [Int] = []
+
+    private static let floorChoices: [(Int, String)] = [
+        (0, "Ground floor"),
+        (1, "First floor"),
+        (2, "Second floor"),
+        (-1, "Basement"),
+    ]
 
     init(unit: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
         self.unit = unit
@@ -173,7 +183,43 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
     func present(from host: UIViewController) {
         self.hostVC = host
         self.startedAt = Date()
-        presentCapture(roomNumber: 1)
+        askForFloor(thenRoomNumber: 1)
+    }
+
+    /**
+     * Which storey is this room on?
+     *
+     * Before the camera opens, so the answer is given standing in
+     * the room rather than remembered afterwards. The floor last
+     * chosen is listed first and marked, which makes a run of rooms
+     * on one storey a single tap in the same place each time.
+     */
+    private func askForFloor(thenRoomNumber roomNumber: Int) {
+        guard let host = hostVC else {
+            finish(.failure(HouseError.cancelled))
+            return
+        }
+        let alert = UIAlertController(
+            title: "Which floor is this room on?",
+            message: nil,
+            preferredStyle: .alert
+        )
+        let ordered = Self.floorChoices.sorted { a, b in
+            (a.0 == currentFloor ? 0 : 1) < (b.0 == currentFloor ? 0 : 1)
+        }
+        for (value, label) in ordered {
+            let title = value == currentFloor ? "\(label) (same as last)" : label
+            alert.addAction(
+                UIAlertAction(title: title, style: .default) { [weak self] _ in
+                    guard let self else { return }
+                    self.currentFloor = value
+                    self.whenHostIsFree {
+                        self.presentCapture(roomNumber: roomNumber)
+                    }
+                }
+            )
+        }
+        host.present(alert, animated: true)
     }
 
     private func presentCapture(roomNumber: Int) {
@@ -302,8 +348,7 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
         let elapsed = Date().timeIntervalSince(startedAt)
         let names = roomNames
         let frames = roomFrames
-        let cameraY = roomCameraY
-        let storeyIndex = Self.storeys(fromCameraHeights: cameraY)
+        let floors = roomFloors
 
         /*
          * Keep the rooms as the customer drew them. No merge.
@@ -337,8 +382,9 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
             if i < frames.count, !frames[i].isEmpty {
                 dict["frameJpegBase64"] = frames[i]
             }
-            if i < storeyIndex.count {
-                dict["floorGuess"] = storeyIndex[i]
+            // Stated by the customer, not inferred. See currentFloor.
+            if i < floors.count {
+                dict["floor"] = floors[i]
             }
             roomDicts.append(dict)
         }
@@ -356,48 +402,6 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
                 "merged": true,
             ])
         )
-    }
-
-    /**
-     * Group rooms into storeys by how high the phone was.
-     *
-     * Not height divided by 2.5. A fixed divisor assumes a storey
-     * height, and it has to guess what to do with everything
-     * between: a bungalow whose rooms differ by 1.2 m because the
-     * phone was held differently in each becomes a bungalow with
-     * two floors, and a Victorian terrace with 3.2 m ceilings
-     * starts skipping floors.
-     *
-     * The heights are clustered instead. Sorted, and a new storey
-     * begins wherever the gap to the previous room is more than
-     * 1.2 m. Nothing in a survey moves the phone vertically by
-     * that much except a staircase: holding it at the chest in one
-     * room and overhead in the next is 0.6 m at the outside, and
-     * ARKit's vertical drift across a house is smaller again.
-     * Conversely no staircase in a house is shorter than 1.2 m, so
-     * a real storey change cannot hide under the threshold.
-     *
-     * It needs no idea what a storey height is, which is the point:
-     * it separates the groups that are there rather than the ones
-     * a constant expects. And it is still a guess -- the app shows
-     * it on the naming screen for the customer to correct, and
-     * mezzanines and split levels are exactly what they will
-     * correct.
-     */
-    static func storeys(fromCameraHeights heights: [Double]) -> [Int] {
-        guard !heights.isEmpty else { return [] }
-        let gapM = 1.2
-        let order = heights.indices.sorted { heights[$0] < heights[$1] }
-        var out = [Int](repeating: 0, count: heights.count)
-        var storey = 0
-        for (n, idx) in order.enumerated() {
-            if n > 0 {
-                let prev = heights[order[n - 1]]
-                if heights[idx] - prev > gapM { storey += 1 }
-            }
-            out[idx] = storey
-        }
-        return out
     }
 
     private func finish(_ result: Result<[String: Any], Error>) {
@@ -501,7 +505,7 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
                      * unannounced camera is also the wrong way to
                      * photograph somebody's home.
                      */
-                    "Face the room and press Done — that view becomes its photo."
+                    "Press Done to take a photo of the room."
                 )
             }
         }
@@ -526,7 +530,7 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
                  * leaves the deciding to them.
                  */
                 text: ready
-                    ? "Done when you're ready — face the room, it becomes the photo"
+                    ? "Press Done to take a photo of the room"
                     : hasFloor
                         ? "Keep going round the room"
                         : "Point the phone down to pick up the floor"
@@ -646,9 +650,7 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
         capturedRooms.append(processedResult)
         roomNames.append("Room \(capturedRooms.count)")
         roomFrames.append(modalVC?.lastFrameJpeg ?? "")
-        roomCameraY.append(
-            Double(sharedARSession.currentFrame?.camera.transform.columns.3.y ?? 0)
-        )
+        roomFloors.append(currentFloor)
         dismissModal { [weak self] in
             self?.askForNextStep()
         }

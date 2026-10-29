@@ -1028,20 +1028,17 @@ export default function MeasureIntakeForm() {
         /*
          * The storey the sensor inferred, used as given.
          *
-         * RoomPlan reports no storey. Everything used to land on the
-         * ground floor, and a customer who scanned upstairs first
-         * was never asked -- "I did upstairs first, then clicked
-         * next room but it doesn't give me an option to click first
-         * floor, it just assumes it's the same".
+         * RoomPlan reports no storey. Everything used to land on
+         * the ground floor, and a customer who scanned upstairs
+         * first was never asked -- "I did upstairs first, then
+         * clicked next room but it doesn't give me an option to
+         * click first floor, it just assumes it's the same".
          *
-         * The shared AR session does know: it keeps one origin for
-         * the whole house, so the phone's height when a room was
-         * finished says which storey it was on, and a staircase
-         * moves it by far more than anything else. See floorGuess.
-         * Still one tap to change on the naming screen, which is
-         * where it is shown.
+         * The scan now asks, once per room, before the camera
+         * opens, with the last answer offered first. Still one tap
+         * to change on the naming screen afterwards.
          */
-        floor: Number.isFinite(sr.floorGuess) ? (sr.floorGuess as number) : 0,
+        floor: Number.isFinite(sr.floor) ? (sr.floor as number) : 0,
       };
 
       return {

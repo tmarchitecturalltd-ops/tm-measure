@@ -242,18 +242,16 @@ export interface RoomPlanRoom {
    */
   frameJpegBase64?: string;
   /**
-   * Which storey the room is probably on, from how high the phone
-   * was when the room was finished.
+   * Which storey the room is on, as the customer said before the
+   * camera opened.
    *
-   * The shared AR session keeps one origin for the whole house, so
-   * the phone's height is comparable between rooms and a staircase
-   * moves it by far more than anything else a survey involves.
-   * Counted up from the lowest room, so a basement start gives
-   * 0, 1, 2 rather than making every floor wrong by one.
-   *
-   * A guess. The app confirms it rather than acting on it quietly.
+   * Asked rather than inferred. The phone's height does separate
+   * storeys reliably, but it cannot name them: it does not know
+   * whether the survey began in a basement, a ground floor or a
+   * first-floor flat, and floors labelled wrongly are wrong in a
+   * way that reads as right. 0 is the ground floor, -1 a basement.
    */
-  floorGuess?: number;
+  floor?: number;
   /**
    * Footprint corner in the SHARED coordinate system, present only on
    * merged house scans. This is where the room sits on the plan; the
