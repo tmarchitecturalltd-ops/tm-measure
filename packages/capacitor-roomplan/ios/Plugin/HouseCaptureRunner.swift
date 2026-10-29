@@ -117,6 +117,35 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
     /// the processed room retains the transforms that matter.
     private var capturedRooms: [CapturedRoom] = []
     private var roomNames: [String] = []
+    /*
+     * A photograph of each room, taken where the customer stood.
+     *
+     * Without this the survey ends upstairs and the customer walks
+     * back down to every room they scanned to photograph it --
+     * reported as "I've got to go back down stairs to each room and
+     * then take a photo". The camera is already open, already in
+     * the room, and already pointed at it, so the picture costs
+     * nothing but the frame.
+     *
+     * It is also what tells somebody which room they are naming
+     * afterwards. "Room 3 of 7" means nothing; a photograph of the
+     * room means everything.
+     */
+    private var roomFrames: [String] = []
+    /*
+     * The camera's height above where the survey started, per room.
+     *
+     * The shared AR session keeps one origin for the whole house,
+     * so the vertical position of the phone is directly comparable
+     * between rooms. Walking upstairs moves it by a storey, and
+     * nothing else a customer does during a survey moves it by
+     * anything close -- so this is a reliable guess at which floor
+     * a room is on, and it costs the customer nothing.
+     *
+     * A guess, and labelled as one: the app confirms it rather than
+     * acting on it silently.
+     */
+    private var roomCameraY: [Double] = []
     private var startedAt: Date = Date()
 
     private weak var hostVC: UIViewController?
@@ -272,6 +301,9 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
         let rooms = capturedRooms
         let elapsed = Date().timeIntervalSince(startedAt)
         let names = roomNames
+        let frames = roomFrames
+        let cameraY = roomCameraY
+        let lowestY = cameraY.min() ?? 0
 
         /*
          * Keep the rooms as the customer drew them. No merge.
@@ -302,6 +334,24 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
             let one = CaptureSerializer.serialize(captured: room, durationS: elapsed)
             guard var dict = (one["rooms"] as? [[String: Any]])?.first else { continue }
             dict["name"] = i < names.count ? names[i] : "Room \(i + 1)"
+            if i < frames.count, !frames[i].isEmpty {
+                dict["frameJpegBase64"] = frames[i]
+            }
+            /*
+             * Which storey, guessed from how high the phone was.
+             *
+             * Measured against the lowest room of the survey and
+             * divided by a storey, so a room scanned two and a half
+             * metres above the first one is on floor 1. Floors are
+             * never negative here: a customer who starts in the
+             * basement and walks up gets 0, 1, 2, and the basement
+             * is the one they correct, rather than everything
+             * being off by one.
+             */
+            if i < cameraY.count {
+                let rise = cameraY[i] - lowestY
+                dict["floorGuess"] = Int((rise / 2.5).rounded())
+            }
             roomDicts.append(dict)
         }
 
@@ -554,6 +604,10 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
         }
         capturedRooms.append(processedResult)
         roomNames.append("Room \(capturedRooms.count)")
+        roomFrames.append(modalVC?.lastFrameJpeg ?? "")
+        roomCameraY.append(
+            Double(sharedARSession.currentFrame?.camera.transform.columns.3.y ?? 0)
+        )
         dismissModal { [weak self] in
             self?.askForNextStep()
         }
@@ -800,9 +854,54 @@ private class HouseCaptureModalViewController: UIViewController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: work)
     }
 
+    /**
+     * The room as the customer is looking at it, as a small JPEG.
+     *
+     * Rendered from the capture view rather than from the AR frame
+     * buffer, because that is what is on the screen: the room with
+     * Apple's wireframe over it, which reads as "this is the room I
+     * just scanned" far better than a bare camera frame would.
+     *
+     * 720px and quality 0.4, matching the camera tracer. It travels
+     * in a JSON payload and sits in memory for the rest of the
+     * survey; a full-resolution photograph of every room in a house
+     * would be tens of megabytes of someone's home carried around
+     * for a thumbnail.
+     */
+    /// Set at Done, read once the capture result comes back.
+    private(set) var lastFrameJpeg: String?
+
+    func snapshotJpegBase64() -> String? {
+        guard let source = captureView ?? view else { return nil }
+        let maxSide: CGFloat = 720
+        let bounds = source.bounds
+        guard bounds.width > 1, bounds.height > 1 else { return nil }
+        let scale = min(1, maxSide / max(bounds.width, bounds.height))
+        let size = CGSize(width: bounds.width * scale, height: bounds.height * scale)
+        UIGraphicsBeginImageContextWithOptions(size, true, 1)
+        defer { UIGraphicsEndImageContext() }
+        source.drawHierarchy(
+            in: CGRect(origin: .zero, size: size),
+            afterScreenUpdates: false
+        )
+        guard let image = UIGraphicsGetImageFromCurrentImageContext(),
+              let data = image.jpegData(compressionQuality: 0.4)
+        else { return nil }
+        return data.base64EncodedString()
+    }
+
     @objc private func doneTapped() {
         guard !isFinishing else { return }
         isFinishing = true
+        /*
+         * Grab the picture now, not when the result arrives.
+         *
+         * By the time didPresent fires the capture view has swapped
+         * the camera for Apple's finished 3D model, so a snapshot
+         * taken then is a photograph of a grey mesh. The moment the
+         * customer presses Done, the screen still shows the room.
+         */
+        lastFrameJpeg = snapshotJpegBase64()
         doneButton?.isEnabled = false
         doneButton?.alpha = 0.5
         doneButton?.setTitle("…", for: .normal)

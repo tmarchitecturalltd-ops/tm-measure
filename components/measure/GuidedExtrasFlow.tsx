@@ -17,7 +17,7 @@
  * of their own house should not be stopped here.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { RoomPhoto } from "@tm-designs/measure-core";
 import GuidedScreen, {
   type MenuSection,
@@ -52,7 +52,29 @@ type StepId = Side | "description" | "sketches";
  * taken by someone standing in their own garden can show, so it was
  * one more screen to skip for a picture we already had.
  */
-const STEPS: StepId[] = [
+/**
+ * How the house is attached, which decides what there is to
+ * photograph.
+ *
+ * Asking for four elevations of a mid-terrace is asking for two
+ * photographs of a neighbour's wall down an alley nobody can get
+ * into, and a flow that demands the impossible teaches people to
+ * skip steps -- including the ones that matter. So the question is
+ * asked once, in one tap, and the sides that do not exist are not
+ * asked for.
+ */
+export type PropertyKind = "detached" | "semi" | "terraced" | "flat";
+
+const SIDES_FOR: Record<PropertyKind, Side[]> = {
+  detached: ["front", "back", "left", "right"],
+  // One side is a party wall. Which one is not worth a screen, so
+  // both are offered and both say "if you can get to it".
+  semi: ["front", "back", "left", "right"],
+  terraced: ["front", "back"],
+  flat: ["front"],
+};
+
+const BASE_STEPS: StepId[] = [
   "front",
   "back",
   "left",
@@ -73,10 +95,12 @@ const LABELS: Record<StepId, string> = {
 };
 
 const HINTS: Record<StepId, string> = {
-  front: "The street side. Stand back far enough to get the whole house in.",
-  back: "The garden side, if you can get to it.",
-  left: "Looking at the front of the house, the side on your left.",
-  right: "Looking at the front of the house, the side on your right.",
+  // A couple of shots each, not a photo shoot. The whole house in
+  // one frame is the useful picture; a close-up of a wall is not.
+  front: "Stand back far enough to get the whole house in. One or two shots.",
+  back: "The garden side. One or two, if you can get round.",
+  left: "The side on your left as you face the front. Skip it if there's no way through.",
+  right: "The side on your right as you face the front. Skip it if there's no way through.",
   // Drains decide where an extension can go, and a manhole in the
   // wrong place is one of the few things that can stop a design after
   // it has been drawn. Photographed from above, with the surroundings
@@ -102,6 +126,9 @@ type Props = {
   onBackToRooms: () => void;
   /** Finished — on to the floor plan. */
   onDone: () => void;
+  /** Detached, semi, terraced or flat. Decides which sides exist. */
+  propertyKind: PropertyKind | null;
+  onPropertyKind: (kind: PropertyKind) => void;
 };
 
 export default function GuidedExtrasFlow({
@@ -115,10 +142,23 @@ export default function GuidedExtrasFlow({
   onRemoveSketch,
   onBackToRooms,
   onDone,
+  propertyKind,
+  onPropertyKind,
 }: Props) {
   const [stepIndex, setStepIndex] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
-  const step = STEPS[stepIndex];
+  const STEPS = useMemo(() => {
+    const sides = propertyKind ? SIDES_FOR[propertyKind] : null;
+    return BASE_STEPS.filter(
+      (s) =>
+        s === "services" ||
+        s === "description" ||
+        s === "sketches" ||
+        !sides ||
+        sides.includes(s as Side),
+    );
+  }, [propertyKind]);
+  const step = STEPS[Math.min(stepIndex, STEPS.length - 1)];
   const isLast = stepIndex === STEPS.length - 1;
   const isSide = step !== "description" && step !== "sketches";
 
@@ -219,6 +259,45 @@ export default function GuidedExtrasFlow({
             : "Next"
       }
     >
+      {/* Asked once, on the first outdoor screen, because it decides
+          what the rest of them ask for. A mid-terrace has two faces
+          and an alley; demanding four photographs of it teaches
+          people to skip steps, including the ones that matter. */}
+      {step === "front" && (
+        <div className="mb-5">
+          <p className="mb-2 text-sm font-bold uppercase tracking-widest text-on-surface-variant">
+            What kind of house is it?
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["detached", "Detached"],
+                ["semi", "Semi-detached"],
+                ["terraced", "Terraced"],
+                ["flat", "Flat"],
+              ] as [PropertyKind, string][]
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onPropertyKind(value)}
+                style={{ minHeight: 44 }}
+                className={`rounded-full border px-4 text-sm font-bold ${
+                  propertyKind === value
+                    ? "border-primary bg-primary/10 text-on-surface"
+                    : "border-outline-variant/40 text-on-surface-variant"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-sm text-on-surface-variant">
+            So we only ask for the sides you can actually get to.
+          </p>
+        </div>
+      )}
+
       <p className="mb-4 text-base leading-relaxed text-on-surface-variant">
         {HINTS[step]}
       </p>

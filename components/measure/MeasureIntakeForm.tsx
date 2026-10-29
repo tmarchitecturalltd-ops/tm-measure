@@ -67,7 +67,9 @@ import VoiceRecorder from "@/components/measure/VoiceRecorder";
 import WallPositionPicker from "@/components/measure/WallPositionPicker";
 import GuidedRoomFlow from "@/components/measure/GuidedRoomFlow";
 import GuidedProjectFlow from "@/components/measure/GuidedProjectFlow";
-import GuidedExtrasFlow from "@/components/measure/GuidedExtrasFlow";
+import GuidedExtrasFlow, {
+  type PropertyKind,
+} from "@/components/measure/GuidedExtrasFlow";
 import HowItWorksOverlay from "@/components/measure/HowItWorksOverlay";
 import ScanResultFilter from "@/components/measure/ScanResultFilter";
 import GuidedScreen from "@/components/measure/GuidedScreen";
@@ -1023,10 +1025,23 @@ export default function MeasureIntakeForm() {
           ? { x: Number(sr.originM.x.toFixed(3)), z: Number(sr.originM.z.toFixed(3)) }
           : null,
         rotationDeg,
-        // RoomPlan reports no storey, so everything lands on the ground
-        // floor. Moving a room upstairs is one tap in the plan editor;
-        // guessing from ceiling heights would be worse than not guessing.
-        floor: 0,
+        /*
+         * The storey the sensor inferred, used as given.
+         *
+         * RoomPlan reports no storey. Everything used to land on the
+         * ground floor, and a customer who scanned upstairs first
+         * was never asked -- "I did upstairs first, then clicked
+         * next room but it doesn't give me an option to click first
+         * floor, it just assumes it's the same".
+         *
+         * The shared AR session does know: it keeps one origin for
+         * the whole house, so the phone's height when a room was
+         * finished says which storey it was on, and a staircase
+         * moves it by far more than anything else. See floorGuess.
+         * Still one tap to change on the naming screen, which is
+         * where it is shown.
+         */
+        floor: Number.isFinite(sr.floorGuess) ? (sr.floorGuess as number) : 0,
       };
 
       return {
@@ -1074,7 +1089,30 @@ export default function MeasureIntakeForm() {
         // here. See stairsProposals.
         irregularNotes: "",
         notes: stamp,
-        photos: [],
+        /*
+         * The scan's own view of the room, kept as its photograph.
+         *
+         * Taken the moment Done was pressed, where the customer was
+         * standing, pointed at the room. Without it the survey ends
+         * upstairs and they walk back down to every room they
+         * scanned to take a picture -- and most will not, so the
+         * rooms that most need corroborating arrive with nothing.
+         *
+         * Not a substitute for a considered photograph: it is one
+         * frame, with Apple's wireframe over it, and the photo step
+         * still asks for the blinds and the chimney breast. It is
+         * the difference between some evidence and none.
+         */
+        photos: sr.frameJpegBase64
+          ? [
+              {
+                id: newId(),
+                uri: `data:image/jpeg;base64,${sr.frameJpegBase64}`,
+                name: "From the scan.jpg",
+                mimeType: "image/jpeg",
+              },
+            ]
+          : [],
         shape: scanOutlineWorthKeeping(sr.floorPolygonM, sr.widthM, sr.lengthM) ? "custom" : "rectangle",
         measuredByScan: true,
         // Raw count from the sensor, kept whether or not the outline
@@ -1150,6 +1188,17 @@ export default function MeasureIntakeForm() {
       return [...kept, ...built];
     });
     setPlacements((prev) => ({ ...prev, ...nextPlacements }));
+    // The same frame again, for the screens that show the room
+    // rather than submit it. See scanFrames.
+    setScanFrames((prev) => {
+      const next = { ...prev };
+      scanned.forEach((sr, i) => {
+        if (sr.frameJpegBase64 && built[i]) {
+          next[built[i].id] = `data:image/jpeg;base64,${sr.frameJpegBase64}`;
+        }
+      });
+      return next;
+    });
     /*
      * Open on the first room the scan produced, not on room zero.
      *
@@ -2386,6 +2435,16 @@ export default function MeasureIntakeForm() {
    *  means the next picked files go to the room (legacy path). */
 
   // ── Exterior (4-sides) photos ──────────────────────────────────────
+  /*
+   * Detached, semi, terraced or flat.
+   *
+   * Only the exterior step uses it, to decide which sides there are
+   * to photograph, but it is worth sending: it is the first thing a
+   * draughtsman wants to know about a property and it costs the
+   * customer one tap they were going to make anyway.
+   */
+  const [propertyKind, setPropertyKind] = useState<PropertyKind | null>(null);
+
   const [exteriorPhotos, setExteriorPhotos] = useState<
     Record<ExteriorSide, RoomPhoto[]>
   >({
@@ -3414,6 +3473,10 @@ export default function MeasureIntakeForm() {
       email: email.trim(),
       projectName: projectName.trim(),
       projectType: projectType ?? undefined,
+      // Detached, semi, terraced or flat. Asked so the exterior step
+      // only requests sides that exist, and sent because it is the
+      // first thing a draughtsman wants to know.
+      propertyKind: propertyKind ?? undefined,
       unitPreference: unit,
       rooms: serialRooms,
       connections: serialConnections,
@@ -6813,6 +6876,8 @@ export default function MeasureIntakeForm() {
            * where it would be a change to a file this one is only
            * meant to reorder.
            */
+          propertyKind={propertyKind}
+          onPropertyKind={setPropertyKind}
           onBackToRooms={() => setStep(skipPlanStep ? "rooms" : "plan")}
           /*
            * The outside work is the last of the survey now, so this

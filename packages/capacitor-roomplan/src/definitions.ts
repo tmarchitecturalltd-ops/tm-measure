@@ -232,6 +232,29 @@ export interface RoomPlanRoom {
   /** Present on merged house scans: "Room 1", "Room 2", ... */
   name?: string;
   /**
+   * A small JPEG of the room, taken the moment Done was pressed.
+   *
+   * Whole-property scans only. The camera is already in the room
+   * and pointed at it, so the picture costs nothing -- and without
+   * it the survey ends upstairs and the customer walks back down to
+   * every room to photograph it. It is also the only thing that
+   * tells somebody which room "Room 3 of 7" is.
+   */
+  frameJpegBase64?: string;
+  /**
+   * Which storey the room is probably on, from how high the phone
+   * was when the room was finished.
+   *
+   * The shared AR session keeps one origin for the whole house, so
+   * the phone's height is comparable between rooms and a staircase
+   * moves it by far more than anything else a survey involves.
+   * Counted up from the lowest room, so a basement start gives
+   * 0, 1, 2 rather than making every floor wrong by one.
+   *
+   * A guess. The app confirms it rather than acting on it quietly.
+   */
+  floorGuess?: number;
+  /**
    * Footprint corner in the SHARED coordinate system, present only on
    * merged house scans. This is where the room sits on the plan; the
    * width/length below are its size. Absent on single-room scans, where

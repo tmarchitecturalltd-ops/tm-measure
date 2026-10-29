@@ -32,6 +32,7 @@ import type {
 } from "@tm-designs/measure-core";
 import {
   outlineThumbnail,
+  outlineAreaM2,
   outlineProblem,
   openingTooWideForWall,
   roomFootprint,
@@ -844,6 +845,57 @@ export default function GuidedRoomFlow({
 
       {step === "name" && (
         <div>
+          {/* ── Which room is this? ──────────────────────────────
+              "Room 3 of 7" is a number, not a room. After a
+              whole-property scan the customer is naming seven
+              spaces they walked through twenty minutes ago, in an
+              order the sensor chose, and the screen gave them
+              nothing to recognise. Reported as "I have no idea
+              which room it's referring to".
+
+              The scan's own view of the room answers it instantly,
+              and the outline and floor area answer it for anyone
+              whose photograph came out dark. Both are already
+              carried for other screens. */}
+          {(scanFrame || (room.floorPolygonM?.length ?? 0) >= 3) && (
+            <div className="mb-4 flex items-center gap-3 rounded-xl border border-outline-variant/40 bg-surface-container-low p-3">
+              {scanFrame ? (
+                <img
+                  src={scanFrame}
+                  alt="The room as the scan saw it"
+                  className="h-20 w-20 shrink-0 rounded-lg object-cover"
+                />
+              ) : null}
+              {(() => {
+                const thumb = outlineThumbnail(room.floorPolygonM, 64, 5);
+                return thumb ? (
+                  <svg
+                    viewBox={`0 0 ${thumb.size} ${thumb.size}`}
+                    width={64}
+                    height={64}
+                    className="shrink-0"
+                    aria-hidden
+                  >
+                    <path
+                      d={thumb.path}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      className="text-primary"
+                    />
+                  </svg>
+                ) : null;
+              })()}
+              <p className="text-sm text-on-surface-variant">
+                The room you scanned
+                {(() => {
+                  const area = outlineAreaM2(room.floorPolygonM);
+                  return area > 0 ? `, about ${area.toFixed(1)} m²` : "";
+                })()}
+                .
+              </p>
+            </div>
+          )}
           <input
             value={room.name}
             onChange={(e) => onPatch({ name: e.target.value })}
