@@ -303,7 +303,7 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
         let names = roomNames
         let frames = roomFrames
         let cameraY = roomCameraY
-        let lowestY = cameraY.min() ?? 0
+        let storeyIndex = Self.storeys(fromCameraHeights: cameraY)
 
         /*
          * Keep the rooms as the customer drew them. No merge.
@@ -337,20 +337,8 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
             if i < frames.count, !frames[i].isEmpty {
                 dict["frameJpegBase64"] = frames[i]
             }
-            /*
-             * Which storey, guessed from how high the phone was.
-             *
-             * Measured against the lowest room of the survey and
-             * divided by a storey, so a room scanned two and a half
-             * metres above the first one is on floor 1. Floors are
-             * never negative here: a customer who starts in the
-             * basement and walks up gets 0, 1, 2, and the basement
-             * is the one they correct, rather than everything
-             * being off by one.
-             */
-            if i < cameraY.count {
-                let rise = cameraY[i] - lowestY
-                dict["floorGuess"] = Int((rise / 2.5).rounded())
+            if i < storeyIndex.count {
+                dict["floorGuess"] = storeyIndex[i]
             }
             roomDicts.append(dict)
         }
@@ -368,6 +356,48 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
                 "merged": true,
             ])
         )
+    }
+
+    /**
+     * Group rooms into storeys by how high the phone was.
+     *
+     * Not height divided by 2.5. A fixed divisor assumes a storey
+     * height, and it has to guess what to do with everything
+     * between: a bungalow whose rooms differ by 1.2 m because the
+     * phone was held differently in each becomes a bungalow with
+     * two floors, and a Victorian terrace with 3.2 m ceilings
+     * starts skipping floors.
+     *
+     * The heights are clustered instead. Sorted, and a new storey
+     * begins wherever the gap to the previous room is more than
+     * 1.2 m. Nothing in a survey moves the phone vertically by
+     * that much except a staircase: holding it at the chest in one
+     * room and overhead in the next is 0.6 m at the outside, and
+     * ARKit's vertical drift across a house is smaller again.
+     * Conversely no staircase in a house is shorter than 1.2 m, so
+     * a real storey change cannot hide under the threshold.
+     *
+     * It needs no idea what a storey height is, which is the point:
+     * it separates the groups that are there rather than the ones
+     * a constant expects. And it is still a guess -- the app shows
+     * it on the naming screen for the customer to correct, and
+     * mezzanines and split levels are exactly what they will
+     * correct.
+     */
+    static func storeys(fromCameraHeights heights: [Double]) -> [Int] {
+        guard !heights.isEmpty else { return [] }
+        let gapM = 1.2
+        let order = heights.indices.sorted { heights[$0] < heights[$1] }
+        var out = [Int](repeating: 0, count: heights.count)
+        var storey = 0
+        for (n, idx) in order.enumerated() {
+            if n > 0 {
+                let prev = heights[order[n - 1]]
+                if heights[idx] - prev > gapM { storey += 1 }
+            }
+            out[idx] = storey
+        }
+        return out
     }
 
     private func finish(_ result: Result<[String: Any], Error>) {
@@ -460,7 +490,18 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
             enoughPromptShown = true
             DispatchQueue.main.async { [weak self] in
                 self?.modalVC?.showCoaching(
-                    "You can press Done whenever the room is covered."
+                    /*
+                     * Done does two things, so it says two things.
+                     *
+                     * It keeps the view on screen as the room's
+                     * photograph, which saves the customer walking
+                     * back to every room afterwards -- but only if
+                     * they are pointing at the room rather than at
+                     * their own feet when they press it. An
+                     * unannounced camera is also the wrong way to
+                     * photograph somebody's home.
+                     */
+                    "Face the room and press Done — that view becomes its photo."
                 )
             }
         }
@@ -485,7 +526,7 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
                  * leaves the deciding to them.
                  */
                 text: ready
-                    ? "Keep going until the whole room is covered"
+                    ? "Done when you're ready — face the room, it becomes the photo"
                     : hasFloor
                         ? "Keep going round the room"
                         : "Point the phone down to pick up the floor"
