@@ -3076,7 +3076,28 @@ export default function MeasureIntakeForm() {
     setPlacements((prev) => {
       const next = { ...prev };
       for (const [id, placement] of seed.entries()) {
-        if (!next[id]?.positionM) next[id] = placement;
+        if (next[id]?.positionM) continue;
+        /*
+         * Take the position from the layout and nothing else.
+         *
+         * This replaced the whole placement, and the layout has no
+         * idea which storey a room is on -- it is given the rooms
+         * and not their placements, so every seeded floor is 0. A
+         * customer who chose "First floor" while naming the room,
+         * before it had a position, had that answer quietly
+         * overwritten on the way into the plan. The floor then
+         * never reached the DXF, which is where it was noticed:
+         * every storey drawn on top of every other.
+         *
+         * The storey is the customer's answer and the position is
+         * a guess to be dragged, so the guess may not carry the
+         * answer with it.
+         */
+        next[id] = {
+          ...placement,
+          floor: next[id]?.floor ?? placement.floor,
+          rotationDeg: next[id]?.rotationDeg ?? placement.rotationDeg,
+        };
       }
       return next;
     });

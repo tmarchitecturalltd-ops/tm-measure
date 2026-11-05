@@ -1283,7 +1283,37 @@ export function buildDetailedPlanDxf(
   if (detailed) drawTitleBlock(out, placed, options);
 
   out.push(pair(0, "ENDSEC"), pair(0, "EOF"));
-  return out.join("\n") + "\n";
+
+  /*
+   * One line where one line was drawn.
+   *
+   * Every room draws its own walls, so a partition between two
+   * rooms is drawn twice -- once by each side, on the same
+   * centreline, at the same thickness. On screen that is one wall
+   * made of two coincident walls and four coincident edges, and in
+   * CAD it is what a draughtsman sees when he clicks a wall and
+   * gets a second one underneath it. Reported as "it thinks some
+   * walls have multi layers or thickness".
+   *
+   * The two are identical, so one of them is simply dropped: same
+   * layer, same endpoints to the centimetre, nothing lost. Walls
+   * that genuinely sit beside each other -- two skins of a cavity,
+   * a partition against an outside wall -- are not identical and
+   * are kept.
+   *
+   * Done here rather than by deciding which room owns a shared
+   * wall, because ownership would also have to decide which room's
+   * doorway gets drawn in it, and the answer to that is both.
+   */
+  const seen = new Set<string>();
+  const deduped = out.filter((entity) => {
+    if (!entity.startsWith(pair(0, "LINE"))) return true;
+    if (seen.has(entity)) return false;
+    seen.add(entity);
+    return true;
+  });
+
+  return deduped.join("\n") + "\n";
 }
 
 /**

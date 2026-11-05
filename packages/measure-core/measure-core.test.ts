@@ -3197,3 +3197,29 @@ test("two storeys stack, and a terrace has no side elevation", () => {
   // empty sheet headed "Left elevation" that reads as missing.
   assert.equal(buildElevations([]).length, 0);
 });
+
+test("a partition between two rooms is drawn once", () => {
+  /*
+   * Each room draws its own walls, so the wall between two rooms
+   * is drawn twice: same centreline, same thickness, once from
+   * each side. On screen that is one wall made of two, and in CAD
+   * it is a draughtsman clicking a wall and finding another one
+   * underneath. Reported as "it thinks some walls have multi
+   * layers or thickness".
+   */
+  const left = planRoom("l", "Lounge", 4, 3) as unknown as RoomDraft;
+  const right = planRoom("r", "Diner", 4, 3) as unknown as RoomDraft;
+  const dxf = buildDetailedPlanDxf([
+    { room: left, anchor: { x: 0, z: 0 }, rotationDeg: 0, floor: 0 },
+    // Hard against it: the shared edge is the same line twice.
+    { room: right, anchor: { x: 4, z: 0 }, rotationDeg: 0, floor: 0 },
+  ]);
+
+  const lines = dxf.split("\n0\nLINE\n").slice(1);
+  const seen = new Set(lines);
+  assert.equal(
+    lines.length,
+    seen.size,
+    "no line is emitted twice at the same place on the same layer",
+  );
+});
