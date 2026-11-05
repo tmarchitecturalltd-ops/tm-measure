@@ -1212,7 +1212,41 @@ export function buildDetailedPlanDxf(
    * select. Drawn on the title layer so it can be frozen in one
    * action by anybody who would rather not have it.
    */
-  for (const s of spread.sheets) {
+  /*
+   * A single storey is framed where it stands.
+   *
+   * It gets no sheet of its own, because moving a one-storey plan
+   * to the middle of a page would shift every coordinate in the
+   * drawing away from the measurements it was built from. A border
+   * drawn round where it already is costs nothing and answers the
+   * same complaint -- a survey that arrived as a drawing floating
+   * off to one side of an empty sheet with no edge to it.
+   */
+  const frames =
+    spread.sheets.length > 0
+      ? spread.sheets
+      : (() => {
+          const pts = placed.flatMap((e) => roomOutlineM(e));
+          if (!pts.length) return [];
+          const xs = pts.map((p) => p.x);
+          const zs = pts.map((p) => p.z);
+          const m = SHEET_MARGIN_M;
+          const x = Math.min(...xs) - m;
+          const z = Math.min(...zs) - m;
+          return [
+            {
+              floor: placed[0]?.floor ?? 0,
+              x,
+              z,
+              w: Math.max(...xs) - Math.min(...xs) + 2 * m,
+              h: Math.max(...zs) - Math.min(...zs) + 2 * m,
+            },
+          ];
+        })();
+
+  // Detailed only, like the title block: the plain companion is a
+  // clean shell and a border is furniture.
+  for (const s of detailed ? frames : []) {
     const c = [
       { x: s.x, z: s.z },
       { x: s.x + s.w, z: s.z },
@@ -1244,7 +1278,7 @@ export function buildDetailedPlanDxf(
    * no title layer, no openings. Four more sheets of faces would
    * make it a different document.
    */
-  if (detailed) drawElevations(out, placed, spread.sheets);
+  if (detailed) drawElevations(out, placed, frames);
 
   if (detailed) drawTitleBlock(out, placed, options);
 

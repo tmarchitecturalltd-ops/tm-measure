@@ -1018,7 +1018,36 @@ export default function MeasureIntakeForm() {
        * drawing implies a precision we do not have.
        */
       const raw = sr.rotationDeg ?? 0;
-      const rotationDeg = Number(((((raw % 360) + 360) % 360)).toFixed(1));
+      const sensorBearing = Number(((((raw % 360) + 360) % 360)).toFixed(1));
+
+      /*
+       * The outline the whole-property scan returns is already
+       * pointing the way the room points.
+       *
+       * Every room of a house scan is measured in one shared AR
+       * frame, so its floor polygon arrives in world orientation
+       * and is only shifted to sit against its own anchor. The
+       * bearing is already in those corners.
+       *
+       * The placement rotation was then set to the sensor's bearing
+       * as well, and the plan rotates a room's outline by it --
+       * so every room was turned twice, each about its own corner,
+       * by its own angle. A rectangular house came back with its
+       * rooms at assorted angles, overlapping each other, and the
+       * rooms that happened to be scanned square looked fine, which
+       * is what made it read as the sensor being inaccurate rather
+       * than as arithmetic.
+       *
+       * So: where the outline is kept, the rotation is already
+       * spent and the placement carries none. Where it is not kept
+       * the room is drawn as a rectangle from its wall lengths,
+       * which has no bearing of its own and still needs the
+       * sensor's.
+       */
+      const outlineKept =
+        !!sr.originM &&
+        scanOutlineWorthKeeping(sr.floorPolygonM, sr.widthM, sr.lengthM);
+      const rotationDeg = outlineKept ? 0 : sensorBearing;
 
       nextPlacements[id] = {
         positionM: sr.originM
@@ -1129,8 +1158,7 @@ export default function MeasureIntakeForm() {
         // not always the tidy shape its bounding metrics imply, and a
         // sliver drawn faithfully is worse than a rectangle drawn
         // approximately.
-        floorPolygonM:
-          sr.originM && scanOutlineWorthKeeping(sr.floorPolygonM, sr.widthM, sr.lengthM)
+        floorPolygonM: outlineKept
             ? sr.floorPolygonM!.map((p) => ({
                 x: Number((p.x - sr.originM!.x).toFixed(3)),
                 z: Number((p.z - sr.originM!.z).toFixed(3)),
