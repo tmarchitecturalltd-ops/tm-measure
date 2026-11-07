@@ -41,6 +41,7 @@ import type {
 } from "./types";
 import { FIXTURE_SIZES_M, fixtureFootprintM, rotatePointM } from "./types.ts";
 import { roomFootprint } from "./floorplan.ts";
+import { squareUpOutline } from "./scan.ts";
 import {
   buildElevations,
   elevationName,
@@ -211,6 +212,51 @@ export function squareToSheet(entries: PlanRoomInput[]): PlanRoomInput[] {
     },
     rotationDeg: (e.rotationDeg ?? 0) - bearing,
   }));
+}
+
+/**
+ * How far off square a drawn wall may be before it is left alone.
+ *
+ * Looser than the app's own rule. A draughtsman has asked for right
+ * angles: "if it can assume it's square and right angle walls, that
+ * is needed". Ten degrees catches sensor drift and a wall traced
+ * slightly off, and leaves alone everything a house is genuinely
+ * built at an angle -- a bay cheek is 45, a splayed corner 30, and
+ * neither is close to the line.
+ */
+export const DRAWN_SQUARE_TOLERANCE_DEG = 10;
+
+/**
+ * Right-angle the rooms before they are drawn.
+ *
+ * A scanned outline is a measurement, so its corners come back at
+ * 89.2 and 90.6 degrees. That is honest and it is not what a
+ * drawing is for: the walls were built square, the draughtsman is
+ * going to square them, and leaving it to him means every room is
+ * redrawn by hand before the survey is worth anything.
+ *
+ * Each room is squared against its own longest wall, so a room
+ * keeps the bearing it was measured at and only its corners move.
+ * Squaring them to the page instead would pivot each room about
+ * its anchor and open gaps between rooms that are actually
+ * touching, which is a worse drawing than a slightly wonky one.
+ * The sheet as a whole is straightened separately -- see
+ * squareToSheet.
+ *
+ * The app's own data is untouched. This is the drawing's view of
+ * the survey, and the submission still carries what was measured.
+ */
+export function squareRoomsForDrawing(
+  entries: PlanRoomInput[],
+  toleranceDeg = DRAWN_SQUARE_TOLERANCE_DEG,
+): PlanRoomInput[] {
+  return entries.map((e) => {
+    const poly = e.room.floorPolygonM;
+    if (!poly || poly.length < 4) return e;
+    const squared = squareUpOutline(poly, toleranceDeg);
+    if (squared === poly) return e;
+    return { ...e, room: { ...e.room, floorPolygonM: squared } };
+  });
 }
 
 export function spreadFloors(entries: PlanRoomInput[]): {
@@ -856,7 +902,9 @@ export function buildDetailedPlanDxf(
   // Square to the sheet before the storeys are laid out, so each
   // storey's bounding box is measured on the turned drawing rather
   // than on the skewed one. See squareToSheet.
-  const spread = spreadFloors(squareToSheet(entries.filter((e) => e.anchor)));
+  const spread = spreadFloors(
+    squareToSheet(squareRoomsForDrawing(entries.filter((e) => e.anchor))),
+  );
   const placed = spread.entries;
   const walls = buildWalls(placed);
   const out: string[] = [];

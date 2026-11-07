@@ -33,6 +33,7 @@ import {
   buildDetailedPlanDxf,
   planBearingDeg,
   squareToSheet,
+  squareRoomsForDrawing,
   roomOutlineM,
   spreadFloors,
   floorName,
@@ -3221,5 +3222,60 @@ test("a partition between two rooms is drawn once", () => {
     lines.length,
     seen.size,
     "no line is emitted twice at the same place on the same layer",
+  );
+});
+
+test("a scanned room is drawn with right angles", () => {
+  /*
+   * "If it can assume it's square and right angle walls, that is
+   * needed." A scanned outline is a measurement, so its corners
+   * come back at 89.2 and 90.6 degrees -- honest, and not what a
+   * drawing is for. Squared against the room's own longest wall,
+   * so the room keeps its bearing and only the corners move.
+   */
+  const wonky = planRoom("k", "Kitchen", 4, 3) as unknown as RoomDraft;
+  wonky.shape = "custom";
+  wonky.floorPolygonM = [
+    { x: 0, z: 0 },
+    { x: 4, z: 0.14 },
+    { x: 3.93, z: 3.0 },
+    { x: -0.06, z: 2.92 },
+  ];
+  const [squared] = squareRoomsForDrawing([
+    { room: wonky, anchor: { x: 0, z: 0 }, rotationDeg: 0, floor: 0 },
+  ]);
+  const poly = squared.room.floorPolygonM!;
+  for (let i = 0; i < poly.length; i += 1) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const c = poly[(i + 2) % poly.length];
+    const u = { x: b.x - a.x, z: b.z - a.z };
+    const v = { x: c.x - b.x, z: c.z - b.z };
+    const cos =
+      (u.x * v.x + u.z * v.z) / (Math.hypot(u.x, u.z) * Math.hypot(v.x, v.z));
+    assert.ok(
+      Math.abs(cos) < 0.02,
+      `corner ${i} should be square, cos was ${cos.toFixed(3)}`,
+    );
+  }
+
+  // A bay genuinely built at an angle is left alone.
+  const bay = planRoom("b", "Bay", 4, 3) as unknown as RoomDraft;
+  bay.shape = "custom";
+  bay.floorPolygonM = [
+    { x: 0, z: 0 },
+    { x: 4, z: 0 },
+    { x: 4, z: 2 },
+    { x: 3, z: 3 },
+    { x: 1, z: 3 },
+    { x: 0, z: 2 },
+  ];
+  const [kept] = squareRoomsForDrawing([
+    { room: bay, anchor: { x: 0, z: 0 }, rotationDeg: 0, floor: 0 },
+  ]);
+  assert.deepEqual(
+    kept.room.floorPolygonM,
+    bay.floorPolygonM,
+    "45 degree cheeks are not drift",
   );
 });

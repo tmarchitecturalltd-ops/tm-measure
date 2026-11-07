@@ -280,8 +280,20 @@ class HouseCaptureRunner: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionD
              * The customer presses "Next room" and stays where they
              * are, which is the end of a whole-property scan.
              */
+            /*
+             * Via the floor question, not straight to the camera.
+             *
+             * Asked before the first room only, which is the one
+             * room nobody needs to be asked about -- the survey
+             * starts where the customer is standing. The floor they
+             * change is the one they walk up to, and that is every
+             * room after the first. Reported as "it does at the
+             * start but not when I'm in the middle".
+             */
             self.whenHostIsFree {
-                self.presentCapture(roomNumber: self.capturedRooms.count + 1)
+                self.askForFloor(
+                    thenRoomNumber: self.capturedRooms.count + 1
+                )
             }
         })
         alert.addAction(UIAlertAction(title: "That's the lot", style: .default) { [weak self] _ in

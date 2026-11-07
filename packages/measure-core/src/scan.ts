@@ -418,6 +418,18 @@ export const SQUARE_UP_TOLERANCE_DEG = 8;
 
 export function squareUpOutline(
   polygon: { x: number; z: number }[],
+  /**
+   * How far off a quarter turn a wall may be and still be treated as
+   * drift rather than as a wall somebody built at an angle.
+   *
+   * Overridable because the drawing wants a looser rule than the app
+   * does. On screen the customer is looking at their own room and a
+   * wall quietly straightened is a wall they cannot query; on the
+   * DXF a draughtsman has asked for square walls, and the ones that
+   * are genuinely angled -- a bay at 45 degrees, a splayed corner --
+   * are nowhere near any threshold either way.
+   */
+  toleranceDeg: number = SQUARE_UP_TOLERANCE_DEG,
 ): { x: number; z: number }[] {
   const n = polygon.length;
   if (n < 4) return polygon;
@@ -445,10 +457,8 @@ export function squareUpOutline(
     const rel = measured - axis;
     const q = Math.round(rel / (Math.PI / 2));
     const offBy = Math.abs(rel - q * (Math.PI / 2)) * (180 / Math.PI);
-    const a = offBy <= SQUARE_UP_TOLERANCE_DEG
-      ? axis + q * (Math.PI / 2)
-      : measured;
-    if (offBy <= SQUARE_UP_TOLERANCE_DEG && offBy > 1e-9) snappedAny = true;
+    const a = offBy <= toleranceDeg ? axis + q * (Math.PI / 2) : measured;
+    if (offBy <= toleranceDeg && offBy > 1e-9) snappedAny = true;
     dirs.push({ x: Math.cos(a), z: Math.sin(a) });
   }
   if (!snappedAny) return polygon;
