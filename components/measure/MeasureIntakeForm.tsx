@@ -40,6 +40,8 @@ import {
   makeRoomConnectionDraft,
   normalizeConnections,
   buildDetailedPlanDxf,
+  buildPlanSvgs,
+  floorName,
   type ConnectionKind,
   type ExteriorSide,
   type FieldIssue,
@@ -3571,6 +3573,71 @@ export default function MeasureIntakeForm() {
     sizeBytes: number;
   };
 
+
+  /**
+   * The plan as PNGs, one per storey.
+   *
+   * SVG to canvas to PNG. The SVG is handed over as a data URI
+   * rather than a blob URL because a blob URL is revoked when the
+   * page it came from goes away, and this runs during submission
+   * when several other things are happening at once.
+   *
+   * Encoded with unescape(encodeURIComponent()) before btoa: btoa is
+   * latin1-only and a room called "Séjour" would otherwise throw and
+   * take the submission down with it.
+   *
+   * Failures are swallowed per storey. A missing picture in an email
+   * is a worse email; a submission that does not send is a lost
+   * survey.
+   */
+  const buildPlanImages = useCallback(async (): Promise<
+    { floor: number; name: string; dataUri: string }[]
+  > => {
+    const entries = rooms
+      .map((room) => {
+        const p = placements[room.id];
+        if (!p?.positionM) return null;
+        return {
+          room,
+          anchor: { x: p.positionM.x, z: p.positionM.z },
+          rotationDeg: p.rotationDeg ?? 0,
+          floor: p.floor ?? 0,
+        };
+      })
+      .filter((e): e is NonNullable<typeof e> => e !== null);
+    if (!entries.length) return [];
+
+    const out: { floor: number; name: string; dataUri: string }[] = [];
+    for (const { floor, svg } of buildPlanSvgs(entries)) {
+      try {
+        const encoded =
+          "data:image/svg+xml;base64," +
+          btoa(unescape(encodeURIComponent(svg)));
+        const img = await new Promise<HTMLImageElement | null>((resolve) => {
+          const el = new Image();
+          el.onload = () => resolve(el);
+          el.onerror = () => resolve(null);
+          el.src = encoded;
+        });
+        if (!img) continue;
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) continue;
+        ctx.drawImage(img, 0, 0);
+        out.push({
+          floor,
+          name: `${floorName(floor).toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`,
+          dataUri: canvas.toDataURL("image/png"),
+        });
+      } catch {
+        // See above: a storey without a picture is still a storey.
+      }
+    }
+    return out;
+  }, [rooms, placements]);
+
   const buildDxfAttachment = useCallback(():
     | (DxfFile & { plain: DxfFile })
     | null => {
@@ -3850,6 +3917,23 @@ export default function MeasureIntakeForm() {
         // house from a list of numbers. Null when nothing was placed on
         // the plan; the backend simply finds no file to upload.
         floorPlanDxf: buildDxfAttachment(),
+        /*
+         * A picture of the plan, for the email to show.
+         *
+         * The submission arrives as a list of wall lengths -- "Wall
+         * 1 5.50 m, Wall 2 3.91 m, Wall 3 2.01 m" -- which is the
+         * whole survey and is unreadable: nine numbers do not add
+         * up to a nine-sided room in anybody's head. The email did
+         * already build an SVG plan, and nobody has ever seen it,
+         * because Gmail strips inline SVG. So it is rasterised
+         * here, where there is a canvas to do it with, and sent as
+         * an image the mail client will actually render.
+         *
+         * One per storey. Same geometry as the DXF, squared the
+         * same way, so the picture and the file are the same
+         * survey.
+         */
+        planImages: await buildPlanImages(),
         exterior: Object.fromEntries(
           Object.entries(payload.exterior).map(([side, photos]) => [
             side,

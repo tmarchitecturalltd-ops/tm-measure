@@ -874,13 +874,57 @@ function sendEmail_(payload, submissionId) {
     (payload.projectName || 'New project') + ' — ' +
     (payload.customerName || 'Customer');
 
+  /*
+   * The plan images, attached so the HTML can point at them.
+   *
+   * Gmail strips an inline <svg> entirely, which is why this email
+   * has carried a drawing nobody has ever seen. A PNG referenced by
+   * content id renders everywhere, so the app rasterises the plan
+   * and sends one image per storey.
+   */
+  const inline = planInlineImages_(payload);
+
   MailApp.sendEmail({
     to: CONFIG.recipientEmail,
     replyTo: validEmail_(payload.email) ? payload.email : CONFIG.recipientEmail,
     subject: subject,
     htmlBody: buildHtmlEmail_(payload, submissionId),
     body: buildPlainTextEmail_(payload, submissionId),
+    inlineImages: inline,
   });
+}
+
+/**
+ * Turn payload.planImages into blobs keyed by content id.
+ *
+ * One per storey, named plan0, plan1 ... in the order they were
+ * sent, which is lowest storey first. An image that will not decode
+ * is dropped rather than throwing: a missing picture is a worse
+ * email, a thrown error is no email at all.
+ */
+function planInlineImages_(payload) {
+  const out = {};
+  const list = Array.isArray(payload.planImages) ? payload.planImages : [];
+  for (let i = 0; i < list.length; i++) {
+    try {
+      const uri = list[i] && list[i].dataUri;
+      if (!uri) continue;
+      const match = /^data:(image\/png);base64,(.+)$/i.exec(String(uri));
+      if (!match) continue;
+      const bytes = Utilities.base64Decode(match[2]);
+      // A plan of a house is tens of kilobytes. Anything far past
+      // that is not a plan.
+      if (bytes.length > 4 * 1024 * 1024) continue;
+      out['plan' + i] = Utilities.newBlob(
+        bytes,
+        'image/png',
+        (list[i].name || ('plan-' + i + '.png'))
+      ).setName('plan' + i);
+    } catch (err) {
+      console.error('plan image ' + i + ' could not be attached', err);
+    }
+  }
+  return out;
 
   // Customer confirmation — short branded receipt so they know we
   // got their submission, with the submission ID for the status page
@@ -1279,7 +1323,7 @@ function floorPlanHtmlBlock_(payload, gold, cream, dark, mid, border) {
         escapeHtml_(floorLabel_(floor)) + ' (' + floorRooms.length + ' room' + (floorRooms.length === 1 ? '' : 's') + ')' +
       '</div>' +
       '<div style="padding:16px;background:' + cream + ';text-align:center;">' +
-        svg +
+        planPicture_(payload, floor, svg) +
       '</div>' +
       '<table style="width:100%;border-collapse:collapse;border-top:1px solid ' + border + ';">' +
         listing +
@@ -1292,7 +1336,7 @@ function floorPlanHtmlBlock_(payload, gold, cream, dark, mid, border) {
       'Floor plan (' + floors.length + ' floor' + (floors.length === 1 ? '' : 's') + ')' +
     '</h2>' +
     '<p style="margin:6px 0 0 0;font-size:12px;color:' + mid + ';">' +
-      'If this section shows only a list, your mail client stripped the inline SVG. ' +
+      'Wall lengths and floor areas are on the drawing, in metres. ' +
       'The coordinates below are exact — x and z are in metres from the floor origin.' +
     '</p>' +
     sections +
@@ -1303,6 +1347,27 @@ function floorPlanHtmlBlock_(payload, gold, cream, dark, mid, border) {
  * Mirror of measure-core/floorplan.ts roomFootprint() — width = walls[0],
  * length = walls[1], with fallback to 3×3 m for rooms missing dimensions.
  */
+/**
+ * The drawing for one storey: a real image where there is one.
+ *
+ * The app sends a PNG per storey, rasterised from the same geometry
+ * as the DXF. Where it is present it is referenced by content id,
+ * because that is the only form of image every mail client renders.
+ * The old inline SVG stays as the fallback for a submission sent by
+ * an older build -- it shows in a few clients and costs nothing in
+ * the rest.
+ */
+function planPicture_(payload, floor, svgFallback) {
+  const list = Array.isArray(payload.planImages) ? payload.planImages : [];
+  for (let i = 0; i < list.length; i++) {
+    if (list[i] && Number(list[i].floor) === Number(floor) && list[i].dataUri) {
+      return '<img src="cid:plan' + i + '" alt="Floor plan" ' +
+        'style="max-width:100%;height:auto;border:0;display:block;margin:0 auto;">';
+    }
+  }
+  return svgFallback;
+}
+
 function roomFootprint_(room) {
   const walls = Array.isArray(room.walls) ? room.walls : [];
   const w = walls[0] ? Number(walls[0].lengthM) : NaN;

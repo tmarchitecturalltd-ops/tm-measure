@@ -53,6 +53,7 @@ import {
   buildElevations,
   ASSUMED,
 } from "./src/elevation.ts";
+import { buildPlanSvgs } from "./src/planImage.ts";
 import {
   scanPolygonIsUsable,
   scanOutlineWorthKeeping,
@@ -3278,4 +3279,59 @@ test("a scanned room is drawn with right angles", () => {
     bay.floorPolygonM,
     "45 degree cheeks are not drift",
   );
+});
+
+test("the email plan draws one storey per image, with its dimensions", () => {
+  /*
+   * The submission email listed every room as wall lengths --
+   * "Wall 1 5.50 m, Wall 2 3.91 m, Wall 3 2.01 m" -- which is the
+   * whole survey and unreadable: nine numbers do not add up to a
+   * nine-sided room in anybody's head.
+   */
+  const mk = (id: string, name: string, poly: { x: number; z: number }[]) =>
+    ({
+      ...(planRoom(id, name, 3, 3) as unknown as RoomDraft),
+      shape: "custom",
+      floorPolygonM: poly,
+    }) as RoomDraft;
+
+  const kitchen = mk("k", "Kitchen", [
+    { x: 0, z: 0 },
+    { x: 4.2, z: 0 },
+    { x: 4.2, z: 3.1 },
+    { x: 0, z: 3.1 },
+  ]);
+  const hall = mk("h", "Hallway", [
+    { x: 4.2, z: 0 },
+    { x: 5.4, z: 0 },
+    { x: 5.4, z: 3.1 },
+    { x: 4.2, z: 3.1 },
+  ]);
+  const bed = mk("b", "Bedroom", [
+    { x: 0, z: 0 },
+    { x: 4.2, z: 0 },
+    { x: 4.2, z: 3.1 },
+    { x: 0, z: 3.1 },
+  ]);
+
+  const svgs = buildPlanSvgs([
+    { room: kitchen, anchor: { x: 0, z: 0 }, rotationDeg: 0, floor: 0 },
+    { room: hall, anchor: { x: 0, z: 0 }, rotationDeg: 0, floor: 0 },
+    { room: bed, anchor: { x: 0, z: 0 }, rotationDeg: 0, floor: 1 },
+  ]);
+
+  assert.equal(svgs.length, 2, "one image per storey");
+  const ground = svgs[0].svg;
+  assert.ok(ground.includes("Kitchen"), "rooms are named on the drawing");
+  assert.ok(ground.includes("4.20"), "and the walls carry their lengths");
+  assert.ok(ground.includes("13.0 m"), "and the floor area");
+
+  /*
+   * The partition between the kitchen and the hallway is 3.10 long
+   * and both rooms would label it, printing one figure on top of
+   * the other. The two outside walls are 3.10 as well, so three
+   * labels is right and four is the bug.
+   */
+  const threeTens = ground.match(/>3\.10</g) ?? [];
+  assert.equal(threeTens.length, 3, "a shared wall is measured once");
 });

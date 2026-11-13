@@ -11,3 +11,4 @@ export * from "./dxf";
 export * from "./dxfPlan";
 export * from "./splitRooms";
 export * from "./elevation";
+export * from "./planImage";
