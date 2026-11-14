@@ -29,6 +29,13 @@ import {
   type PlanRoomInput,
 } from "./dxfPlan.ts";
 import { outlineAreaM2 } from "./scan.ts";
+import {
+  buildElevations,
+  elevationName,
+  type Elevation,
+  type ElevationRoom,
+  type ElevationSide,
+} from "./elevation.ts";
 
 /** Pixels per metre. 36 puts a 10 m house in about 400px. */
 const PX_PER_M = 36;
@@ -37,6 +44,7 @@ const PAD_PX = 56;
 const ink = "#1c1c1a";
 const label = "#4d4639";
 const gold = "#b89650";
+const soft = "#a39b90";
 
 function esc(s: string): string {
   return s
@@ -272,3 +280,260 @@ export function buildPlanSvgs(
 }
 
 export type { RoomDraft };
+
+/**
+ * The whole property, as one picture for the top of the email.
+ *
+ * The per-storey drawings answer "how big is that room". This one
+ * answers "what have I been sent" -- it is the first thing in the
+ * email and it has to read at a glance, from a phone, before
+ * anybody has decided to pay attention. So it carries no
+ * dimensions: storeys side by side, rooms filled, each named, with
+ * the floor area underneath.
+ *
+ * Scaled to a fixed width rather than a fixed scale, because a
+ * bungalow and a three-storey townhouse both have to arrive as a
+ * picture of a house rather than a stamp or a wall chart.
+ */
+export function buildPropertySvg(
+  entries: PlanRoomInput[],
+  projectName?: string,
+): string | null {
+  const prepared = squareToSheet(
+    squareRoomsForDrawing(entries.filter((e) => e.anchor)),
+  );
+  if (!prepared.length) return null;
+
+  const floors = [...new Set(prepared.map((e) => e.floor ?? 0))].sort(
+    (a, b) => a - b,
+  );
+
+  type Block = {
+    floor: number;
+    polys: { poly: Pt[]; name: string }[];
+    minX: number;
+    minZ: number;
+    w: number;
+    h: number;
+    areaM2: number;
+  };
+
+  const blocks: Block[] = [];
+  for (const floor of floors) {
+    const polys = prepared
+      .filter((e) => (e.floor ?? 0) === floor)
+      .map((e) => ({
+        poly: roomOutlineM(e),
+        name: e.room.name?.trim() || "Room",
+      }))
+      .filter((p) => p.poly.length >= 3);
+    if (!polys.length) continue;
+    const pts = polys.flatMap((p) => p.poly);
+    const minX = Math.min(...pts.map((p) => p.x));
+    const minZ = Math.min(...pts.map((p) => p.z));
+    blocks.push({
+      floor,
+      polys,
+      minX,
+      minZ,
+      w: Math.max(...pts.map((p) => p.x)) - minX,
+      h: Math.max(...pts.map((p) => p.z)) - minZ,
+      areaM2: polys.reduce((s, p) => s + outlineAreaM2(p.poly), 0),
+    });
+  }
+  if (!blocks.length) return null;
+
+  const WIDTH = 680;
+  const GAP = 28;
+  const PAD = 24;
+  const HEAD = projectName ? 38 : 14;
+  const FOOT = 34;
+
+  // One scale for every storey, so a first floor that is smaller
+  // than the ground floor looks smaller rather than being blown up
+  // to match it.
+  const totalW = blocks.reduce((s, b) => s + b.w, 0);
+  const tallest = Math.max(...blocks.map((b) => b.h));
+  const availW = WIDTH - PAD * 2 - GAP * (blocks.length - 1);
+  const scale = Math.min(availW / Math.max(totalW, 0.1), 240 / Math.max(tallest, 0.1));
+  const bodyH = Math.round(tallest * scale);
+  const height = HEAD + bodyH + FOOT + PAD;
+
+  const parts: string[] = [];
+  let cursor = PAD;
+
+  for (const b of blocks) {
+    const ox = cursor;
+    const oy = HEAD + (bodyH - b.h * scale) / 2;
+    for (const { poly, name } of b.polys) {
+      const px = (p: Pt) => ox + (p.x - b.minX) * scale;
+      const pz = (p: Pt) => oy + (p.z - b.minZ) * scale;
+      const d =
+        poly.map((p, i) => `${i === 0 ? "M" : "L"}${px(p).toFixed(1)} ${pz(p).toFixed(1)}`).join(" ") +
+        " Z";
+      // Filled, not hollow. A row of empty rectangles reads as a
+      // diagram of nothing; a tinted footprint reads as a building,
+      // which is the entire job of this picture.
+      parts.push(
+        `<path d="${d}" fill="#f2ece1" stroke="${ink}" stroke-width="2" stroke-linejoin="round"/>`,
+      );
+
+      /*
+       * The room's name, where it fits.
+       *
+       * No dimensions on this image -- it is the one at the top of
+       * the email and it has to read before anybody has decided to
+       * pay attention -- but a plan of unlabelled boxes says
+       * nothing at all. Rooms too small for their own name are left
+       * blank rather than overwritten, because the per-storey
+       * drawings below name everything anyway.
+       */
+      const w = (Math.max(...poly.map((p) => p.x)) - Math.min(...poly.map((p) => p.x))) * scale;
+      const h = (Math.max(...poly.map((p) => p.z)) - Math.min(...poly.map((p) => p.z))) * scale;
+      const cx = poly.reduce((s, p) => s + px(p), 0) / poly.length;
+      const cz = poly.reduce((s, p) => s + pz(p), 0) / poly.length;
+      const needed = name.length * 6.2 + 6;
+      const turn = needed > w - 6 && h > w;
+      if (turn ? needed < h - 6 : needed < w - 6) {
+        const rot = turn ? ` transform="rotate(-90 ${cx.toFixed(1)} ${cz.toFixed(1)})"` : "";
+        parts.push(
+          `<text x="${cx.toFixed(1)}" y="${cz.toFixed(1)}" fill="${ink}" font-size="11" text-anchor="middle" dominant-baseline="middle"${rot}>${esc(name)}</text>`,
+        );
+      }
+    }
+    parts.push(
+      `<text x="${(ox + (b.w * scale) / 2).toFixed(1)}" y="${(HEAD + bodyH + 20).toFixed(1)}" fill="${label}" font-size="13" text-anchor="middle">${esc(floorName(b.floor))} · ${b.areaM2.toFixed(1)} m²</text>`,
+    );
+    cursor += b.w * scale + GAP;
+  }
+
+  if (projectName) {
+    parts.unshift(
+      `<text x="${PAD}" y="24" fill="${ink}" font-size="17" font-weight="600">${esc(projectName)}</text>`,
+    );
+  }
+
+  const total = blocks.reduce((s, b) => s + b.areaM2, 0);
+  parts.push(
+    `<text x="${WIDTH - PAD}" y="24" fill="${gold}" font-size="13" text-anchor="end">${total.toFixed(1)} m² measured</text>`,
+  );
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${Math.round(height)}" viewBox="0 0 ${WIDTH} ${Math.round(height)}">`,
+    `<rect width="${WIDTH}" height="${Math.round(height)}" fill="#fcf9f5"/>`,
+    ...parts,
+    "</svg>",
+  ].join("");
+}
+
+/**
+ * The elevations, as pictures for the email.
+ *
+ * The DXF already carries a sheet per face. This is the same
+ * geometry drawn for someone reading an email on a phone, which is
+ * a different job: no dimension strings, bigger openings, and the
+ * three pens kept distinct so it is obvious at a glance which part
+ * of the drawing is a measurement.
+ *
+ * Solid is measured -- every opening width and its position along
+ * the wall, and each storey height. Dashed is assumed, and the only
+ * assumed geometry here is the roof: the scan cannot see it, so it
+ * is drawn from the span at a conventional pitch and labelled on
+ * the sheet. A draughtsman replaces it; nobody scales it.
+ */
+export function buildElevationSvg(el: Elevation): string {
+  const S = 52;
+  const PAD = 54;
+  const EAVES = 0.4;
+  const PITCH = (38 * Math.PI) / 180;
+
+  const w = el.widthM;
+  const top = el.heightM + EAVES;
+  const ridge = top + (w / 2) * Math.tan(PITCH);
+
+  const width = Math.round(w * S) + PAD * 2;
+  const height = Math.round(ridge * S) + PAD * 2 + 44;
+  const X = (u: number) => PAD + u * S;
+  const Y = (y: number) => height - PAD - 44 - y * S;
+
+  const p: string[] = [];
+
+  // The roof, assumed, dashed, and said so.
+  p.push(
+    `<path d="M${X(-0.3).toFixed(1)} ${Y(top).toFixed(1)} L${X(w / 2).toFixed(1)} ${Y(ridge).toFixed(1)} L${X(w + 0.3).toFixed(1)} ${Y(top).toFixed(1)}" fill="none" stroke="${soft}" stroke-width="1.6" stroke-dasharray="9 5"/>`,
+  );
+
+  // One continuous face, ground to eaves, rather than a box per
+  // storey: a house is not built in stacked crates and a drawing
+  // that shows it that way is read as a mistake.
+  p.push(
+    `<rect x="${X(0).toFixed(1)}" y="${Y(top).toFixed(1)}" width="${(w * S).toFixed(1)}" height="${(top * S).toFixed(1)}" fill="#ffffff" stroke="${ink}" stroke-width="2"/>`,
+  );
+
+  for (const lv of el.levels) {
+    if (lv.y < 0.01) continue;
+    p.push(
+      `<line x1="${X(0).toFixed(1)}" y1="${Y(lv.y).toFixed(1)}" x2="${X(w).toFixed(1)}" y2="${Y(lv.y).toFixed(1)}" stroke="${label}" stroke-width="0.7" stroke-dasharray="8 5"/>`,
+    );
+  }
+
+  for (const o of el.openings) {
+    const x = X(o.u0);
+    const y = Y(o.y1);
+    const ow = (o.u1 - o.u0) * S;
+    const oh = (o.y1 - o.y0) * S;
+    p.push(
+      `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${ow.toFixed(1)}" height="${oh.toFixed(1)}" fill="#ffffff" stroke="${ink}" stroke-width="1.6"/>`,
+    );
+    p.push(
+      `<rect x="${(x + 3).toFixed(1)}" y="${(y + 3).toFixed(1)}" width="${(ow - 6).toFixed(1)}" height="${(oh - 6).toFixed(1)}" fill="none" stroke="${label}" stroke-width="0.7"/>`,
+    );
+    if (o.kind === "window") {
+      p.push(
+        `<rect x="${(x - 5).toFixed(1)}" y="${(y + oh).toFixed(1)}" width="${(ow + 10).toFixed(1)}" height="6" fill="#ffffff" stroke="${label}" stroke-width="1"/>`,
+      );
+      p.push(
+        `<line x1="${(x + ow / 2).toFixed(1)}" y1="${(y + 3).toFixed(1)}" x2="${(x + ow / 2).toFixed(1)}" y2="${(y + oh - 3).toFixed(1)}" stroke="${label}" stroke-width="0.7"/>`,
+      );
+    } else {
+      p.push(
+        `<line x1="${(x - 4).toFixed(1)}" y1="${(y + oh).toFixed(1)}" x2="${(x + ow + 4).toFixed(1)}" y2="${(y + oh).toFixed(1)}" stroke="${ink}" stroke-width="2"/>`,
+      );
+    }
+  }
+
+  p.push(
+    `<line x1="${X(-0.7).toFixed(1)}" y1="${Y(0).toFixed(1)}" x2="${X(w + 0.7).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="${ink}" stroke-width="3"/>`,
+  );
+  p.push(
+    `<text x="${X(w / 2).toFixed(1)}" y="${(height - 34).toFixed(1)}" fill="${ink}" font-size="12" text-anchor="middle" letter-spacing="0.5">${esc(elevationName(el.side).toUpperCase())}</text>`,
+  );
+  p.push(
+    `<text x="${X(w / 2).toFixed(1)}" y="${(height - 16).toFixed(1)}" fill="${label}" font-size="10" text-anchor="middle">Solid: measured widths and positions. Dashed: roof assumed, not surveyed.</text>`,
+  );
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
+    `<rect width="${width}" height="${height}" fill="#ffffff"/>`,
+    ...p,
+    "</svg>",
+  ].join("");
+}
+
+/** Every face with something on it, drawn for the email. */
+export function buildElevationSvgs(
+  entries: PlanRoomInput[],
+): { side: ElevationSide; svg: string }[] {
+  const prepared = squareToSheet(
+    squareRoomsForDrawing(entries.filter((e) => e.anchor)),
+  );
+  const rooms: ElevationRoom[] = prepared.map((e) => ({
+    room: e.room,
+    outline: roomOutlineM(e),
+    floor: e.floor ?? 0,
+  }));
+  return buildElevations(rooms).map((el) => ({
+    side: el.side,
+    svg: buildElevationSvg(el),
+  }));
+}

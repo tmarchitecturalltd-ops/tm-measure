@@ -41,6 +41,7 @@ import {
   normalizeConnections,
   buildDetailedPlanDxf,
   buildPlanSvgs,
+  buildElevationSvgs,
   floorName,
   type ConnectionKind,
   type ExteriorSide,
@@ -3607,8 +3608,44 @@ export default function MeasureIntakeForm() {
       .filter((e): e is NonNullable<typeof e> => e !== null);
     if (!entries.length) return [];
 
-    const out: { floor: number; name: string; dataUri: string }[] = [];
-    for (const { floor, svg } of buildPlanSvgs(entries)) {
+    const out: {
+      floor: number;
+      name: string;
+      dataUri: string;
+      kind: "plan" | "elevation";
+      label?: string;
+    }[] = [];
+    const jobs: {
+      floor: number;
+      name: string;
+      svg: string;
+      kind: "plan" | "elevation";
+      label?: string;
+    }[] = [
+      ...buildPlanSvgs(entries).map((s) => ({
+        floor: s.floor,
+        name: `${floorName(s.floor).toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`,
+        svg: s.svg,
+        kind: "plan" as const,
+      })),
+      /*
+       * The faces as well as the plans.
+       *
+       * The DXF has carried an elevation per face for a while and
+       * the email has not, so the person reading the email saw a
+       * plan and a list of numbers while the drawing underneath it
+       * had the front of the house in it. Same geometry, drawn for
+       * a phone screen.
+       */
+      ...buildElevationSvgs(entries).map((e) => ({
+        floor: 0,
+        name: `${e.side}-elevation.png`,
+        svg: e.svg,
+        kind: "elevation" as const,
+        label: e.side,
+      })),
+    ];
+    for (const { floor, svg, kind, name, label } of jobs) {
       try {
         const encoded =
           "data:image/svg+xml;base64," +
@@ -3628,7 +3665,9 @@ export default function MeasureIntakeForm() {
         ctx.drawImage(img, 0, 0);
         out.push({
           floor,
-          name: `${floorName(floor).toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`,
+          name,
+          kind,
+          ...(label ? { label } : {}),
           dataUri: canvas.toDataURL("image/png"),
         });
       } catch {

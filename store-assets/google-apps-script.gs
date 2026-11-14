@@ -1131,6 +1131,8 @@ function buildHtmlEmail_(payload, submissionId) {
         // Floor plan — one block per floor, only if any rooms are placed
         floorPlanHtmlBlock_(payload, gold, cream, dark, mid, border) +
 
+        elevationsHtmlBlock_(payload, gold, cream, dark, mid, border) +
+
         // Exterior + proposal — only if the customer added them.
         exteriorHtmlBlock_(payload, gold, cream, dark, mid, border) +
         proposalHtmlBlock_(payload, gold, cream, dark, mid, border) +
@@ -1360,12 +1362,62 @@ function floorPlanHtmlBlock_(payload, gold, cream, dark, mid, border) {
 function planPicture_(payload, floor, svgFallback) {
   const list = Array.isArray(payload.planImages) ? payload.planImages : [];
   for (let i = 0; i < list.length; i++) {
-    if (list[i] && Number(list[i].floor) === Number(floor) && list[i].dataUri) {
+    const it = list[i];
+    if (!it || !it.dataUri) continue;
+    if (it.kind === 'elevation') continue;
+    if (Number(it.floor) === Number(floor)) {
       return '<img src="cid:plan' + i + '" alt="Floor plan" ' +
         'style="max-width:100%;height:auto;border:0;display:block;margin:0 auto;">';
     }
   }
   return svgFallback;
+}
+
+/**
+ * The elevations: the faces of the house, one picture each.
+ *
+ * Below the plans, because a plan is what gets read first, and
+ * above the proposal, because these are the drawings a draughtsman
+ * works from. Each says on it which part is measured and which part
+ * is the assumed roof, so the note here does not have to repeat it.
+ *
+ * Nothing is rendered when the submission carries no elevations --
+ * an older build of the app, or a survey with no rooms placed.
+ */
+function elevationsHtmlBlock_(payload, gold, cream, dark, mid, border) {
+  const list = Array.isArray(payload.planImages) ? payload.planImages : [];
+  const faces = [];
+  for (let i = 0; i < list.length; i++) {
+    const it = list[i];
+    if (it && it.kind === 'elevation' && it.dataUri) faces.push({ i: i, side: it.label || '' });
+  }
+  if (!faces.length) return '';
+
+  const blocks = faces.map(function (f) {
+    const name = f.side
+      ? f.side.charAt(0).toUpperCase() + f.side.slice(1) + ' elevation'
+      : 'Elevation';
+    return '<div style="margin-top:16px;border:1px solid ' + border + ';border-radius:8px;overflow:hidden;">' +
+      '<div style="padding:10px 16px;background:' + dark + ';color:' + cream + ';font-weight:600;font-size:14px;">' +
+        escapeHtml_(name) +
+      '</div>' +
+      '<div style="padding:14px;background:#ffffff;text-align:center;">' +
+        '<img src="cid:plan' + f.i + '" alt="' + escapeHtml_(name) + '" ' +
+          'style="max-width:100%;height:auto;border:0;display:block;margin:0 auto;">' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  return '<div style="padding:0 28px 24px 28px;">' +
+    '<h2 style="margin:20px 0 0 0;font-size:16px;color:' + dark + ';font-weight:600;">' +
+      'Elevations (' + faces.length + ')' +
+    '</h2>' +
+    '<p style="margin:6px 0 0 0;font-size:12px;color:' + mid + ';">' +
+      'Built from the scan: every opening is at its measured width and position. ' +
+      'The roof is assumed and marked as such on each drawing.' +
+    '</p>' +
+    blocks +
+  '</div>';
 }
 
 function roomFootprint_(room) {
