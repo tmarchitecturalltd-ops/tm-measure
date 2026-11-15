@@ -55,6 +55,7 @@ import {
 } from "./src/elevation.ts";
 import { buildPlanSvgs } from "./src/planImage.ts";
 import { assessRearExtension } from "./src/proposal.ts";
+import { rearWall, buildRearExtension } from "./src/proposalPlan.ts";
 import {
   scanPolygonIsUsable,
   scanOutlineWorthKeeping,
@@ -3456,4 +3457,82 @@ test("a listed building is not assessed against the usual limits", () => {
   const rights = r.checks.find((c) => c.id === "pd-rights")!;
   assert.equal(rights.state, "breach");
   assert.ok(rights.detail.includes("listed building consent"));
+});
+
+test("the extension projects off the nominated rear wall", () => {
+  /*
+   * Which face is the back is asked, never inferred. A house can
+   * have its garden on any side, the scan has no idea which way is
+   * which, and an extension drawn off the wrong wall is not a
+   * drawing with a small error in it.
+   */
+  const room = {
+    ...(planRoom("k", "Kitchen", 7.2, 8.2) as unknown as RoomDraft),
+    shape: "custom",
+    floorPolygonM: [
+      { x: 0, z: 0 },
+      { x: 7.2, z: 0 },
+      { x: 7.2, z: 8.2 },
+      { x: 0, z: 8.2 },
+    ],
+  } as RoomDraft;
+  const entries = [
+    { room, anchor: { x: 0, z: 0 }, rotationDeg: 0 as const, floor: 0 },
+  ];
+
+  const south = rearWall(entries, "south")!;
+  assert.ok(Math.abs(south.lengthM - 7.2) < 0.01, "spans the rear face");
+  assert.equal(south.outward.z, 1, "and points away from the house");
+
+  const ext = buildRearExtension(south, {
+    depthM: 3,
+    width: "full",
+    roof: "flat",
+    heightM: 3.1,
+    eavesHeightM: 2.85,
+    rearGlazing: "bifold",
+  });
+  assert.ok(Math.abs(ext.footprintM2 - 21.6) < 0.01);
+  // Every corner of the new envelope is at or beyond the old rear wall.
+  assert.ok(ext.outline.every((p) => p.z >= 8.19));
+
+  // The east face is a different wall and a different length.
+  const east = rearWall(entries, "east")!;
+  assert.ok(Math.abs(east.lengthM - 8.2) < 0.01);
+  assert.equal(east.outward.x, 1);
+});
+
+test("a part-width extension is centred, and its glazing with it", () => {
+  const room = {
+    ...(planRoom("k", "Kitchen", 8, 6) as unknown as RoomDraft),
+    shape: "custom",
+    floorPolygonM: [
+      { x: 0, z: 0 },
+      { x: 8, z: 0 },
+      { x: 8, z: 6 },
+      { x: 0, z: 6 },
+    ],
+  } as RoomDraft;
+  const wall = rearWall(
+    [{ room, anchor: { x: 0, z: 0 }, rotationDeg: 0 as const, floor: 0 }],
+    "south",
+  )!;
+  const ext = buildRearExtension(wall, {
+    depthM: 3,
+    width: "part",
+    widthM: 4,
+    roof: "flat",
+    heightM: 3,
+    eavesHeightM: 2.8,
+    rearGlazing: "french",
+  });
+  assert.ok(Math.abs(ext.widthM - 4) < 0.01);
+  const left = Math.min(...ext.outline.map((p) => p.x));
+  const right = Math.max(...ext.outline.map((p) => p.x));
+  assert.ok(Math.abs(left - 2) < 0.01 && Math.abs(right - 6) < 0.01);
+
+  const g = ext.openings[0];
+  const gMid = (g.a.x + g.b.x) / 2;
+  assert.ok(Math.abs(gMid - 4) < 0.01, "glazing centred on the new wall");
+  assert.ok(g.widthM <= ext.widthM - 0.6, "and it fits inside it");
 });
