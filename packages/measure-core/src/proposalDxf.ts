@@ -307,11 +307,32 @@ export function buildProposalDxf(input: ProposalDxfInput): string {
     const top = planBottom + 4;
 
     for (const el of input.elevations) {
+      /*
+       * How wide this face actually draws.
+       *
+       * Not the existing face's width: seen end-on, the extension
+       * projects past the house and is drawn beyond it, so
+       * advancing the cursor by the existing width alone laid the
+       * next elevation over the top of this one. Reported simply
+       * as "overlapping", which it was.
+       *
+       * So the extent is taken over everything that will be
+       * drawn -- the storeys, the new work and the ridge -- and
+       * the row is laid out from that.
+       */
+      const extents: number[] = [0, el.existing.widthM];
+      if (el.newWork) extents.push(el.newWork.u0, el.newWork.u1);
+      if (el.ridge) extents.push(el.ridge.u);
+      for (const o of el.newOpenings) extents.push(o.u0, o.u1);
+      const drawnFrom = Math.min(...extents);
+      const drawnTo = Math.max(...extents);
       const w = el.existing.widthM;
       // Elevation y is up, the drawing's z is down, so the face is
       // drawn from its base upward by subtracting from the base z.
+      // Shifted so the leftmost thing drawn starts at the cursor,
+      // whether that is the house or the extension beside it.
       const at = (u: number, y: number): Pt => ({
-        x: cursor + u,
+        x: cursor + (u - drawnFrom),
         z: top + 4 - y,
       });
 
@@ -377,7 +398,7 @@ export function buildProposalDxf(input: ProposalDxfInput): string {
           text(PROP_LAYER.elev, at(0, -1.5), 120, "No change to this face."),
         );
       }
-      cursor += w + 2;
+      cursor += drawnTo - drawnFrom + 3;
     }
   }
 
