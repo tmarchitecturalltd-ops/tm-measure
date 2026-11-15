@@ -6,12 +6,10 @@ export default function Navbar() {
           TM Designs Ltd
         </div>
         <div className="hidden items-center space-x-10 md:flex">
-          <a
-            className="font-label text-sm uppercase tracking-tight text-on-surface/70 transition-all hover:text-primary"
-            href="#planning"
-          >
-            Pricing
-          </a>
+          {/* Pricing was removed from this page: it belongs to the
+              public site, it was out of date, and by the time anyone
+              is here the customer has bought. A nav link to a
+              section that no longer exists scrolls nowhere. */}
           <a
             className="font-label text-sm uppercase tracking-tight text-on-surface/70 transition-all hover:text-primary"
             href="#process"
