@@ -55,6 +55,7 @@ import {
 } from "./src/elevation.ts";
 import { buildPlanSvgs } from "./src/planImage.ts";
 import { assessRearExtension } from "./src/proposal.ts";
+import { takeDown, takeDownAsText } from "./src/loads.ts";
 import {
   rearWall,
   buildRearExtension,
@@ -3722,5 +3723,64 @@ test("the rear wall is the wall that is there, not the bounding box", () => {
   assert.ok(
     Math.abs(west.lengthM - 8.4) < 0.01,
     "the left flank is the main range only",
+  );
+});
+
+test("a load take-down halves what spans onto the beam", () => {
+  /*
+   * A beam carries half of what spans onto it from each side; the
+   * other half goes to the wall at the far end. Getting that wrong
+   * by a factor of two is the commonest error in a hand take-down,
+   * which is the argument for not doing it by hand.
+   */
+  const one = takeDown(3, [{ kind: "floor", spanM: 4 }]);
+  const both = takeDown(3, [{ kind: "floor", spanM: 4, bothSides: true }]);
+  // 0.5 kN/m2 self weight over a 2 m load width = 1.0, plus the beam.
+  assert.ok(Math.abs(one.gkPerM - (1.0 + 0.3)) < 0.001);
+  assert.ok(Math.abs(both.gkPerM - (2.0 + 0.3)) < 0.001);
+  assert.ok(Math.abs(one.qkPerM - 3.0) < 0.001, "1.5 kN/m2 over 2 m");
+
+  // 1.35 Gk + 1.5 Qk
+  assert.ok(
+    Math.abs(one.udlULS - (1.35 * 1.3 + 1.5 * 3.0)) < 0.001,
+    `design UDL was ${one.udlULS}`,
+  );
+  // Simply supported: half the total load at each end.
+  assert.ok(
+    Math.abs(one.reactions.leftULS - (one.udlULS * 3) / 2) < 0.01,
+  );
+});
+
+test("a point load divides between the bearings by where it sits", () => {
+  const t = takeDown(4, [
+    { kind: "point", label: "B2 reaction", gkKN: 10, qkKN: 6, atM: 1 },
+  ]);
+  const uls = 1.35 * 10 + 1.5 * 6;
+  // 1 m from the left of a 4 m span: three quarters to the left.
+  const udlPart = (t.udlULS * 4) / 2;
+  assert.ok(Math.abs(t.reactions.leftULS - (udlPart + uls * 0.75)) < 0.02);
+  assert.ok(Math.abs(t.reactions.rightULS - (udlPart + uls * 0.25)) < 0.02);
+});
+
+test("every assumption is named, and no section is chosen", () => {
+  /*
+   * A beam whose load was computed from an assumed build-up is a
+   * beam whose load is an assumption. The output says which figure
+   * it used for each element, and says who sizes the steel.
+   */
+  const t = takeDown(3, [
+    { kind: "flat-roof", spanM: 3.5 },
+    { kind: "wall", heightM: 2.4, construction: "cavity" },
+  ]);
+  const text = takeDownAsText("B1", 3, t).join("\n");
+  assert.ok(text.includes("0.6 kN/m²"), "roof self-weight stated");
+  assert.ok(text.includes("4 kN/m²"), "wall self-weight stated");
+  assert.ok(text.includes("1.35"), "partial factors stated");
+  assert.ok(
+    text.includes("sized, and this take-down checked, by the structural engineer"),
+  );
+  assert.ok(
+    !/\d+\s*x\s*\d+\s*x\s*\d+\s*(UB|UC)/i.test(text),
+    "and no section is chosen anywhere in it",
   );
 });

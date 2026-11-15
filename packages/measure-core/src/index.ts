@@ -16,3 +16,4 @@ export * from "./proposal";
 export * from "./proposalPlan";
 export * from "./proposalNotes";
 export * from "./proposalDxf";
+export * from "./loads";
