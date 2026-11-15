@@ -30,6 +30,7 @@ import {
 import type { ProposedExtension, ProposedBeam } from "./proposalPlan.ts";
 import { beamScheduleLine } from "./proposalPlan.ts";
 import type { ComplianceReport } from "./proposal.ts";
+import { takeDownAsText, type LoadTakeDown } from "./loads.ts";
 import type { NoteGroup } from "./proposalNotes.ts";
 
 export const PROP_LAYER = {
@@ -98,6 +99,8 @@ export type ProposalDxfInput = {
   entries: PlanRoomInput[];
   extension: ProposedExtension;
   beams: ProposedBeam[];
+  /** Load take-down per beam ref, when one has been worked out. */
+  loads?: Record<string, LoadTakeDown>;
   report: ComplianceReport;
   notes: NoteGroup[];
   projectName?: string;
@@ -240,6 +243,21 @@ export function buildProposalDxf(input: ProposalDxfInput): string {
     for (const b of input.beams) {
       put(PROP_LAYER.beams, beamScheduleLine(b));
       put(PROP_LAYER.beams, "   carries: " + b.supports);
+      /*
+       * The take-down under the beam it belongs to.
+       *
+       * This is what the engineer's software asks for, so it goes
+       * on the drawing rather than in a separate note nobody
+       * carries to the desk with them. It states its own
+       * assumptions, because a load computed from an assumed
+       * build-up is an assumption.
+       */
+      const t = input.loads?.[b.ref];
+      if (t) {
+        for (const l of takeDownAsText(b.ref, b.spanM, t).slice(1)) {
+          put(PROP_LAYER.beams, l);
+        }
+      }
     }
     put(
       PROP_LAYER.beams,

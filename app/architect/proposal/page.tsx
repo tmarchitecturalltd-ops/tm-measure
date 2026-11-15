@@ -37,6 +37,9 @@ import {
   beamsForExtension,
   selectNotes,
   buildProposalDxf,
+  takeDown,
+  type LoadTakeDown,
+  type Supported,
   type HouseForm,
   type ExistingExtension,
   type Designation,
@@ -157,6 +160,23 @@ export default function ProposalPage() {
   const [rooflights, setRooflights] = useState("0");
   const [newKitchen, setNewKitchen] = useState(true);
   const [newBathroom, setNewBathroom] = useState(false);
+
+  /*
+   * What sits on the beam over the knock-through.
+   *
+   * The spans are the joist spans, not the beam's own span -- what
+   * matters is how much roof and floor is leaning on it from each
+   * side. The drawing cannot know which way the joists run or what
+   * is above the opening, and guessing it would produce a load that
+   * looks authoritative and is wrong by a factor of two.
+   */
+  const [roofSpan, setRoofSpan] = useState("3.5");
+  const [floorSpan, setFloorSpan] = useState("");
+  const [floorPartitions, setFloorPartitions] = useState(true);
+  const [wallOver, setWallOver] = useState("2.4");
+  const [wallOpenings, setWallOpenings] = useState("0");
+  const [wallKind, setWallKind] = useState<"cavity" | "solidBrick215" | "block100" | "timberStud">("cavity");
+  const [snow, setSnow] = useState("0.6");
   const [briefNotes, setBriefNotes] = useState("");
 
   useEffect(() => {
@@ -292,12 +312,46 @@ export default function ProposalPage() {
       isExtension: true,
       isLoft: false,
     });
-    return { wall, ext, beams, report, notes, brief, log };
+    /*
+     * The take-down, per beam.
+     *
+     * Only the elements the user has actually described are passed
+     * in: an empty floor span means there is no floor over the
+     * opening, which on a single-storey rear wall is often true.
+     */
+    const supported: Supported[] = [];
+    if ((num(roofSpan) ?? 0) > 0) {
+      supported.push({
+        kind: roof === "flat" || roof === "flat-lantern" ? "flat-roof" : "pitched-roof",
+        spanM: num(roofSpan)!,
+        snowKNm2: num(snow),
+      });
+    }
+    if ((num(floorSpan) ?? 0) > 0) {
+      supported.push({
+        kind: "floor",
+        spanM: num(floorSpan)!,
+        partitions: floorPartitions,
+      });
+    }
+    if ((num(wallOver) ?? 0) > 0) {
+      supported.push({
+        kind: "wall",
+        heightM: num(wallOver)!,
+        construction: wallKind,
+        openingsFraction: (num(wallOpenings) ?? 0) / 100,
+      });
+    }
+    const loads: Record<string, LoadTakeDown> = {};
+    for (const b of beams) loads[b.ref] = takeDown(b.spanM, supported);
+
+    return { wall, ext, beams, report, notes, brief, log, loads };
   }, [
     entries, face, depth, widthMode, widthM, roof, height, eaves, glazing,
     glazingWidth, rooflights, briefNotes, form, era, bedrooms, existing,
     existingRearDepth, designations, rearBoundary, sideBoundary, plotArea,
-    footprint, newKitchen, newBathroom,
+    footprint, newKitchen, newBathroom, roofSpan, floorSpan, floorPartitions,
+    wallOver, wallOpenings, wallKind, snow,
   ]);
 
   const download = useCallback(() => {
@@ -306,6 +360,7 @@ export default function ProposalPage() {
       entries,
       extension: result.ext,
       beams: result.beams,
+      loads: result.loads,
       report: result.report,
       notes: result.notes,
       projectName:
@@ -580,6 +635,49 @@ export default function ProposalPage() {
             </label>
           </div>
 
+          {/* ── What is over the opening ───────────────────────
+              The spans here are the joist spans, not the beam's
+              own: what matters is how much roof and floor leans on
+              it from each side. The drawing cannot know which way
+              the joists run, and guessing would produce a load that
+              looks authoritative and is wrong by a factor of two. */}
+          <p className={label + " mt-5"}>Over the knock-through</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className={label}>Roof joist span onto the beam (m)</label>
+              <input value={roofSpan} onChange={(e) => setRoofSpan(e.target.value)} inputMode="decimal" className={field} />
+            </div>
+            <div>
+              <label className={label}>Floor joist span over (m, blank if none)</label>
+              <input value={floorSpan} onChange={(e) => setFloorSpan(e.target.value)} inputMode="decimal" className={field} />
+            </div>
+            <div>
+              <label className={label}>Wall over, height (m)</label>
+              <input value={wallOver} onChange={(e) => setWallOver(e.target.value)} inputMode="decimal" className={field} />
+            </div>
+            <div>
+              <label className={label}>Wall construction</label>
+              <select value={wallKind} onChange={(e) => setWallKind(e.target.value as typeof wallKind)} className={field}>
+                <option value="cavity">Cavity, brick and block</option>
+                <option value="solidBrick215">Solid brick, 215</option>
+                <option value="block100">Block, 100</option>
+                <option value="timberStud">Timber stud</option>
+              </select>
+            </div>
+            <div>
+              <label className={label}>Openings in that wall (%)</label>
+              <input value={wallOpenings} onChange={(e) => setWallOpenings(e.target.value)} inputMode="numeric" className={field} />
+            </div>
+            <div>
+              <label className={label}>Snow, ground load (kN/m²)</label>
+              <input value={snow} onChange={(e) => setSnow(e.target.value)} inputMode="decimal" className={field} />
+            </div>
+          </div>
+          <label className="mt-2 flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={floorPartitions} onChange={(e) => setFloorPartitions(e.target.checked)} />
+            Lightweight partitions on the floor over
+          </label>
+
           <div className="mt-3">
             <label className={label}>Notes (carried onto the drawing)</label>
             <textarea value={briefNotes} onChange={(e) => setBriefNotes(e.target.value)} rows={3} className={field} />
@@ -647,13 +745,41 @@ export default function ProposalPage() {
           {result.beams.length > 0 && (
             <div className="mt-4 border-t border-outline-variant/40 pt-3">
               <p className={label}>Beams</p>
-              {result.beams.map((b) => (
-                <p key={b.ref} className="text-sm text-on-surface-variant">
-                  <strong className="text-on-surface">{b.ref}</strong> —{" "}
-                  {b.spanM.toFixed(2)} m clear span, {b.bearingMm} mm bearing
-                  each end. Section to be confirmed by calculation.
-                </p>
-              ))}
+              {result.beams.map((b) => {
+                const t = result.loads[b.ref];
+                return (
+                  <div key={b.ref} className="mb-3">
+                    <p className="text-sm text-on-surface-variant">
+                      <strong className="text-on-surface">{b.ref}</strong> —{" "}
+                      {b.spanM.toFixed(2)} m clear span, {b.bearingMm} mm
+                      bearing each end. Section to be confirmed by calculation.
+                    </p>
+                    {t && (
+                      <div className="mt-1.5 rounded-lg bg-surface-container p-3 text-sm">
+                        {t.lines.map((l, i) => (
+                          <p key={i} className="flex justify-between gap-4 text-on-surface-variant">
+                            <span>{l.description}</span>
+                            <span className="shrink-0 font-mono text-xs">
+                              Gk {l.gk.toFixed(2)}
+                              {l.qk ? ` · Qk ${l.qk.toFixed(2)}` : ""}
+                              {l.point ? " kN" : " kN/m"}
+                            </span>
+                          </p>
+                        ))}
+                        <p className="mt-2 border-t border-outline-variant/40 pt-2 font-semibold text-on-surface">
+                          Gk {t.gkPerM.toFixed(2)} kN/m · Qk{" "}
+                          {t.qkPerM.toFixed(2)} kN/m → design UDL{" "}
+                          {t.udlULS.toFixed(2)} kN/m at ULS
+                        </p>
+                        <p className="text-on-surface-variant">
+                          Reactions {t.reactions.leftULS.toFixed(2)} kN left,{" "}
+                          {t.reactions.rightULS.toFixed(2)} kN right
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
