@@ -56,6 +56,7 @@ import {
 import { buildPlanSvgs } from "./src/planImage.ts";
 import { assessRearExtension } from "./src/proposal.ts";
 import { rearWall, buildRearExtension } from "./src/proposalPlan.ts";
+import { selectNotes, notesAsText } from "./src/proposalNotes.ts";
 import {
   scanPolygonIsUsable,
   scanOutlineWorthKeeping,
@@ -3535,4 +3536,49 @@ test("a part-width extension is centred, and its glazing with it", () => {
   const gMid = (g.a.x + g.b.x) / 2;
   assert.ok(Math.abs(gMid - 4) < 0.01, "glazing centred on the new wall");
   assert.ok(g.widthM <= ext.widthM - 0.6, "and it fits inside it");
+});
+
+test("the notes are chosen by what the job contains", () => {
+  /*
+   * A clause on a drawing it does not apply to is not harmless. It
+   * gets read, priced, and occasionally built -- and it teaches
+   * whoever reads the next drawing that the notes are boilerplate
+   * to be skipped, which is the worse outcome.
+   */
+  const extension = {
+    hasNewDrainage: false,
+    hasNewBathroom: false,
+    hasNewKitchen: true,
+    hasNewWindows: true,
+    hasFlatRoof: true,
+    hasPitchedRoof: false,
+    hasSteel: true,
+    hasRooflights: false,
+    isExtension: true,
+    isLoft: false,
+  };
+  const ids = selectNotes(extension).map((g) => g.id);
+  assert.ok(ids.includes("part-h"), "a new kitchen brings drainage notes");
+  assert.ok(ids.includes("flat-roof"));
+  assert.ok(!ids.includes("pitched-roof"), "and not the roof it does not have");
+  assert.ok(!ids.includes("rooflights"), "nor rooflights nobody asked for");
+
+  const bare = selectNotes({
+    ...extension,
+    hasNewKitchen: false,
+    hasNewWindows: false,
+    hasFlatRoof: false,
+    hasSteel: false,
+    isExtension: false,
+  }).map((g) => g.id);
+  assert.deepEqual(
+    bare,
+    ["general", "part-l", "part-b"],
+    "a job with nothing in it still carries the clauses that always apply",
+  );
+
+  // Nothing in the notes is a calculation.
+  const text = notesAsText(selectNotes(extension));
+  assert.ok(!/\d+\s*x\s*\d+\s*x\s*\d+\s*(UB|UC)/i.test(text), "no steel sections");
+  assert.ok(!/span\s*=\s*\d/i.test(text), "no spans");
 });
