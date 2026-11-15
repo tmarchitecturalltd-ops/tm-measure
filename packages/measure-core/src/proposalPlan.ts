@@ -186,3 +186,90 @@ export function buildRearExtension(
     depthM: brief.depthM,
   };
 }
+
+/**
+ * Where a beam is needed, and how far it spans.
+ *
+ * ── The line this draws ────────────────────────────────────────────
+ *
+ * Working out *that* a beam is needed and *how far it spans* is
+ * geometry: a wall is being removed, the span is the opening, and
+ * both come straight off the drawing. Working out *what size* it
+ * should be is structural design -- it depends on what is above,
+ * what the floor is made of, whether the wall was load-bearing at
+ * all, and it carries professional liability that belongs to
+ * somebody who has signed for it.
+ *
+ * So this marks the position, measures the span, and leaves the
+ * section blank for Charlie to fill from his calculations. Marked
+ * `B1`, `B2` in the order they appear, which is how his drawings
+ * already label them.
+ *
+ * The alternative -- an indicative size from a span table -- was
+ * considered and rejected. An indicative section printed on a
+ * drawing is indistinguishable from a calculated one by the time it
+ * reaches a builder, and "indicative" in small type has never
+ * stopped anybody ordering steel.
+ */
+export type ProposedBeam = {
+  /** B1, B2 — the order they appear on the drawing. */
+  ref: string;
+  a: Pt;
+  b: Pt;
+  spanM: number;
+  /** Charlie's section, from his calculations. Empty until he fills it. */
+  section: string;
+  /** What the beam is carrying, as far as the drawing can tell. */
+  supports: string;
+  /** Bearing each end, mm. 150 is the usual minimum onto masonry. */
+  bearingMm: number;
+};
+
+/**
+ * Beams implied by the work.
+ *
+ * One over the knock-through, always: a new envelope opened into
+ * the existing house removes a span of external wall, and that wall
+ * was carrying whatever is above it. Whether it was load-bearing is
+ * not for this to decide -- the beam is marked and the engineer
+ * confirms or removes it.
+ *
+ * A second where the opening is wide enough that Charlie's drawings
+ * consistently show a column rather than a single clear span. Over
+ * 5 m is where that starts on his precedents, so the note says a
+ * column may be required and lets the calculations settle it.
+ */
+export function beamsForExtension(ext: ProposedExtension): ProposedBeam[] {
+  const out: ProposedBeam[] = [];
+  const k = ext.knockThrough;
+  if (!k) return out;
+
+  const span = Math.hypot(k.b.x - k.a.x, k.b.z - k.a.z);
+  out.push({
+    ref: "B1",
+    a: k.a,
+    b: k.b,
+    spanM: Number(span.toFixed(2)),
+    section: "",
+    supports:
+      span > 5
+        ? "Existing rear wall over, and the floor and roof above. A " +
+          "mid-span column or a pair of beams may be required — see the " +
+          "structural calculations."
+        : "Existing rear wall over, and the floor and roof above.",
+    bearingMm: 150,
+  });
+
+  return out;
+}
+
+/** "B1 — 4.20 m span — section to be confirmed" */
+export function beamScheduleLine(b: ProposedBeam): string {
+  return (
+    `${b.ref} — ${b.spanM.toFixed(2)} m clear span — ` +
+    (b.section
+      ? b.section
+      : "section to be confirmed by structural calculation") +
+    ` — ${b.bearingMm} mm minimum bearing each end`
+  );
+}

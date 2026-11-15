@@ -55,7 +55,12 @@ import {
 } from "./src/elevation.ts";
 import { buildPlanSvgs } from "./src/planImage.ts";
 import { assessRearExtension } from "./src/proposal.ts";
-import { rearWall, buildRearExtension } from "./src/proposalPlan.ts";
+import {
+  rearWall,
+  buildRearExtension,
+  beamsForExtension,
+} from "./src/proposalPlan.ts";
+import { buildProposalDxf } from "./src/proposalDxf.ts";
 import { selectNotes, notesAsText } from "./src/proposalNotes.ts";
 import {
   scanPolygonIsUsable,
@@ -3581,4 +3586,85 @@ test("the notes are chosen by what the job contains", () => {
   const text = notesAsText(selectNotes(extension));
   assert.ok(!/\d+\s*x\s*\d+\s*x\s*\d+\s*(UB|UC)/i.test(text), "no steel sections");
   assert.ok(!/span\s*=\s*\d/i.test(text), "no spans");
+});
+
+test("a beam is marked and measured, and never sized", () => {
+  /*
+   * That a beam is needed and how far it spans is geometry: a wall
+   * is being removed and the span is the opening. What size it
+   * should be is structural design, and it carries liability that
+   * belongs to whoever signs for it.
+   */
+  const room = {
+    ...(planRoom("k", "Kitchen", 7.2, 8.2) as unknown as RoomDraft),
+    shape: "custom",
+    floorPolygonM: [
+      { x: 0, z: 0 },
+      { x: 7.2, z: 0 },
+      { x: 7.2, z: 8.2 },
+      { x: 0, z: 8.2 },
+    ],
+  } as RoomDraft;
+  const entries = [
+    { room, anchor: { x: 0, z: 0 }, rotationDeg: 0 as const, floor: 0 },
+  ];
+  const brief = {
+    depthM: 3,
+    width: "full" as const,
+    roof: "flat" as const,
+    heightM: 3.1,
+    eavesHeightM: 2.85,
+    rearGlazing: "bifold" as const,
+  };
+  const ext = buildRearExtension(rearWall(entries, "south")!, brief);
+  const beams = beamsForExtension(ext);
+
+  assert.equal(beams.length, 1);
+  assert.equal(beams[0].ref, "B1");
+  assert.ok(Math.abs(beams[0].spanM - 7.2) < 0.01, "the span is the opening");
+  assert.equal(beams[0].section, "", "and the section is left blank");
+  assert.ok(
+    beams[0].supports.includes("column"),
+    "over 5 m it says a column may be needed rather than guessing",
+  );
+
+  const dxf = buildProposalDxf({
+    entries,
+    extension: ext,
+    beams,
+    report: assessRearExtension(
+      {
+        form: "semi",
+        existing: [],
+        designations: [],
+        rearBoundaryM: 14,
+        sideBoundaryM: 3,
+        plotAreaM2: 340,
+        existingFootprintM2: 59,
+      },
+      { ...brief, widthM: ext.widthM },
+    ),
+    notes: selectNotes({
+      hasNewDrainage: false,
+      hasNewBathroom: false,
+      hasNewKitchen: true,
+      hasNewWindows: true,
+      hasFlatRoof: true,
+      hasPitchedRoof: false,
+      hasSteel: true,
+      hasRooflights: false,
+      isExtension: true,
+      isLoft: false,
+    }),
+    projectName: "Test",
+  });
+
+  assert.ok(dxf.includes("TM-PROP-WALLS"), "new work has its own layers");
+  assert.ok(dxf.includes("TM-EXIST"), "and the survey keeps its own");
+  assert.ok(dxf.includes("section to be confirmed"));
+  assert.ok(
+    !/\d+\s*x\s*\d+\s*x\s*\d+\s*(UB|UC)/i.test(dxf),
+    "no steel section appears anywhere on the drawing",
+  );
+  assert.ok(dxf.trim().endsWith("EOF"));
 });
