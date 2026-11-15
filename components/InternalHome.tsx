@@ -68,6 +68,13 @@ export default function InternalHome() {
   return (
     <section className="hero-split">
       <div className="hero-split-left">
+        {/* The company name, because a page with no mark on it
+            looks like a page that is half finished -- and because
+            on a phone the photograph is above the fold and this is
+            the only thing identifying where you are. */}
+        <div className="font-headline mb-6 text-xl font-bold tracking-tighter text-on-surface">
+          TM Designs Ltd
+        </div>
         <div className="eyebrow-line">Internal</div>
         <h1
           className="font-headline mb-6 text-on-surface"
