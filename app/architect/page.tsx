@@ -159,6 +159,15 @@ export default function ArchitectListPage() {
         <p className="mt-2 max-w-2xl text-sm text-on-surface-variant">
           Review every customer submission. Open one to inspect measurements, photos and the floor plan, then approve to lock it for export.
         </p>
+        {/* The proposal tool draws the work the customer wants onto the
+            survey they already sent, so it belongs next to the survey
+            rather than behind a URL somebody has to be told. */}
+        <Link
+          href="/architect/proposal"
+          className="mt-4 inline-block rounded-full border border-primary px-4 py-2 text-sm font-bold text-primary"
+        >
+          Proposal tool — draw a rear extension
+        </Link>
       </header>
 
       <main className="mx-auto max-w-5xl space-y-6 px-4 md:px-6">
