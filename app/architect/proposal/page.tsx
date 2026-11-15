@@ -319,6 +319,51 @@ export default function ProposalPage() {
         </Link>
       </div>
 
+      {/* ── Where to ask, and with what ──────────────────────────
+          These live in the console too, and this page read them from
+          storage without offering anywhere to set them -- so landing
+          here first, or on a browser that had never seen the
+          console, produced "Unauthorised" with no way to fix it. A
+          screen that needs a credential has to be able to take one. */}
+      <details
+        className={card + " mb-5"}
+        open={!endpoint || !secret}
+      >
+        <summary className="cursor-pointer text-sm font-bold text-on-surface">
+          Connection {endpoint && secret ? "— saved" : "— not set up yet"}
+        </summary>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className={label}>Apps Script /exec URL</label>
+            <input
+              value={endpoint}
+              onChange={(e) => {
+                setEndpoint(e.target.value);
+                window.localStorage.setItem(ENDPOINT_KEY, e.target.value);
+              }}
+              placeholder="https://script.google.com/macros/s/.../exec"
+              className={field}
+            />
+          </div>
+          <div>
+            <label className={label}>Admin secret</label>
+            <input
+              type="password"
+              value={secret}
+              onChange={(e) => {
+                setSecret(e.target.value);
+                window.localStorage.setItem(SECRET_KEY, e.target.value);
+              }}
+              className={field}
+            />
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-on-surface-variant">
+          Both are kept in this browser only, and shared with the
+          console. The secret is the ADMIN_SECRET script property.
+        </p>
+      </details>
+
       <div className={card + " mb-5"}>
         <label className={label}>Submission ID</label>
         <div className="flex gap-2">
