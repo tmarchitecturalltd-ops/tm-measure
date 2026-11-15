@@ -129,6 +129,31 @@ const ROOFS: { value: RoofForm; label: string }[] = [
 
 const FACES = ["north", "south", "east", "west"] as const;
 
+/**
+ * A house to try the tool on.
+ *
+ * Without this the page is unusable until someone has a real
+ * submission ID and the endpoint to hand, which makes it hard to
+ * look at the drawing, hard to show Charlie, and hard to check a
+ * change. So there is one worked example built in: a Victorian
+ * mid-terrace, four rooms on the ground floor, garden to the south.
+ *
+ * It is marked as an example on screen for the obvious reason --
+ * nobody should ever mistake these numbers for a survey.
+ */
+const DEMO: Submission = {
+  submissionId: "EXAMPLE",
+  customerName: "Example",
+  projectName: "12 Alma Terrace (example)",
+  rooms: [
+    // width (x) by depth (z), anchored at the front-left corner.
+    { id: "d1", name: "Hall", ceilingHeightM: "2.65", walls: [{ lengthM: "1.20" }, { lengthM: "8.80" }], placement: { floor: 0, positionM: { x: 0, z: 0 } } },
+    { id: "d2", name: "Front room", ceilingHeightM: "2.65", walls: [{ lengthM: "3.80" }, { lengthM: "4.00" }], placement: { floor: 0, positionM: { x: 1.2, z: 0 } } },
+    { id: "d3", name: "Middle room", ceilingHeightM: "2.65", walls: [{ lengthM: "3.80" }, { lengthM: "3.20" }], placement: { floor: 0, positionM: { x: 1.2, z: 4.0 } } },
+    { id: "d4", name: "Kitchen", ceilingHeightM: "2.55", walls: [{ lengthM: "3.80" }, { lengthM: "1.60" }], placement: { floor: 0, positionM: { x: 1.2, z: 7.2 } } },
+  ],
+};
+
 const label = "mb-1 block text-xs font-bold uppercase tracking-widest text-on-surface-variant";
 const field = "w-full rounded-lg border border-outline-variant/50 bg-white px-3 py-2 text-base";
 const card = "rounded-2xl border border-outline-variant/40 bg-surface-container-low p-4";
@@ -513,6 +538,16 @@ export default function ProposalPage() {
             className="shrink-0 rounded-lg bg-primary px-5 font-bold text-on-primary"
           >
             {loading ? "Loading…" : "Load survey"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setLoadError(null);
+              setSubmission(DEMO);
+            }}
+            className="shrink-0 rounded-lg border border-outline-variant/50 px-4 font-semibold text-on-surface-variant"
+          >
+            Use example house
           </button>
         </div>
         {loadError && <p className="mt-2 text-sm text-error">{loadError}</p>}
