@@ -3668,3 +3668,59 @@ test("a beam is marked and measured, and never sized", () => {
   );
   assert.ok(dxf.trim().endsWith("EOF"));
 });
+
+test("the rear wall is the wall that is there, not the bounding box", () => {
+  /*
+   * An L-shaped terrace with a rear outrigger: the footprint's
+   * bounding box is the full width of the house, but at the back
+   * the building is only as wide as the outrigger. Taking the box
+   * edge invented a wall straight across the side return and
+   * centred the extension on it, so it hung out over the garden
+   * path. Reported as "this doesn't make any sense", which it did
+   * not.
+   */
+  const mk = (id: string, x0: number, z0: number, x1: number, z1: number) =>
+    ({
+      ...(planRoom(id, id, x1 - x0, z1 - z0) as unknown as RoomDraft),
+      shape: "custom",
+      floorPolygonM: [
+        { x: x0, z: z0 },
+        { x: x1, z: z0 },
+        { x: x1, z: z1 },
+        { x: x0, z: z1 },
+      ],
+    }) as RoomDraft;
+
+  // Main range 5.6 wide to z = 8.4, outrigger 3.0 wide to z = 13.4.
+  const entries = [
+    { room: mk("main", 0, 0, 5.6, 8.4), anchor: { x: 0, z: 0 }, rotationDeg: 0 as const, floor: 0 },
+    { room: mk("outrigger", 2.6, 8.4, 5.6, 13.4), anchor: { x: 0, z: 0 }, rotationDeg: 0 as const, floor: 0 },
+  ];
+
+  const wall = rearWall(entries, "south")!;
+  assert.ok(
+    Math.abs(wall.lengthM - 3.0) < 0.01,
+    `the back of the house is the outrigger, 3.0 m, got ${wall.lengthM}`,
+  );
+  assert.ok(Math.abs(wall.a.z - 13.4) < 0.01, "and it sits at the back");
+  assert.ok(Math.abs(Math.min(wall.a.x, wall.b.x) - 2.6) < 0.01);
+
+  // A full-width extension fills that wall and nothing more.
+  const ext = buildRearExtension(wall, {
+    depthM: 3,
+    width: "full",
+    roof: "flat",
+    heightM: 3,
+    eavesHeightM: 2.8,
+    rearGlazing: "sliding",
+  });
+  assert.ok(Math.min(...ext.outline.map((p) => p.x)) >= 2.59);
+  assert.ok(Math.max(...ext.outline.map((p) => p.x)) <= 5.61);
+
+  // The other faces are still found from their own walls.
+  const west = rearWall(entries, "west")!;
+  assert.ok(
+    Math.abs(west.lengthM - 8.4) < 0.01,
+    "the left flank is the main range only",
+  );
+});

@@ -46,44 +46,72 @@ export function rearWall(entries: PlanRoomInput[], face: Face): RearWall | null 
   const prepared = squareToSheet(
     squareRoomsForDrawing(entries.filter((e) => e.anchor)),
   );
-  const pts = prepared.flatMap((e) => roomOutlineM(e));
+  const polys = prepared.map((e) => roomOutlineM(e)).filter((p) => p.length >= 3);
+  const pts = polys.flat();
   if (pts.length < 3) return null;
 
-  const minX = Math.min(...pts.map((p) => p.x));
-  const maxX = Math.max(...pts.map((p) => p.x));
-  const minZ = Math.min(...pts.map((p) => p.z));
-  const maxZ = Math.max(...pts.map((p) => p.z));
+  const along = face === "north" || face === "south" ? "x" : "z";
+  const across = along === "x" ? "z" : "x";
+  const outerIsMax = face === "south" || face === "east";
+  const values = pts.map((p) => p[across]);
+  const extreme = outerIsMax ? Math.max(...values) : Math.min(...values);
 
-  switch (face) {
-    case "south":
-      return {
-        a: { x: minX, z: maxZ },
-        b: { x: maxX, z: maxZ },
-        outward: { x: 0, z: 1 },
-        lengthM: maxX - minX,
-      };
-    case "north":
-      return {
-        a: { x: maxX, z: minZ },
-        b: { x: minX, z: minZ },
-        outward: { x: 0, z: -1 },
-        lengthM: maxX - minX,
-      };
-    case "east":
-      return {
-        a: { x: maxX, z: maxZ },
-        b: { x: maxX, z: minZ },
-        outward: { x: 1, z: 0 },
-        lengthM: maxZ - minZ,
-      };
-    default:
-      return {
-        a: { x: minX, z: minZ },
-        b: { x: minX, z: maxZ },
-        outward: { x: -1, z: 0 },
-        lengthM: maxZ - minZ,
-      };
+  /*
+   * The wall that is actually there.
+   *
+   * This took the bounding box edge, which is right for a
+   * rectangular house and wrong for every other kind. On an
+   * L-shaped terrace with a rear outrigger the box edge runs
+   * straight across the side return -- a 5.6 m wall where the
+   * building is only 3.0 m wide at that point -- so the extension
+   * was centred on a wall that does not exist and hung out over
+   * the garden path. Reported, correctly, as "this doesn't make
+   * any sense".
+   *
+   * So the outermost face is found first, and then only the edges
+   * that actually lie on it are measured. The result is the real
+   * back wall of the real building.
+   *
+   * 0.15 m of tolerance, because a scanned outline is a
+   * measurement: two rooms whose back walls are one wall come back
+   * a few centimetres apart, and treating those as two different
+   * faces would halve the wall.
+   */
+  const TOL = 0.15;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const poly of polys) {
+    for (let i = 0; i < poly.length; i += 1) {
+      const a = poly[i];
+      const b = poly[(i + 1) % poly.length];
+      // Only edges running along the face, sitting on it.
+      if (Math.abs(a[across] - b[across]) > TOL) continue;
+      if (Math.abs((a[across] + b[across]) / 2 - extreme) > TOL) continue;
+      lo = Math.min(lo, a[along], b[along]);
+      hi = Math.max(hi, a[along], b[along]);
+    }
   }
+  if (!Number.isFinite(lo) || hi - lo < 0.5) return null;
+
+  const at = (v: number): Pt =>
+    along === "x" ? { x: v, z: extreme } : { x: extreme, z: v };
+
+  // Drawn left to right as the viewer sees the face, so a
+  // part-width extension centres where a person would expect.
+  const forward = face === "south" || face === "west";
+  const a = at(forward ? lo : hi);
+  const b = at(forward ? hi : lo);
+
+  const outward: Pt =
+    face === "south"
+      ? { x: 0, z: 1 }
+      : face === "north"
+        ? { x: 0, z: -1 }
+        : face === "east"
+          ? { x: 1, z: 0 }
+          : { x: -1, z: 0 };
+
+  return { a, b, outward, lengthM: hi - lo };
 }
 
 export type ProposedOpening = {
