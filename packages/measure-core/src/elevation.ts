@@ -74,6 +74,16 @@ export type Elevation = {
   levels: { floor: number; y: number }[];
   widthM: number;
   heightM: number;
+  /**
+   * Where u = 0 sits, measured across the face in world metres.
+   *
+   * Needed so that anything drawn later -- a proposed extension,
+   * say -- lands in the same frame as the house. Without it the
+   * caller has to recompute the face's own origin and hope it
+   * agrees, and a disagreement puts the new work beside the
+   * building rather than on it.
+   */
+  originAcross: number;
 };
 
 export type ElevationRoom = {
@@ -82,6 +92,12 @@ export type ElevationRoom = {
   outline: Pt[];
   floor: number;
 };
+
+/** Across the face, in the elevation's own frame. Exported so the
+ *  proposal can place new work in the same frame as the house. */
+export function acrossFaceM(side: ElevationSide, p: Pt): number {
+  return acrossFace(side, p);
+}
 
 /** Which way the viewer is looking, in plan. */
 function viewDirection(side: ElevationSide): Pt {
@@ -290,6 +306,7 @@ export function buildElevation(
     levels: heights.map((h) => ({ floor: h.floor, y: h.baseY })),
     widthM,
     heightM: top,
+    originAcross: uMin,
   };
 }
 

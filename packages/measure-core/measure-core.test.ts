@@ -62,6 +62,10 @@ import {
   beamsForExtension,
 } from "./src/proposalPlan.ts";
 import { buildProposalDxf } from "./src/proposalDxf.ts";
+import {
+  buildProposedElevations,
+  proposedElevationName,
+} from "./src/proposalElevation.ts";
 import { selectNotes, notesAsText } from "./src/proposalNotes.ts";
 import {
   scanPolygonIsUsable,
@@ -3783,4 +3787,78 @@ test("every assumption is named, and no section is chosen", () => {
     !/\d+\s*x\s*\d+\s*x\s*\d+\s*(UB|UC)/i.test(text),
     "and no section is chosen anywhere in it",
   );
+});
+
+test("the extension shows on the faces it is actually on", () => {
+  /*
+   * Projected onto the front of the house, a rear extension
+   * collapses to the same width as the house -- so drawn without a
+   * test it appears across the street frontage, which on a
+   * planning submission is a drawing of a building that does not
+   * exist. Seen from the side it shows its depth, not its width:
+   * drawing the full width there makes a 3 m extension look like a
+   * 7 m one.
+   */
+  const mk = (id: string, floor: number) => ({
+    room: {
+      ...(planRoom(id, id, 6.8, 9) as unknown as RoomDraft),
+      shape: "custom",
+      ceilingHeightM: "2.5",
+      floorPolygonM: [
+        { x: 0, z: 0 },
+        { x: 6.8, z: 0 },
+        { x: 6.8, z: 9 },
+        { x: 0, z: 9 },
+      ],
+    } as RoomDraft,
+    outline: [
+      { x: 0, z: 0 },
+      { x: 6.8, z: 0 },
+      { x: 6.8, z: 9 },
+      { x: 0, z: 9 },
+    ],
+    floor,
+  });
+  const rooms = [mk("g", 0), mk("f", 1)];
+  const entries = [
+    {
+      room: rooms[0].room,
+      anchor: { x: 0, z: 0 },
+      rotationDeg: 0 as const,
+      floor: 0,
+    },
+  ];
+  const brief = {
+    depthM: 3,
+    width: "full" as const,
+    roof: "flat" as const,
+    heightM: 3.15,
+    eavesHeightM: 2.95,
+    rearGlazing: "bifold" as const,
+  };
+  const ext = buildRearExtension(rearWall(entries, "south")!, brief);
+  const els = buildProposedElevations(rooms, ext, brief);
+
+  const by = (s: string) => els.find((e) => e.side === s)!;
+  assert.ok(by("front").newWork, "it shows on the face it was built off");
+  assert.ok(
+    Math.abs(by("front").newWork!.u1 - by("front").newWork!.u0 - 6.8) < 0.05,
+    "at its full width",
+  );
+  assert.equal(by("back").newWork, null, "and not on the opposite face");
+
+  const side = by("right");
+  assert.ok(side.seenFromTheSide, "the flanks see it end-on");
+  assert.ok(
+    Math.abs(side.newWork!.u1 - side.newWork!.u0 - 3) < 0.05,
+    "showing its 3 m depth, not its 6.8 m width",
+  );
+
+  /*
+   * And it is named as a planning drawing names it. The garden
+   * face is the rear, whatever the coordinate frame calls it.
+   */
+  assert.equal(proposedElevationName("front", "south"), "Rear elevation");
+  assert.equal(proposedElevationName("back", "south"), "Front elevation");
+  assert.equal(proposedElevationName("front", "north"), "Front elevation");
 });
