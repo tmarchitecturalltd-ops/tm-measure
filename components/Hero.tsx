@@ -100,21 +100,16 @@ export default function Hero() {
             </Link>
           </div>
           <div className="mb-2 mt-6 flex items-center gap-3">
-            <a
-              href="https://maps.app.goo.gl/vuZ1J5rqnVh9MPFM6"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-lg border border-outline-variant/30 bg-surface-container-low px-4 py-2 transition-colors hover:border-primary"
-            >
-              <span className="font-headline text-sm font-bold">Google</span>
-              <span className="text-sm font-bold text-primary">5.0</span>
-              <span className="text-primary" style={{ fontSize: 14 }}>
-                ★★★★★
-              </span>
-              <span className="text-[9px] font-bold uppercase tracking-widest text-on-surface-variant">
-                (21 reviews)
-              </span>
-            </a>
+            {/* The Google rating badge was removed.
+                It read "5.0 ★★★★★ (21 reviews)" and linked to the
+                Maps listing, and the reviews behind it were written
+                rather than received. A rating is a claim about what
+                other people said; inventing one is not a placeholder
+                that gets replaced later, it is a false statement
+                sitting on the page in the meantime.
+
+                Put it back when the listing genuinely carries those
+                reviews, and take the figures from the listing. */}
           </div>
           <div className="hero-stats-row">
             <div>
@@ -148,10 +143,7 @@ export default function Hero() {
             ))}
           </div>
           <div className="hero-overlay" aria-hidden />
-          <div className="hero-badge">
-            <span className="hero-badge-number">5.0★</span>
-            <span className="hero-badge-text">Google Rating · 21 Reviews</span>
-          </div>
+          {/* Same again: an invented rating over the photograph. */}
         </div>
       </section>
 

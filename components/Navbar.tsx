@@ -16,12 +16,8 @@ export default function Navbar() {
           >
             Process
           </a>
-          <a
-            className="font-label text-sm uppercase tracking-tight text-on-surface/70 transition-all hover:text-primary"
-            href="#reviews"
-          >
-            Reviews
-          </a>
+          {/* The reviews section is gone with the invented reviews
+              it held. A nav link to it scrolls nowhere. */}
           <a
             className="font-label border-b border-primary pb-1 text-sm uppercase tracking-tight text-primary transition-all hover:opacity-100"
             href="#portfolio"

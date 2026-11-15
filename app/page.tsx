@@ -19,7 +19,6 @@ import AppHome from "@/components/app/AppHome";
 import Hero from "@/components/Hero";
 import Navbar from "@/components/Navbar";
 import Process from "@/components/Process";
-import ReviewCarousel from "@/components/ReviewCarousel";
 
 const IS_CAPACITOR = process.env.CAPACITOR === "1";
 
@@ -90,7 +89,17 @@ export default function Home() {
         </section>
 
         <Process />
-        <ReviewCarousel />
+        {/* Testimonials removed. The quotes were written, not
+            received, and each carried a name, a star rating and
+            "Google Review · TM Architectural Designs LTD · 1 month
+            ago" under it. That is not a placeholder; it is a
+            fabricated testimonial attributed to a real person who
+            does not exist, on a page that also linked to the real
+            Google listing.
+
+            The component is still in the repo. Feed it real
+            reviews, with real names and fixed dates, and put it
+            back. */}
       </main>
     </>
   );
