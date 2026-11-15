@@ -54,6 +54,7 @@ import {
   ASSUMED,
 } from "./src/elevation.ts";
 import { buildPlanSvgs } from "./src/planImage.ts";
+import { assessRearExtension } from "./src/proposal.ts";
 import {
   scanPolygonIsUsable,
   scanOutlineWorthKeeping,
@@ -3334,4 +3335,125 @@ test("the email plan draws one storey per image, with its dimensions", () => {
    */
   const threeTens = ground.match(/>3\.10</g) ?? [];
   assert.equal(threeTens.length, 3, "a shared wall is measured once");
+});
+
+/* ── Proposed work: the rules ──────────────────────────────────── */
+
+const baseLog = {
+  form: "semi" as const,
+  existing: [] as never[],
+  designations: [] as never[],
+  rearBoundaryM: 12,
+  sideBoundaryM: 4,
+  // Both are needed before the 50% curtilage rule can be tested, and
+  // the engine will not claim permitted development without it. That
+  // is the point of the three states, so the fixtures carry them.
+  plotAreaM2: 320,
+  existingFootprintM2: 68,
+};
+const baseBrief = {
+  depthM: 3,
+  width: "full" as const,
+  widthM: 6,
+  roof: "flat" as const,
+  heightM: 3.2,
+  eavesHeightM: 2.9,
+  rearGlazing: "bifold" as const,
+};
+
+test("a 3 m extension on a semi is permitted development", () => {
+  const r = assessRearExtension(baseLog, baseBrief);
+  assert.equal(r.overall, "pass");
+  assert.equal(r.route, "permitted-development");
+});
+
+test("the depth allowance counts what is already built", () => {
+  /*
+   * The allowance is for the whole rear projection, not for this
+   * extension alone. A house with 3 m already on it has none left,
+   * and a drawing that says otherwise is found out at the council
+   * rather than at the desk.
+   */
+  const r = assessRearExtension(
+    { ...baseLog, existing: ["single-storey-rear"], existingRearDepthM: 2.5 },
+    { ...baseBrief, depthM: 2 },
+  );
+  const depth = r.checks.find((c) => c.id === "depth")!;
+  assert.equal(depth.state, "breach", "4.5 m total is over the 3 m limit");
+  assert.ok(depth.detail.includes("4.50 m"), "and it says the total");
+
+  // An existing extension with no depth recorded cannot be added up.
+  const unknown = assessRearExtension(
+    { ...baseLog, existing: ["single-storey-rear"] },
+    baseBrief,
+  );
+  assert.equal(
+    unknown.checks.find((c) => c.id === "depth")!.state,
+    "unverified",
+  );
+  assert.equal(unknown.route, "unknown", "and the route is not guessed");
+});
+
+test("a missing boundary distance is unverified, never a pass", () => {
+  /*
+   * The failure this is written against is a report that reads as
+   * compliant because a field was blank.
+   */
+  const { sideBoundaryM, ...noSide } = baseLog;
+  const r = assessRearExtension(noSide, baseBrief);
+  const check = r.checks.find((c) => c.id === "eaves-boundary")!;
+  assert.equal(check.state, "unverified");
+  assert.equal(r.overall, "unverified");
+  assert.equal(r.route, "unknown");
+  assert.ok(
+    r.checks.every((c) => c.state !== "pass" || c.id !== "eaves-boundary"),
+  );
+});
+
+test("a flat has no permitted development rights at all", () => {
+  const r = assessRearExtension({ ...baseLog, form: "flat" }, baseBrief);
+  const rights = r.checks.find((c) => c.id === "pd-rights")!;
+  assert.equal(rights.state, "breach");
+  assert.equal(r.route, "full-application");
+});
+
+test("a detached house gets 4 m, and 8 m by prior approval", () => {
+  const four = assessRearExtension(
+    { ...baseLog, form: "detached" },
+    { ...baseBrief, depthM: 4 },
+  );
+  assert.equal(four.route, "permitted-development");
+
+  const six = assessRearExtension(
+    { ...baseLog, form: "detached" },
+    { ...baseBrief, depthM: 6 },
+  );
+  assert.equal(six.route, "prior-approval", "within the larger allowance");
+
+  const ten = assessRearExtension(
+    { ...baseLog, form: "detached" },
+    { ...baseBrief, depthM: 10, widthM: 6 },
+  );
+  assert.equal(ten.route, "full-application");
+});
+
+test("eaves within 2 m of a boundary are held to 3 m", () => {
+  const r = assessRearExtension(
+    { ...baseLog, sideBoundaryM: 1.2 },
+    { ...baseBrief, eavesHeightM: 3.2 },
+  );
+  assert.equal(
+    r.checks.find((c) => c.id === "eaves-boundary")!.state,
+    "breach",
+  );
+});
+
+test("a listed building is not assessed against the usual limits", () => {
+  const r = assessRearExtension(
+    { ...baseLog, designations: ["listed"] },
+    baseBrief,
+  );
+  const rights = r.checks.find((c) => c.id === "pd-rights")!;
+  assert.equal(rights.state, "breach");
+  assert.ok(rights.detail.includes("listed building consent"));
 });
