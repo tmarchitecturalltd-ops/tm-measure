@@ -32,6 +32,10 @@ import { beamScheduleLine } from "./proposalPlan.ts";
 import type { ComplianceReport } from "./proposal.ts";
 import { takeDownAsText, type LoadTakeDown } from "./loads.ts";
 import type { NoteGroup } from "./proposalNotes.ts";
+import {
+  proposedElevationName,
+  type ProposedElevation,
+} from "./proposalElevation.ts";
 
 export const PROP_LAYER = {
   existing: "TM-EXIST",
@@ -40,6 +44,8 @@ export const PROP_LAYER = {
   openings: "TM-PROP-OPENINGS",
   beams: "TM-PROP-BEAMS",
   dims: "TM-PROP-DIMS",
+  elev: "TM-PROP-ELEV",
+  elevNew: "TM-PROP-ELEV-NEW",
   notes: "TM-PROP-NOTES",
   compliance: "TM-PROP-COMPLIANCE",
 } as const;
@@ -103,6 +109,10 @@ export type ProposalDxfInput = {
   loads?: Record<string, LoadTakeDown>;
   report: ComplianceReport;
   notes: NoteGroup[];
+  /** The faces, with the new work on the ones it shows on. */
+  elevations?: ProposedElevation[];
+  /** Which way the garden is, so the faces are named properly. */
+  gardenFace?: "north" | "south" | "east" | "west";
   projectName?: string;
   /** Era, form, bedrooms — printed on the sheet as context. */
   subtitle?: string;
@@ -125,6 +135,8 @@ export function buildProposalDxf(input: ProposalDxfInput): string {
     [PROP_LAYER.openings, 1],
     [PROP_LAYER.beams, 1],
     [PROP_LAYER.dims, 1],
+    [PROP_LAYER.elev, 7],
+    [PROP_LAYER.elevNew, 1],
     [PROP_LAYER.notes, 7],
     [PROP_LAYER.compliance, 7],
   ];
@@ -271,6 +283,102 @@ export function buildProposalDxf(input: ProposalDxfInput): string {
     put(PROP_LAYER.notes, g.heading.toUpperCase(), 170);
     for (const l of g.lines) put(PROP_LAYER.notes, "  " + l);
     y += 0.2;
+  }
+
+  /*
+   * The faces, laid out in a row below the plan.
+   *
+   * Below rather than beside, because the plan is what gets read
+   * first and a sheet of four elevations alongside it pushes the
+   * plan off the screen the moment anybody zooms to fit. A metre
+   * of clear space between each, which at 1:100 is a centimetre on
+   * paper.
+   */
+  if (input.elevations?.length) {
+    const planBottom = Math.max(
+      ...prepared.flatMap((e) => roomOutlineM(e)).map((p) => p.z),
+      ...ext.outline.map((p) => p.z),
+    );
+    const planLeft = Math.min(
+      ...prepared.flatMap((e) => roomOutlineM(e)).map((p) => p.x),
+      ...ext.outline.map((p) => p.x),
+    );
+    let cursor = planLeft;
+    const top = planBottom + 4;
+
+    for (const el of input.elevations) {
+      const w = el.existing.widthM;
+      // Elevation y is up, the drawing's z is down, so the face is
+      // drawn from its base upward by subtracting from the base z.
+      const at = (u: number, y: number): Pt => ({
+        x: cursor + u,
+        z: top + 4 - y,
+      });
+
+      for (const st of el.existing.storeys) {
+        const c = [
+          at(st.u0, st.y0),
+          at(st.u1, st.y0),
+          at(st.u1, st.y1),
+          at(st.u0, st.y1),
+        ];
+        out.push(...polyline(PROP_LAYER.elev, c));
+      }
+      for (const o of el.existing.openings) {
+        out.push(
+          ...polyline(PROP_LAYER.elev, [
+            at(o.u0, o.y0),
+            at(o.u1, o.y0),
+            at(o.u1, o.y1),
+            at(o.u0, o.y1),
+          ]),
+        );
+      }
+
+      if (el.newWork) {
+        const n = el.newWork;
+        out.push(
+          ...polyline(PROP_LAYER.elevNew, [
+            at(n.u0, n.y0),
+            at(n.u1, n.y0),
+            at(n.u1, n.y1),
+            at(n.u0, n.y1),
+          ]),
+        );
+        if (el.ridge) {
+          out.push(
+            line(PROP_LAYER.elevNew, at(n.u0, n.y1), at(el.ridge.u, el.ridge.y)),
+            line(PROP_LAYER.elevNew, at(el.ridge.u, el.ridge.y), at(n.u1, n.y1)),
+          );
+        }
+        for (const o of el.newOpenings) {
+          out.push(
+            ...polyline(PROP_LAYER.elevNew, [
+              at(o.u0, o.y0),
+              at(o.u1, o.y0),
+              at(o.u1, o.y1),
+              at(o.u0, o.y1),
+            ]),
+          );
+        }
+      }
+
+      out.push(line(PROP_LAYER.elev, at(-0.6, 0), at(w + 0.6, 0)));
+      out.push(
+        text(
+          PROP_LAYER.elev,
+          at(0, -0.9),
+          180,
+          proposedElevationName(el.side, input.gardenFace ?? "south").toUpperCase(),
+        ),
+      );
+      if (!el.newWork) {
+        out.push(
+          text(PROP_LAYER.elev, at(0, -1.5), 120, "No change to this face."),
+        );
+      }
+      cursor += w + 2;
+    }
   }
 
   out.push(pair(0, "ENDSEC"), pair(0, "EOF"));

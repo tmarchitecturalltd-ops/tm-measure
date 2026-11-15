@@ -38,6 +38,11 @@ import {
   selectNotes,
   buildProposalDxf,
   takeDown,
+  buildProposedElevations,
+  proposedElevationName,
+  roomOutlineM,
+  squareRoomsForDrawing,
+  squareToSheet,
   type LoadTakeDown,
   type Supported,
   type HouseForm,
@@ -345,7 +350,20 @@ export default function ProposalPage() {
     const loads: Record<string, LoadTakeDown> = {};
     for (const b of beams) loads[b.ref] = takeDown(b.spanM, supported);
 
-    return { wall, ext, beams, report, notes, brief, log, loads };
+    /*
+     * The faces, prepared the same way the plan is -- squared up
+     * and turned square to the page -- so the elevations and the
+     * plan are the same building.
+     */
+    const prepared = squareToSheet(squareRoomsForDrawing(entries));
+    const elevationRooms = prepared.map((e) => ({
+      room: e.room,
+      outline: roomOutlineM(e),
+      floor: e.floor ?? 0,
+    }));
+    const elevations = buildProposedElevations(elevationRooms, ext, brief);
+
+    return { wall, ext, beams, report, notes, brief, log, loads, elevations };
   }, [
     entries, face, depth, widthMode, widthM, roof, height, eaves, glazing,
     glazingWidth, rooflights, briefNotes, form, era, bedrooms, existing,
@@ -361,6 +379,8 @@ export default function ProposalPage() {
       extension: result.ext,
       beams: result.beams,
       loads: result.loads,
+      elevations: result.elevations,
+      gardenFace: face,
       report: result.report,
       notes: result.notes,
       projectName:
@@ -782,6 +802,21 @@ export default function ProposalPage() {
               })}
             </div>
           )}
+
+          <div className="mt-4 border-t border-outline-variant/40 pt-3">
+            <p className={label}>Elevations</p>
+            {result.elevations.map((e) => (
+              <p key={e.side} className="text-sm text-on-surface-variant">
+                <strong className="text-on-surface">
+                  {proposedElevationName(e.side, face)}
+                </strong>{" "}
+                {e.newWork
+                  ? `— new work ${(e.newWork.u1 - e.newWork.u0).toFixed(2)} m ` +
+                    `${e.seenFromTheSide ? "deep, seen end-on" : "wide"}`
+                  : "— no change to this face"}
+              </p>
+            ))}
+          </div>
 
           <p className="mt-4 text-xs text-on-surface-variant">
             {result.notes.length} note groups will be written onto the
