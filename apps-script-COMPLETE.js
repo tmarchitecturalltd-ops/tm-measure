@@ -339,8 +339,9 @@ function getStatusForCustomer_(id, email) {
   const cApproved = headers.indexOf('Approved At');
   const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
   const target = email.trim().toLowerCase();
+  const wantId = String(id || '').trim().toUpperCase();
   const match = rows.find(function (r) {
-    return String(r[cId] || '') === id &&
+    return String(r[cId] || '').trim().toUpperCase() === wantId &&
       String(r[cEmail] || '').toLowerCase().trim() === target;
   });
   if (!match) throw new Error('No matching submission found.');
@@ -367,7 +368,21 @@ function getSubmission_(id) {
   const cRaw = headers.indexOf('Raw payload');
   const cApproved = headers.indexOf('Approved At');
   const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
-  const match = rows.find(function (r) { return String(r[cId] || '') === id; });
+  /*
+   * Compared loosely, because the comparison is not the point.
+   *
+   * This was an exact string match, and a submission that the list
+   * endpoint had just displayed came back "Submission not found" --
+   * the id in the cell carried a space, which a list renders
+   * invisibly and an === finds immediately. Case is folded for the
+   * same reason: these ids are typed and pasted by people, and a
+   * lookup that fails on a capital letter is a lookup that teaches
+   * everyone the tool is broken.
+   */
+  const want = String(id || '').trim().toUpperCase();
+  const match = rows.find(function (r) {
+    return String(r[cId] || '').trim().toUpperCase() === want;
+  });
   if (!match) throw new Error('Submission not found: ' + id);
   let parsed = null;
   if (cRaw >= 0 && match[cRaw]) {
@@ -402,7 +417,7 @@ function approveSubmission_(id) {
   const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
   let touched = 0;
   for (let i = 0; i < rows.length; i++) {
-    if (String(rows[i][cId] || '') === id) {
+    if (String(rows[i][cId] || '').trim().toUpperCase() === String(id).trim().toUpperCase()) {
       sheet.getRange(i + 2, cApproved + 1).setValue(now);
       touched++;
     }
