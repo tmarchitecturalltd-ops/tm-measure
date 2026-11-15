@@ -295,9 +295,19 @@ export function buildProposalDxf(input: ProposalDxfInput): string {
    * paper.
    */
   if (input.elevations?.length) {
+    /*
+     * Below everything above them, not just below the plan.
+     *
+     * The written blocks -- compliance, beam schedule, notes --
+     * run down the right of the plan and are far longer than it.
+     * Placing the elevations under the plan alone put them through
+     * the middle of the notes. `y` is where the written column
+     * actually ended, so that is what they clear.
+     */
     const planBottom = Math.max(
       ...prepared.flatMap((e) => roomOutlineM(e)).map((p) => p.z),
       ...ext.outline.map((p) => p.z),
+      y,
     );
     const planLeft = Math.min(
       ...prepared.flatMap((e) => roomOutlineM(e)).map((p) => p.x),
