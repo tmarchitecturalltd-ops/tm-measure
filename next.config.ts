@@ -1,11 +1,22 @@
 import type { NextConfig } from "next";
 
 const isCapacitorExport = process.env.CAPACITOR === "1";
+
+/**
+ * A static export for hosting, as distinct from the Capacitor one.
+ *
+ * Cloudflare Pages serves files, not a Node server, so the site has
+ * to be exported. The Capacitor flag could not be reused for it:
+ * that flag also swaps the root route to AppHome, which would put
+ * the phone's start screen on the web and lose the links to the
+ * tools. Two different questions, two different flags.
+ */
+const isStaticExport = isCapacitorExport || process.env.STATIC_EXPORT === "1";
 const isDev = process.env.NODE_ENV !== "production";
 
 const nextConfig: NextConfig = {
-  output: isCapacitorExport ? "export" : undefined,
-  images: { unoptimized: isCapacitorExport },
+  output: isStaticExport ? "export" : undefined,
+  images: { unoptimized: isStaticExport },
   // Phone testing goes through a Cloudflare quick tunnel. Without listing
   // that origin the dev server rejects its requests for internal assets and
   // the hot-reload socket, so the page arrives as server-rendered HTML that
