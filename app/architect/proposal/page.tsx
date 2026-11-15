@@ -214,10 +214,28 @@ export default function ProposalPage() {
           shape: r.shape === "custom" ? "custom" : "rectangle",
           floorPolygonM: r.floorPolygonM,
         } as unknown as RoomDraft;
+        /*
+         * A scanned outline has its bearing in its corners already.
+         *
+         * Every room of a whole-property scan is measured in one
+         * shared frame, so the polygon arrives pointing the way the
+         * room points and is only shifted to its anchor. Rotating it
+         * again by the placement turns each room twice, about its
+         * own corner, by its own angle -- a rectangular house comes
+         * back with its rooms at assorted angles, overlapping.
+         *
+         * The app stopped doing that at the source, but submissions
+         * sent before that fix still carry both, and they are the
+         * ones in the sheet. So the rule is applied here as well:
+         * where there is an outline the rotation is already spent.
+         * A typed rectangle has no bearing of its own and still
+         * needs it.
+         */
+        const hasOutline = (r.floorPolygonM?.length ?? 0) >= 3;
         return {
           room: draft,
           anchor: { x: p.positionM.x, z: p.positionM.z ?? 0 },
-          rotationDeg: (p.rotationDeg ?? 0) as never,
+          rotationDeg: (hasOutline ? 0 : (p.rotationDeg ?? 0)) as never,
           floor: p.floor ?? 0,
         };
       })
