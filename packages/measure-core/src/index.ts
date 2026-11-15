@@ -18,3 +18,4 @@ export * from "./proposalNotes";
 export * from "./proposalDxf";
 export * from "./loads";
 export * from "./proposalElevation";
+export * from "./dxfPreview";

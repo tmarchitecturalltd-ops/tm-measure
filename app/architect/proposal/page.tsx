@@ -37,6 +37,7 @@ import {
   beamsForExtension,
   selectNotes,
   buildProposalDxf,
+  dxfToSvg,
   takeDown,
   buildProposedElevations,
   proposedElevationName,
@@ -183,6 +184,12 @@ export default function ProposalPage() {
   const [wallKind, setWallKind] = useState<"cavity" | "solidBrick215" | "block100" | "timberStud">("cavity");
   const [snow, setSnow] = useState("0.6");
   const [briefNotes, setBriefNotes] = useState("");
+
+  // Which part of the sheet the preview is showing.
+  const [view, setView] = useState<"all" | "plan" | "elevations" | "notes">(
+    "plan",
+  );
+  const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
     setEndpoint(window.localStorage.getItem(ENDPOINT_KEY) ?? "");
@@ -372,9 +379,16 @@ export default function ProposalPage() {
     wallOver, wallOpenings, wallKind, snow,
   ]);
 
-  const download = useCallback(() => {
-    if (!result) return;
-    const dxf = buildProposalDxf({
+  /*
+   * The file itself, built once.
+   *
+   * The preview below parses this exact string rather than drawing
+   * from the model, so what is on screen is what is in the file --
+   * a wall missing from the preview is missing from the download.
+   */
+  const dxfText = useMemo(() => {
+    if (!result) return "";
+    return buildProposalDxf({
       entries,
       extension: result.ext,
       beams: result.beams,
@@ -388,7 +402,11 @@ export default function ProposalPage() {
         (submission?.customerName ? " — " + submission.customerName : ""),
       subtitle: `${era} ${FORMS.find((f) => f.value === form)?.label} · ${bedrooms} bed · ${ROOFS.find((r) => r.value === roof)?.label.toLowerCase()} roof`,
     });
-    const blob = new Blob([dxf], { type: "application/dxf" });
+  }, [result, entries, submission, era, form, bedrooms, roof, face]);
+
+  const download = useCallback(() => {
+    if (!dxfText) return;
+    const blob = new Blob([dxfText], { type: "application/dxf" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -396,7 +414,30 @@ export default function ProposalPage() {
       (submission?.submissionId || "proposal") + "-proposed.dxf";
     a.click();
     URL.revokeObjectURL(url);
-  }, [result, entries, submission, era, form, bedrooms, roof]);
+  }, [dxfText, submission]);
+
+  /*
+   * What the preview shows.
+   *
+   * The whole sheet at once is unreadable on a laptop -- the notes
+   * column is a third of the width and the plan ends up thumbnail
+   * sized. So the view narrows to the part being checked, and the
+   * SVG refits each time.
+   */
+  const previewSvg = useMemo(() => {
+    if (!dxfText) return "";
+    const only: Record<string, (layer: string) => boolean> = {
+      all: () => true,
+      plan: (l) => /EXIST|PROP-WALLS|PROP-OPENINGS|PROP-BEAMS|PROP-DIMS/.test(l),
+      elevations: (l) => /ELEV/.test(l),
+      notes: (l) => /NOTES|COMPLIANCE|BEAMS/.test(l),
+    };
+    return dxfToSvg(dxfText, {
+      layerFilter: only[view] ?? only.all,
+      width: 1400,
+      height: 900,
+    });
+  }, [dxfText, view]);
 
   const toggle = <T,>(list: T[], v: T, set: (x: T[]) => void) =>
     set(list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
@@ -721,6 +762,74 @@ export default function ProposalPage() {
               Download DXF
             </button>
           </div>
+
+          {/* ── The drawing, before you download it ─────────────── */}
+          {previewSvg && (
+            <div className="mb-4">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                {(
+                  [
+                    ["plan", "Plan"],
+                    ["elevations", "Elevations"],
+                    ["notes", "Notes & schedule"],
+                    ["all", "Whole sheet"],
+                  ] as const
+                ).map(([v, lbl]) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setView(v)}
+                    className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+                      view === v
+                        ? "bg-primary text-on-primary"
+                        : "bg-surface-container-low text-on-surface-variant"
+                    }`}
+                  >
+                    {lbl}
+                  </button>
+                ))}
+                <div className="ml-auto flex items-center gap-2 text-sm text-on-surface-variant">
+                  <span>Zoom</span>
+                  <input
+                    type="range"
+                    min={1}
+                    max={5}
+                    step={0.25}
+                    value={zoom}
+                    onChange={(e) => setZoom(Number(e.target.value))}
+                  />
+                  <span className="tabular-nums">{zoom.toFixed(2)}×</span>
+                </div>
+              </div>
+
+              {/*
+                Scrolls at zoom rather than scaling the page: the SVG
+                is vector, so magnifying it stays sharp and the
+                container is what moves.
+              */}
+              <div
+                className="overflow-auto rounded-xl border border-outline-variant/40"
+                style={{ maxHeight: 620, background: "#13161a" }}
+              >
+                <div
+                  style={{ width: `${zoom * 100}%` }}
+                  // The SVG is built here from our own DXF string, not
+                  // from anything a customer sent, and every text value
+                  // is escaped in dxfToSvg.
+                  dangerouslySetInnerHTML={{
+                    __html: previewSvg.replace(
+                      /^<svg /,
+                      '<svg style="width:100%;height:auto;display:block" ',
+                    ),
+                  }}
+                />
+              </div>
+              <p className="mt-1 text-xs text-on-surface-variant">
+                Rendered from the file itself. Red is new work, white is
+                existing.
+              </p>
+            </div>
+          )}
 
           <p
             className={`mb-3 rounded-lg px-3 py-2 text-sm font-semibold ${

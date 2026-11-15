@@ -62,6 +62,7 @@ import {
   beamsForExtension,
 } from "./src/proposalPlan.ts";
 import { buildProposalDxf } from "./src/proposalDxf.ts";
+import { parseDxf, dxfToSvg } from "./src/dxfPreview.ts";
 import {
   buildProposedElevations,
   proposedElevationName,
@@ -3861,4 +3862,35 @@ test("the extension shows on the faces it is actually on", () => {
   assert.equal(proposedElevationName("front", "south"), "Rear elevation");
   assert.equal(proposedElevationName("back", "south"), "Front elevation");
   assert.equal(proposedElevationName("front", "north"), "Front elevation");
+});
+
+/*
+ * The preview has to be the file.
+ *
+ * Its whole value is that it is parsed from the generated DXF, so
+ * the test is a round trip: build a drawing, parse it back, and
+ * check the lines survived and the text is escaped.
+ */
+test("dxfPreview parses back the lines it was given", () => {
+  const dxf = [
+    "0", "SECTION", "2", "ENTITIES",
+    "0", "LINE", "8", "TM-PROP-WALLS",
+    "10", "0.0", "20", "0.0", "30", "0.0",
+    "11", "3000.0", "21", "0.0", "31", "0.0",
+    "0", "TEXT", "8", "TM-PROP-NOTES",
+    "10", "100.0", "20", "200.0", "30", "0.0", "40", "150.0",
+    "1", "A < B & C",
+    "0", "ENDSEC", "0", "EOF",
+  ].join("\n");
+
+  const parsed = parseDxf(dxf);
+  assert.equal(parsed.lines.length, 1);
+  assert.equal(parsed.lines[0].x2, 3000);
+  assert.equal(parsed.texts.length, 1);
+  assert.equal(parsed.texts[0].value, "A < B & C");
+
+  const svg = dxfToSvg(dxf);
+  assert.ok(svg.startsWith("<svg"));
+  assert.ok(svg.includes("A &lt; B &amp; C"), "text is escaped");
+  assert.ok(!svg.includes("A < B & C"), "raw text never reaches the markup");
 });
