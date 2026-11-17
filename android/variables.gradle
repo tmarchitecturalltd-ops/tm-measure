@@ -1,5 +1,7 @@
 ext {
-    minSdkVersion = 23
+    // 24, not 23: Play's automatic protection refuses a bundle below
+    // it, and Android 6 is a rounding error of the devices in use.
+    minSdkVersion = 24
     compileSdkVersion = 36
     targetSdkVersion = 36
     androidxActivityVersion = '1.9.2'
